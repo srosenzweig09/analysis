@@ -22,14 +22,14 @@ run_code                 = argv[2]
 hyperparameter_to_modify = argv[3]
 hyperparameter_value     = argv[4]
 
-save_loc = 'Experiments/' + hyperparameter_to_modify + '/' + hyperparameter_to_modify + '_' + hyperparameter_value + '/'
+save_loc = 'Experiments/' + hyperparameter_to_modify + '/' + hyperparameter_to_modify + '_' + hyperparameter_value + '_repeat/'
 if not path.exists(save_loc):
     makedirs(save_loc)
 
 config = configparser.ConfigParser()
 config.optionxform = str
 config.read(config_file)
-print(f"[INFO] Opening configuration file:\n       {config_file}")
+print(f"----------[INFO] Opening configuration file:\n       {config_file}")
 
 # Hidden hyperparameters
 activation = config['HIDDEN']['HiddenActivations']
@@ -52,11 +52,11 @@ num_epochs    = int(config['TRAINING']['NumEpochs'])
 batch_size    = int(config['TRAINING']['BatchSize'])
     
 inputs_filename = config['INPUTS']['InputFile']
-print(f"[INFO] Loading inputs from file:\n       {inputs_filename}")
+print(f"----------[INFO] Loading inputs from file:\n       {inputs_filename}")
 
 inputs = InputProcessor(inputs_filename)
-inputs.normalize_inputs(save_loc=save_loc, run_code=run_code)
-inputs.split_input_examples()
+inputs.normalize_inputs(save_loc=save_loc)
+inputs.split_input_examples(save_loc=save_loc, run_code=run_code)
 
 x_train, x_val, x_test = inputs.get_x()
 y_train, y_val, y_test = inputs.get_y()
@@ -110,7 +110,7 @@ with open(json_save, "w") as json_file:
     json_file.write(model_json)
 # serialize weights to HDF5
 model.save_weights(h5_save)
-print(f"[INFO] Saved model and history to disk in location:\n       {json_save}\n       {h5_save}\n       {hist_json_file}")
+print(f"----------[INFO] Saved model and history to disk in location:\n       {json_save}\n       {h5_save}\n       {hist_json_file}")
 
 h_act = ''
 for funcs in hidden_activations:
@@ -121,41 +121,41 @@ print("Validation set:              {:d}%, {:d}".format(int(len(x_val)/len(input
 print("Testing set:                 {:d}%, {:d}".format(int(len(x_test)/len(inputs.X)*100), int(len(x_test))))
 print("Class 0 (Non-Higgs  Pair):   {:.0f}%, {:d}".format(np.sum(inputs.y == 0)/len(inputs.y)*100, np.sum(inputs.y == 0)))
 print("Class 1 (Higgs Pair):        {:.0f}%, {:d}".format(np.sum(inputs.y == 1)/len(inputs.y)*100, np.sum(inputs.y == 1)))
-print("Input parameters:           ", param_dim, inputs['params'])
+print("Input parameters:           ", param_dim, inputs.inputs['params'])
 print("Optimizer:                  ", optimizer)
 print("Loss:                       ", loss_function)
 print("Num epochs:                 ", num_epochs)
 print("Batch size:                 ", batch_size)
 print("Num input nodes:            ", input_nodes)
-print("Input activation function:  ", input_activation)
+print("Input activation function:  ", activation)
 print("Num hidden layers:          ", num_hidden)
 print("Hidden layer nodes:         ", nodes)
 print("Hidden activation functions:", h_act[:-2])
 print("Num output nodes:           ", output_nodes)
 print("Output activation function: ", output_activation)
 
-nn_dict = {"Training set"                :[int(len(x_train)/len(inputs.X)*100), int(len(x_train))],
-           "Validation set"              :[int(len(x_val)/len(inputs.X)*100), int(len(x_val))],
-           "Testing set"                 :[int(len(x_test)/len(inputs.X)*100), int(len(x_test))],
-           "Class 0"                     :[np.sum(inputs.y == 0)/len(inputs.y)*100, np.sum(inputs.y == 0)],
-           "Class 1"                     :[np.sum(inputs.y == 1)/len(inputs.y)*100, np.sum(inputs.y == 1)],
-           "Input parameters"            : [param_dim, inputs['params']],
-           "Optimizer"                   : optimizer,
-           "Loss"                        : loss_function,
-           "Num epochs"                  : num_epochs,
-           "Batch size"                  : batch_size,
-           "Num input nodes:"            : input_nodes,
-           "Input activation"            : input_activation,
-           "Num hidden layers"           : num_hidden,
-           "Hidden layer nodes"          : nodes,
-           "Hidden activation functions" : h_act[:-2],
-           "Num output nodes"            : output_nodes,
-           "Output activation function"  : output_activation}
+# nn_dict = {"Training set"                :{'percentage':int(len(x_train)/len(inputs.X)*100), 'size':int(len(x_train))},
+#            "Validation set"              :{'percentage':int(len(x_val)/len(inputs.X)*100), 'size':int(len(x_val))},
+#            "Testing set"                 :{'percentage':int(len(x_test)/len(inputs.X)*100), 'size':int(len(x_test))},
+#            "Class 0"                     :{'percentage':np.sum(inputs.y == 0)/len(inputs.y)*100, 'size':np.sum(inputs.y == 0)},
+#            "Class 1"                     :{'percentage':np.sum(inputs.y == 1)/len(inputs.y)*100, 'size':np.sum(inputs.y == 1)},
+#            "Input parameters"            :{'Num Features':param_dim, 'Features':inputs.inputs['params']},
+#            "Optimizer"                   : optimizer,
+#            "Loss"                        : loss_function,
+#            "Num epochs"                  : num_epochs,
+#            "Batch size"                  : batch_size,
+#            "Num input nodes:"            : input_nodes,
+#            "Input activation"            : activation,
+#            "Num hidden layers"           : num_hidden,
+#            "Hidden layer nodes"          : nodes,
+#            "Hidden activation functions" : h_act[:-2],
+#            "Num output nodes"            : output_nodes,
+#            "Output activation function"  : output_activation}
 
-# convert the nn architecture dict to a pandas DataFrame:     
-nn_df = DataFrame(nn_dict) 
+# # convert the nn architecture dict to a pandas DataFrame:     
+# nn_df = DataFrame(nn_dict) 
 
-# save to json:  
-nn_json_file = save_loc + 'nn_architecture_' + run_code + '.json' 
-with open(nn_json_file, mode='w') as f:
-    nn_df.to_json(f)
+# # save to json:  
+# nn_json_file = save_loc + 'nn_architecture_' + run_code + '.json' 
+# with open(nn_json_file, mode='w') as f:
+#     nn_df.to_json(f)
