@@ -1,0 +1,22 @@
+figure.titlesize      : large
+figure.figsize        : 12, 6
+
+text.usetex           : true
+
+axes.titlesize        : 28
+axes.labelsize        : 24
+axes.formatter.limits : -5, 6
+axes.formatter.min_exponent: 4
+
+lines.linewidth       : 3
+lines.markersize      : 10
+
+xtick.labelsize       : 18
+ytick.labelsize       : 18
+
+legend.fancybox:      True
+legend.fontsize:      medium
+
+hist.bins: 100
+
+savefig.transparent: True
