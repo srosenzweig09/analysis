@@ -45,7 +45,7 @@ class InputProcessor():
             self.xscaler = MinMaxScaler()
             self.xscaler.fit(self.X)
             dump(self.xscaler, open(save_loc + 'scaler_' + run_code + '.pkl', 'wb'))
-            print(f"[INFO] Scaler saved to:\n        {save_loc + 'scaler_' + run_code + '.pkl'}")
+            print(f"[INFO] Scaler saved to:\n       {save_loc + 'scaler_' + run_code + '.pkl'}")
             
         self.xnormalized = self.xscaler.transform(self.X)
         
