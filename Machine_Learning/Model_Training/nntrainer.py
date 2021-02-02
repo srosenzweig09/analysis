@@ -19,18 +19,25 @@ from keras.models import Sequential
 from keras.layers import Dense, Dropout, Activation, Flatten, LeakyReLU
 from keras.callbacks import EarlyStopping
 from tensorflow import compat
-compat.v1.logging.set_verbosity(compat.v1.logging.ERROR)
+compat.v1.logging.set_verbosity(compat.v1.logging.ERROR) # suppress Keras/TF warnings
 
 import numpy as np
 from pandas import DataFrame
 from inputprocessor import InputProcessor
 
+def info(string):
+    print("nntrainer.py -- [INFO] -- " + string)
+def error(string):
+    print("nntrainer.py !! [ERROR] !! " + string)
+
 # Check for required user-provided input.
 try:
     config_file              = argv[1]
     run_code                 = argv[2]
+    info(f"Configuration file: {config_file}")
+    info(f"Current run number: {run_code}")
 except IndexError:
-    print("No configuration file and/or run code specified.")
+    error("No configuration file and/or run code specified.")
 except Exception as err:
     print(err)
 
@@ -39,6 +46,8 @@ except Exception as err:
 if len(argv) > 3:
     hyperparameter_to_modify = argv[3]
     hyperparameter_value     = argv[4]
+    info(f"Modifying hyperparameter: {hyperparameter_to_modify}")
+    info(f"New hyperparameter value: {hyperparameter_value}")
 
 # Use 'test' as the input for run_code 
 if run_code != 'test':
@@ -47,24 +56,22 @@ if run_code != 'test':
     # Seconday folder in second line
     save_loc = (f'Experiments/{hyperparameter_to_modify}/' +
                 f'{hyperparameter_to_modify}_{hyperparameter_value}/')
+    info(f"Output will be saved in {save_loc}")
 
     # If directory does not exist, create it
     if not path.exists(save_loc):
         makedirs(save_loc)
+        info(f"Creating folder {save_loc}")
 else:
 
     # If running a test, throw output in quick_test folder
     save_loc = 'quick_test/'
-
-print(f"--[INFO]-- \n"+
-      f"Model will be saved in \n{save_loc}")
+    info(f"Running test script! Output will be saved in {save_loc}")
 
 # Load the configuration using configparser
 config = configparser.ConfigParser()
 config.optionxform = str
 config.read(config_file)
-print(f"--[INFO]-- \n" + 
-      f"Opening configuration file:\n{config_file}")
 
 # Hidden hyperparameters
 activation         = config['HIDDEN']['HiddenActivations']
@@ -83,8 +90,7 @@ num_epochs    = int(config['TRAINING']['NumEpochs'])
 batch_size    = int(config['TRAINING']['BatchSize'])
     
 inputs_filename = config['INPUTS']['InputFile']
-print(f"--[INFO]--\n" + 
-      f"Loading inputs from file:\n{inputs_filename}")
+info(f"Loading inputs from file: {inputs_filename}")
 
 # Load training examples
 inputs = InputProcessor(inputs_filename)
@@ -109,8 +115,10 @@ if len(argv) > 3:
     try:
         hyperparam_dict[hyperparameter_to_modify] = int(hyperparameter_value)
     except KeyError:
-        print("Incorrect key input into hyperparameter dictionary!")
-        print(f"Available keys are: {hyperparam_dict.keys()}")
+        error("Incorrect key input into hyperparameter dictionary!")
+        error(f"Available keys are: {hyperparam_dict.keys()}")
+
+
 
 # Define the keras model
 model = Sequential()
@@ -141,6 +149,12 @@ es = EarlyStopping(monitor='loss', restore_best_weights=True)
 model.compile(loss=loss_function, 
               optimizer=optimizer, 
               metrics=['accuracy', lr_metric])
+
+print()
+info("Preparing to fit the model!\n")
+info(f"Training examples have {param_dim} features.")
+info(f"Model has {num_hidden} hidden layers.")
+info(f"Hidden layers have nodes: {nodes}")
 
 # fit the keras model on the dataset
 history = model.fit(x_train,
@@ -174,9 +188,8 @@ with open(json_save, "w") as json_file:
 # serialize weights to HDF5
 model.save_weights(h5_save)
 
-print(f"--[INFO]--\m" +
-      f"Saved model and history to disk in location:"
-      f"\n{json_save}\n{h5_save}\n{hist_json_file}")
+info(f"Saved model and history to disk in location:"
+      f"\n   {json_save}\n   {h5_save}\n   {hist_json_file}")
 
 h_act = ''
 for funcs in hidden_activations:
