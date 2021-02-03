@@ -14,12 +14,13 @@ import numpy as np
 from pandas import DataFrame
 from configparser import ConfigParser
 from sys import argv
-from os import path, makedirs
+from os import path, makedirs, environ
 from keras import optimizers
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Activation, Flatten, LeakyReLU
 from keras.callbacks import EarlyStopping
 from tensorflow import compat
+environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 compat.v1.logging.set_verbosity(compat.v1.logging.ERROR) # suppress Keras/TF warnings
 
 # Custom libraries and modules
@@ -38,11 +39,7 @@ try:
     config_file              = argv[1]
     run_code                 = argv[2]
     info(f"Configuration file: {config_file}")
-<<<<<<< HEAD
     info(f"Current run number: {run_code}\n")
-=======
-    info(f"Current run number: {run_code}")
->>>>>>> 990ae60d96f08bd8b191a9fb1d051b5681a6d97b
 except IndexError:
     error("No configuration file and/or run code specified.")
 except Exception as err:
