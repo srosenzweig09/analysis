@@ -6,31 +6,36 @@ and value to override the configuration file.
 Command line arguments:
     1. path/to/config_file.cfg
     2. run_code (used to identify iterative runs with the same hyperparameters)
-    3. hyperparameter_to_modify
-    4. hyperparameter_value
+    3. hyperparameter_to_modify (optional)
+    4. hyperparameter_value (optional)
 """
 
+import numpy as np
+from pandas import DataFrame
+from configparser import ConfigParser
 from sys import argv
 from os import path, makedirs
-import configparser
-
 from keras import optimizers
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Activation, Flatten, LeakyReLU
 from keras.callbacks import EarlyStopping
 from tensorflow import compat
-compat.v1.logging.set_verbosity(compat.v1.logging.ERROR)
+compat.v1.logging.set_verbosity(compat.v1.logging.ERROR) # suppress Keras/TF warnings
 
-import numpy as np
-from pandas import DataFrame
+# Custom libraries and modules
 from inputprocessor import InputProcessor
+from logger import info, error
+
+print()
 
 # Check for required user-provided input.
 try:
     config_file              = argv[1]
     run_code                 = argv[2]
+    info(f"Configuration file: {config_file}")
+    info(f"Current run number: {run_code}\n")
 except IndexError:
-    print("No configuration file and/or run code specified.")
+    error("No configuration file and/or run code specified.")
 except Exception as err:
     print(err)
 
@@ -39,6 +44,8 @@ except Exception as err:
 if len(argv) > 3:
     hyperparameter_to_modify = argv[3]
     hyperparameter_value     = argv[4]
+    info(f"Modifying hyperparameter: {hyperparameter_to_modify}")
+    info(f"New hyperparameter value: {hyperparameter_value}\n")
 
 # Use 'test' as the input for run_code 
 if run_code != 'test':
@@ -51,20 +58,19 @@ if run_code != 'test':
     # If directory does not exist, create it
     if not path.exists(save_loc):
         makedirs(save_loc)
+        info(f"Creating folder {save_loc}")
+
+    info(f"Output will be saved in {save_loc}\n")
 else:
 
     # If running a test, throw output in quick_test folder
     save_loc = 'quick_test/'
-
-print(f"--[INFO]-- \n"+
-      f"Model will be saved in \n{save_loc}")
+    info(f"Running test script! Output will be saved in {save_loc}\n")
 
 # Load the configuration using configparser
-config = configparser.ConfigParser()
+config = ConfigParser()
 config.optionxform = str
 config.read(config_file)
-print(f"--[INFO]-- \n" + 
-      f"Opening configuration file:\n{config_file}")
 
 # Hidden hyperparameters
 activation         = config['HIDDEN']['HiddenActivations']
@@ -73,18 +79,18 @@ num_hidden         = len(nodes)
 hidden_activations = ['selu'] * num_hidden
 
 # Output hyperparameters
-output_activation = config['OUTPUT']['OutputActivation']
-output_nodes      = int(config['OUTPUT']['OutputNodes'])
+output_activation  = config['OUTPUT']['OutputActivation']
+output_nodes       = int(config['OUTPUT']['OutputNodes'])
 
 # Fitting hyperparameters
-optimizer     = config['OPTIMIZER']['OptimizerFunction']
-loss_function = config['LOSS']['LossFunction']
-num_epochs    = int(config['TRAINING']['NumEpochs'])
-batch_size    = int(config['TRAINING']['BatchSize'])
+optimizer          = config['OPTIMIZER']['OptimizerFunction']
+loss_function      = config['LOSS']['LossFunction']
+num_epochs         = int(config['TRAINING']['NumEpochs'])
+batch_size         = int(config['TRAINING']['BatchSize'])
     
-inputs_filename = config['INPUTS']['InputFile']
-print(f"--[INFO]--\n" + 
-      f"Loading inputs from file:\n{inputs_filename}")
+inputs_filename    = config['INPUTS']['InputFile']
+
+info(f"Loading inputs from file: {inputs_filename}")
 
 # Load training examples
 inputs = InputProcessor(inputs_filename)
@@ -97,6 +103,7 @@ y_train, y_test, y_val = inputs.get_y()
 
 param_dim = inputs.param_dim
 input_nodes = int(inputs.param_dim*1.2)
+nodes.insert(0,input_nodes)
 
 if len(argv) > 3:
     # Change value of hyperparameter
@@ -108,19 +115,26 @@ if len(argv) > 3:
 
     try:
         hyperparam_dict[hyperparameter_to_modify] = int(hyperparameter_value)
-    except KeyError:
-        print("Incorrect key input into hyperparameter dictionary!")
-        print(f"Available keys are: {hyperparam_dict.keys()}")
+        locals().update(hyperparam_dict)
 
+        # Updating nodes and activation functions just in case number of hyperparameters was changed.
+        nodes = nodes[:num_hidden]
+        hidden_activations = ['selu'] * num_hidden
+    except KeyError:
+        error("Incorrect key input into hyperparameter dictionary!")
+        error(f"Available keys are: {hyperparam_dict.keys()}")
+
+
+info("Defining the model.")
 # Define the keras model
 model = Sequential()
 
 # Input layers
-model.add(Dense(input_nodes, input_dim=param_dim, activation=activation))
+model.add(Dense(nodes[0], input_dim=param_dim, activation=activation))
 
 # # Hidden layers
-for i in range(num_hidden):
-    model.add(Dense(int(nodes[i]), activation=hidden_activations[i]))
+for i in range(1,num_hidden):
+    model.add(Dense(int(nodes[i]), activation=hidden_activations[i-1]))
 
 # Output layer
 model.add(Dense(output_nodes, activation=output_activation))
@@ -138,9 +152,16 @@ lr_metric = get_lr_metric(optimizer)
 # Stop after epoch in which loss no longer decreases but save the best model.
 es = EarlyStopping(monitor='loss', restore_best_weights=True)
 
+info("\nCompiling the model.")
 model.compile(loss=loss_function, 
               optimizer=optimizer, 
               metrics=['accuracy', lr_metric])
+
+print()
+info("Preparing to fit the model!\n")
+info(f"Training examples have {param_dim} features.")
+info(f"Model has {num_hidden} hidden layer(s).")
+info(f"Hidden layer(s) have nodes: {nodes}\n")
 
 # fit the keras model on the dataset
 history = model.fit(x_train,
@@ -174,13 +195,8 @@ with open(json_save, "w") as json_file:
 # serialize weights to HDF5
 model.save_weights(h5_save)
 
-print(f"--[INFO]--\m" +
-      f"Saved model and history to disk in location:"
-      f"\n{json_save}\n{h5_save}\n{hist_json_file}")
-
-h_act = ''
-for funcs in hidden_activations:
-    h_act = h_act + funcs + ', '
+info(f"Saved model and history to disk in location:"
+      f"\n   {json_save}\n   {h5_save}\n   {hist_json_file}")
 
 # Make a list of the hyperparameters and print them to the screen.
 nn_info_list = [
@@ -199,23 +215,25 @@ nn_info_list = [
     f"Class 1 (Higgs Pair):        " +
         f"{np.sum(inputs.y == 1)/len(inputs.y)*100:.0f}%, " +
         f"{np.sum(inputs.y == 1):d}\n",
-    f"Input parameters:            {param_dim}, " +
+    f"Input parameters:            {param_dim},\n" +
+        f"                             " + 
         f"{inputs.inputs['params'][:param_dim]}\n",
     f"Optimizer:                   {optimizer}\n",
     f"Loss:                        {loss_function}\n",
     f"Num epochs:                  {nepochs}\n",
     f"Batch size:                  {batch_size}\n",
-    f"Num hidden layers:           {hyperparameter_value}\n",
+    f"Num hidden layers:           {num_hidden}\n",
     f"Num nodes in  1st hidden:    {input_nodes}\n",
     f"Input activation function:   {activation}\n",
-    f"Hidden layer nodes:          {nodes[:num_hidden-1]}\n",
-    f"Hidden activation functions: {h_act[:-2]}\n",
+    f"Hidden layer nodes:          {nodes}\n",
+    f"Hidden activation functions: {hidden_activations}\n",
     f"Num output nodes:            {output_nodes}\n",
     f"Output activation function:  {output_activation}"]
 
 for info in nn_info_list:
     print(info)
 
-with open(save_loc + 'nn_info.txt', "w") as f:
-    for line in nn_info_list:
-        f.writelines(line)
+if not path.isfile(save_loc + 'nn_info.txt'):
+    with open(save_loc + 'nn_info.txt', "w") as f:
+        for line in nn_info_list:
+            f.writelines(line)
