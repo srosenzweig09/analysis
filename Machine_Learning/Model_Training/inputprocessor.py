@@ -1,9 +1,10 @@
+
+import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
 from pickle import load, dump
-import numpy as np
-import os.path
 from os import path
+from logger import info, error
 
 class InputProcessor():
     """
@@ -32,8 +33,7 @@ class InputProcessor():
         self.X_combinatorics = self.inputs['extra_bkgd_x']
         self.y_combinatorics = self.inputs['extra_bkgd_y']
         self.mjj_combinatorics = self.inputs['extra_bkgd_mjj'] # GeV
-        
-        self.sort_mass()
+
     
     def sort_inputs(self):
         # Select Higgs pairs (labelled y=1)
@@ -51,13 +51,13 @@ class InputProcessor():
         # If not, a new scaler will be created and saved.
         try:
             self.xscaler = load(open(filepath + 'scaler.pkl', 'rb'))
-            print(f"----------[INFO] Scaler loaded:\n        {filepath + 'scaler.pkl'}")
+            info(f"Scaler loaded:\n        {filepath + 'scaler.pkl'}")
         except TypeError:
             self.xscaler = MinMaxScaler()
             self.xscaler.fit(self.X)
             if not path.exists(save_loc + 'scaler.pkl'):
                 dump(self.xscaler, open(save_loc + 'scaler.pkl', 'wb'))
-                print(f"----------[INFO] Scaler saved to:\n       {save_loc + 'scaler.pkl'}")
+                info(f"Scaler saved to:\n       {save_loc + 'scaler.pkl'}")
             
         self.xnormalized = self.xscaler.transform(self.X)
         
@@ -96,7 +96,8 @@ class InputProcessor():
         
         # Save the test sets for later evaluation
         np.savez(save_loc + 'test_set_' + run_code + '.npz', x_test=self.x_test, y_test=self.y_test, X_test=self.X_test, mjj_test=self.mjj_test)
-        print("----------[INFO] Saving test sets.")
+
+        info("Saving test sets.")
         
     def get_x(self):
         return self.x_train, self.x_test, self.x_val
