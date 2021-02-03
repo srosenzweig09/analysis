@@ -28,12 +28,21 @@ from logger import info, error
 
 print()
 
+def info(string):
+    print("nntrainer.py -- [INFO] -- " + string)
+def error(string):
+    print("nntrainer.py !! [ERROR] !! " + string)
+
 # Check for required user-provided input.
 try:
     config_file              = argv[1]
     run_code                 = argv[2]
     info(f"Configuration file: {config_file}")
+<<<<<<< HEAD
     info(f"Current run number: {run_code}\n")
+=======
+    info(f"Current run number: {run_code}")
+>>>>>>> 990ae60d96f08bd8b191a9fb1d051b5681a6d97b
 except IndexError:
     error("No configuration file and/or run code specified.")
 except Exception as err:
@@ -54,6 +63,7 @@ if run_code != 'test':
     # Seconday folder in second line
     save_loc = (f'Experiments/{hyperparameter_to_modify}/' +
                 f'{hyperparameter_to_modify}_{hyperparameter_value}/')
+    info(f"Output will be saved in {save_loc}")
 
     # If directory does not exist, create it
     if not path.exists(save_loc):
