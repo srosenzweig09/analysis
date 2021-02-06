@@ -11,6 +11,9 @@ from random import random, sample
 import matplotlib.pyplot as plt
 from kinematics import calculate_deltaR
 
+### ------------------------------------------------------------------------------------
+## Load signal events
+
 filename = '/eos/user/s/srosenzw/SWAN_projects/sixB/Signal_Exploration/Mass_Pair_ROOT_files/X_YH_HHH_6b_MX700_MY400.root'
 print()
 print("Creating NN training inputs for:",filename)
@@ -18,6 +21,9 @@ f = uproot.open(filename)
 tree = f['sixbntuplizer/sixBtree']
 branches = tree.arrays(namedecode='utf-8')
 table = awkward.Table(branches)
+
+### ------------------------------------------------------------------------------------
+## Prepare bs for pairing
 
 HX_b1 = {'pt':table['gen_HX_b1_pt'], 'eta':table['gen_HX_b1_eta'], 'phi':table['gen_HX_b1_phi'], 'm':table['gen_HX_b1_m']}
 HX_b2 = {'pt':table['gen_HX_b2_pt'], 'eta':table['gen_HX_b2_eta'], 'phi':table['gen_HX_b2_phi'], 'm':table['gen_HX_b2_m']}
@@ -49,6 +55,9 @@ random_selection = np.array(())
 
 nevt = len(table['gen_HX_b1_pt'])
 print("File contains",nevt,"events.")
+
+### ------------------------------------------------------------------------------------
+## Loop through events and build arrays of features
 
 x = np.array(())
 y = np.array(())
