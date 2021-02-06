@@ -45,23 +45,26 @@ class InputProcessor():
 
         return self.X_Higgs, self.X_nonHiggs
 
-    def normalize_inputs(self, filepath=None, save_loc=None):
+    def normalize_inputs(self, run, model_dir=None):
         
+        scaler_file = model_dir + 'scaler.pkl'
         # If the user provides a path to a scaler file, it will be used
         # If not, a new scaler will be created and saved.
-        try:
-            self.xscaler = load(open(filepath + 'scaler.pkl', 'rb'))
-            info(f"Scaler loaded:\n        {filepath + 'scaler.pkl'}")
-        except TypeError:
+        if run > 1:
+            self.xscaler = load(open(scaler_file, 'rb'))
+            info(f"Scaler loaded from {scaler_file}")
+        else:
             self.xscaler = MinMaxScaler()
             self.xscaler.fit(self.X)
-            if not path.exists(save_loc + 'scaler.pkl'):
-                dump(self.xscaler, open(save_loc + 'scaler.pkl', 'wb'))
-                info(f"Scaler saved to:\n       {save_loc + 'scaler.pkl'}")
+            if not path.exists(scaler_file):
+                dump(self.xscaler, open(scaler_file, 'wb'))
+                info(f"Scaler saved to {scaler_file}")
             
         self.xnormalized = self.xscaler.transform(self.X)
+        self.run = run
+        self.model_dir = model_dir
         
-    def split_input_examples(self, test_size = 0.20, val_size = 0.125, save_loc=None, run_code=None):
+    def split_input_examples(self, test_size = 0.20, val_size = 0.125):
         
         # Separate out the test set by selecting test_size*100% of the training examples
         X_train, X_test, x_train, x_test, y_train, y_test, _, mjj_test = train_test_split(self.X, 
@@ -95,7 +98,7 @@ class InputProcessor():
         self.mjj_test  = mjj_test
         
         # Save the test sets for later evaluation
-        np.savez(save_loc + 'test_set_' + run_code + '.npz', x_test=self.x_test, y_test=self.y_test, X_test=self.X_test, mjj_test=self.mjj_test)
+        np.savez(self.model_dir + f'test_set_{self.run}.npz', x_test=self.x_test, y_test=self.y_test, X_test=self.X_test, mjj_test=self.mjj_test)
 
         info("Saving test sets.")
         

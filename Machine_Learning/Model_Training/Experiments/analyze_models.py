@@ -1,79 +1,169 @@
-try:
-    from keras.models import model_from_json
-except ModuleNotFoundError:
-    print("You must activate the conda environment! (Use alias 'csixb')")
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Suppress TF CPU warnings
 import numpy as np
-
+import pandas as pd
 import matplotlib.pyplot as plt 
-# plt.style.use('../../Config/plots.mplstyle')
-
-from os import environ, path
-environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Suppress TF CPU warnings
+from argparse import ArgumentParser
+from sklearn.metrics import roc_curve
+from sklearn.metrics import auc
 
 # custom libraries and modules
 from logger import info, error
+from consistent_plots import hist, hist2d
+
+
+
+def return_predictions(inputs, nmodels, tag, pred_file):
+    if os.path.exists(pred_file):
+        predictions = np.load(pred_file)
+        return predictions['predictions']
+
+    else:
+        predictions = np.array(())
+        high_peak = np.array(())
+
+        for i in np.arange(1, nmodels + 1):
+
+            # Load inputs
+            inputs = np.load(inputs + f'test_set_{i}.npz')
+
+            x = inputs['x_test']
+            y = inputs['y_test']
+            X = inputs['X_test']
+            m = inputs['mjj_test']
+
+            info(f"Evaluating model {inputs + 'model_' + str(i) + '.json'}")
+
+            # load json and create model
+            model_json_file = open(inputs + 'model_' + str(i) + '.json', 'r')
+            model_json = model_json_file.read()
+            model_json_file.close()
+            model = model_from_json(model_json)
+
+            # load weights into new model
+            model.load_weights(inputs + 'model_' + str(i) + '.h5')
+
+            pred = model.predict(x)
+
+            predictions = np.append(predictions, pred)
+
+            bins = np.linspace(0,1,100)
+            n, edges = np.histogram(pred, bins=bins)
+            a = 10 # arbitrarily chosen
+            pos_of_peak = np.argmax(n[a:]) + a # Need to skip the peak at 0, which is higher than the peak near 1. 
+            high_peak = np.append(high_peak, (edges[pos_of_peak] + edges[pos_of_peak + 1]) / 2)
+
+        predictions = predictions.reshape(nmodels, len(x))
+
+        # pred_save = f"evaluation/1_hidden_layer_{tag}_predictions.npz"
+        # info(f"Saving .npz file of predictions to {pred_save}")
+        # np.savez(pred_save, predictions=predictions)
+
+    return predictions, high_peak
+
+def get_roc(y, predictions):
+    fpr, tpr, thresholds_keras = roc_curve(y, predictions)
+    nn_auc = auc(fpr, tpr)
+    return fpr, tpr, nn_auc
+
 
 print()
-info("Beginning model analysis.\n")
+info("Beginning model analysis.")
 
-# User parameters
-num_hidden = 2
-num_models_to_evaluate = 30
+### ------------------------------------------------------------------------------------
+## Implement command line parser
 
-filepath = f'num_hidden/num_hidden_{num_hidden}/'
+info("Parsing command line arguments.")
 
-info(f"Evaluating {num_models_to_evaluate} models with {num_hidden} hidden layers from location {filepath}")
+parser = ArgumentParser(description='Command line parser of model options and tags')
+parser.add_argument('--tag'       , dest = 'tag'       , help = 'production tag'              ,  required = True  )
+parser.add_argument('--nlayers'   , dest = 'nlayers'   , help = 'number of hidden layers'     ,  required = True  )
+parser.add_argument('--test_set'  , dest = 'test_set'  , help = 'test_sets for model'         ,  required = True  )
+parser.add_argument('--pred_file' , dest = 'pred_file' , help = 'predictions.npz'             ,  required = False ,   default = False  )
+parser.add_argument('--nmodels'   , dest = 'nmodels'   , help = 'number of models trained'    ,  required = False ,   default = 1      )
 
-predictions = np.array(())
+args = parser.parse_args()
 
-for i in np.arange(1, num_models_to_evaluate + 1):
+info(f"Evaluating {args.nmodels} models with {args.tag} hidden layers from location {args.input}")
+input_dir = f"layers/layers_{args.nlayers}/{args.tag}/"
+model_dir = input_dir + "model/"
+eval_dir = input_dir + "evaluation/"
 
-    info(f"Evaluating model {filepath + 'model_' + str(i) + '.json'}")
+nn_info =  model_dir + 'nn_info.txt'
+with open(nn_info, 'r') as nn_info:
+    lines = nn_info.readlines()
 
-    # load json and create model
-    model_json_file = open(filepath + 'model_' + str(i) + '.json', 'r')
-    model_json = model_json_file.read()
-    model_json_file.close()
-    model = model_from_json(model_json)
+for line in lines:
+    print(line)
 
-    # load weights into new model
-    model.load_weights(filepath + 'model_' + str(i) + '.h5')
+### ------------------------------------------------------------------------------------
+## Load or generate predictions npz file
 
-    # Load inputs
-    inputs = np.load(filepath + 'test_set_' + str(i) + '.npz')
-
-    x = inputs['x_test']
-    y = inputs['y_test']
-    X = inputs['X_test']
-    m = inputs['mjj_test']
-
-    pred = model.predict(x)
-    predictions = np.append(predictions, pred)
+predictions, high_peak = return_predictions(args.inputs, args.nmodels, args.tag, args.pred_file)
 
 
-predictions = predictions.reshape(num_models_to_evaluate, len(x))
+### ------------------------------------------------------------------------------------
+## Sample the ROC curve for a random model
 
-pred_save = f"evaluation/hidden_layers_{num_hidden}_predictions.npz"
-info(f"Saving .npz file of predictions to {pred_save}")
-np.savez(pred_save, predictions=predictions)
+
+i = np.random.randint(1, args.nmodels)
+ex_file = f"{model_dir}test_set_{i}.npz"
+info(f"Importing test set from file: {ex_file}")
+examples = np.load(ex_file)
+y = examples['y_test']
+fpr, tpr, nn_auc = get_roc(y, predictions[i-1,:])
+
+fig, ax = plt.subplots()
+ax.plot(fpr, tpr, label='Keras (area = {:.3f})'.format(nn_auc))
+ax.set_xlabel('False positive rate')
+ax.set_ylabel('True positive rate')
+ax.set_title(f'ROC curve for model #{i} with {args.nlayers} and {args.tag}')
+fig.savefig(eval_dir + 'roc')
+
+
+### ------------------------------------------------------------------------------------
+## Sample mass scatter plot for the same random model
+
+m = examples['mjj_test']
+
+H_mask = (y == 1)
+
+m_bins = np.linspace(np.min(m), np.max(m), 100)
+p_bins = np.linspace(0,1,100)
+
+fig, axs = plt.subplots(nrows=2, ncols=1, figsize=(10,16))
+fig.suptitle(f"Test predictions vs. $m_{bb}$ for model #{i} with {args.nlayers} and {args.tag}")
+
+ax = axs[0]
+m_nH = m[~H_mask]
+p_nH = predictions[i-1,:][~H_mask]
+n, xedges, yedges, im = hist2d(ax, m_nH, p_nH, bins=(m_bins, p_bins))
+ax.set_xlabel(r"Non-Higgs pair $m_{jj}$ [GeV]")
+ax.set_ylabel("Prediction")
+ax.set_title("Non-Higgs Pairs")
+fig.colorbar(im, ax=ax)
+
+ax = axs[1]
+m_H = m[H_mask]
+p_H = predictions[i-1,:][H_mask]
+n, xedges, yedges, im = hist2d(ax, m_H, p_H, bins=(m_bins, p_bins))
+ax.set_xlabel(r"Higgs pair $m_{jj}$ [GeV]")
+ax.set_ylabel("Prediction")
+ax.set_title("Higgs Pairs")
+fig.colorbar(im, ax=ax)
+
+fig.savefig(eval_dir + 'scatter')
+
+### ------------------------------------------------------------------------------------
+## Plot distribution of test predictions
 
 fig, ax = plt.subplots()
 
-high_peak = np.array(())
-for arr in predictions:
-    n, edges, _ = ax.hist(arr, bins=100, histtype='step', align='mid')
-    pos_of_peak = np.argmax(n[10:]) + 10 # Need to skip the peak at 0, which is higher than the peak near 1. 10 was arbitrarily chosen.
-    high_peak = np.append(high_peak, (edges[pos_of_peak] + edges[pos_of_peak + 1]) / 2)
+for pred in predictions:
+    hist(ax, pred)
 
-print(f"Maximum: {np.max(high_peak):.3f}")
-print(f"Minimum: {np.min(high_peak):.3f}")
-print(f"Average: {np.average(high_peak):.3f}")
-
-ax.set_xlabel('Classification Score')
+ax.set_xlabel('Prediction')
 ax.set_ylabel('Count')
-ax.text(0.3, 0.9, f"Number of Hidden Layers: {num_hidden}\nMax: {np.max(high_peak):.3f}, Min: {np.min(high_peak):.3f}, Avg: {np.average(high_peak):.3f}", transform=ax.transAxes)
-scores = f'evaluation/hidden_layers_{num_hidden}_score_dist.pdf'
+ax.text(0.2, 0.8, f"Number of Hidden Layers: {args.nlayers}\nMax: {np.max(high_peak):.3f}, Min: {np.min(high_peak):.3f}, Avg: {np.average(high_peak):.3f}\nNumber of distributions: {len(predictions):d}", transform=ax.transAxes)
 
-info(f"Saving histogram of classification score distributions to {scores}")
-fig.savefig(scores, bbox_inches='tight')
-
+fig.savefig(eval_dir + 'test_predictions')

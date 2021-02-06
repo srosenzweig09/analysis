@@ -14,6 +14,8 @@ def get_history(filepath, i):
 
     return history
 
+
+
 num_hidden = 4
 num_models = 100
 
