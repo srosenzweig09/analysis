@@ -7,14 +7,14 @@ and value to override the configuration file.
 import numpy as np
 from pandas import DataFrame
 from configparser import ConfigParser
+from argparse import ArgumentParser
 from sys import argv
-from os import path, makedirs, environ
-from keras import optimizers
+import os
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Activation, Flatten, LeakyReLU
 from keras.callbacks import EarlyStopping
 from tensorflow import compat
-environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # suppress Keras/TF warnings
 compat.v1.logging.set_verbosity(compat.v1.logging.ERROR) # suppress Keras/TF warnings
 
 # Custom libraries and modules
@@ -40,10 +40,18 @@ args = parser.parse_args()
 ### ------------------------------------------------------------------------------------
 ## 
 
-info(f"Evaluating {args.nmodels} models with {args.tag} hidden layers from location {args.input}")
 input_dir = f"layers/layers_{args.nlayers}/{args.tag}/"
 model_dir = input_dir + "model/"
 eval_dir = input_dir + "evaluation/"
+
+info(f"Evaluating models with {args.tag} hidden layers from location {input_dir}")
+
+if not os.path.exists(input_dir):
+    os.makedirs(input_dir)
+if not os.path.exists(model_dir):
+    os.makedirs(model_dir)
+if not os.path.exists(eval_dir):
+    os.makedirs(eval_dir)
 
 ### ------------------------------------------------------------------------------------
 ## 
