@@ -30,15 +30,15 @@ print()
 info("Parsing command line arguments.")
 
 parser = ArgumentParser(description='Command line parser of model options and tags')
-parser.add_argument('--tag'       , dest = 'tag'       , help = 'production tag'               ,  required = True  )
-parser.add_argument('--nlayers'   , dest = 'nlayers'   , help = 'number of hidden layers'      ,  required = False , type = int )
-parser.add_argument('--cfg'       , dest = 'cfg'       , help = 'configuration file for model' ,  required = True  )
-parser.add_argument('--run'   , dest = 'run'   , help = 'index of current training session'     ,  required = True , type = int )
+parser.add_argument('--tag'       , dest = 'tag'       , help = 'production tag'                      ,  required = True  )
+parser.add_argument('--nlayers'   , dest = 'nlayers'   , help = 'number of hidden layers'             ,  required = False , type = int )
+parser.add_argument('--cfg'       , dest = 'cfg'       , help = 'configuration file for model'        ,  required = True  )
+parser.add_argument('--run'       , dest = 'run'       , help = 'index of current training session'   ,  required = True , type = int )
 
 args = parser.parse_args()
 
 ### ------------------------------------------------------------------------------------
-## 
+## Prepare output directories
 
 input_dir = f"layers/layers_{args.nlayers}/{args.tag}/"
 model_dir = input_dir + "model/"
@@ -54,7 +54,7 @@ if not os.path.exists(eval_dir):
     os.makedirs(eval_dir)
 
 ### ------------------------------------------------------------------------------------
-## 
+## Parse command line 
 
 # Load the configuration using configparser
 config = ConfigParser()
@@ -73,7 +73,7 @@ output_nodes       = int(config['OUTPUT']['OutputNodes'])
 # Fitting hyperparameters
 optimizer          = config['OPTIMIZER']['OptimizerFunction']
 loss_function      = config['LOSS']['LossFunction']
-num_epochs         = int(config['TRAINING']['NumEpochs'])
+nepochs            = int(config['TRAINING']['NumEpochs'])
 batch_size         = int(config['TRAINING']['BatchSize'])
     
 inputs_filename    = config['INPUTS']['InputFile']
@@ -135,7 +135,7 @@ info(f"Hidden layer(s) have nodes: {nodes}\n")
 history = model.fit(x_train,
                     y_train, 
                     validation_data=(x_val, y_val), 
-                    epochs=num_epochs, 
+                    epochs=nepochs, 
                     batch_size=batch_size, 
                     callbacks=[es])
 
@@ -167,7 +167,8 @@ info(f"Saved model and history to disk in location:"
       f"\n   {json_save}\n   {h5_save}\n   {hist_json_file}")
 
 
-
+### ------------------------------------------------------------------------------------
+## 
 
 
 
@@ -195,9 +196,8 @@ nn_info_list = [
     f"Loss:                        {loss_function}\n",
     f"Num epochs:                  {nepochs}\n",
     f"Batch size:                  {batch_size}\n",
-    f"Num hidden layers:           {num_hidden}\n",
-    f"Num nodes in  1st hidden:    {input_nodes}\n",
-    f"Input activation function:   {activation}\n",
+    f"Num hidden layers:           {nlayers}\n",
+    f"Input activation function:   {hidden_activations}\n",
     f"Hidden layer nodes:          {nodes}\n",
     f"Hidden activation functions: {hidden_activations}\n",
     f"Num output nodes:            {output_nodes}\n",
@@ -206,7 +206,7 @@ nn_info_list = [
 for info in nn_info_list:
     print(info)
 
-if not path.isfile(model_dir + 'nn_info.txt'):
+if not os.path.isfile(model_dir + 'nn_info.txt'):
     with open(model_dir + 'nn_info.txt', "w") as f:
         for line in nn_info_list:
             f.writelines(line)
