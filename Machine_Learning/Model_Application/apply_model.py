@@ -20,15 +20,15 @@ parser = ArgumentParser(description='Command line parser of model options and ta
 parser.add_argument('--tag'       , dest = 'tag'       , help = 'production tag'                      ,  required = True               )
 parser.add_argument('--nlayers'   , dest = 'nlayers'   , help = 'number of hidden layers'             ,  required = False , type = int )
 parser.add_argument('--run'       , dest = 'run'       , help = 'index of current training session'   ,  required = True , type = int  )
-parser.add_argument('--MX'       , dest = 'MX'       , help = 'mass of X resonance'   ,               ,  required = False , type = int , default = 700 ) # GeV
-parser.add_argument('--MY'       , dest = 'MY'       , help = 'mass of Y resonance'   ,               ,  required = False , type = int , default = 400 ) # GeV
+parser.add_argument('--MX'        , dest = 'MX'        , help = 'mass of X resonance'    ,  required = False , type = int , default = 700 ) # GeV
+parser.add_argument('--MY'        , dest = 'MY'        , help = 'mass of Y resonance'    ,  required = False , type = int , default = 400 ) # GeV
 
 args = parser.parse_args()
 
 ### ------------------------------------------------------------------------------------
 ## Load scaler, as well as model (json and h5)
 
-model_dir = f'../Model_Training/Experiments/layers/layers_{args.nlayers}/{args.tag}/model/'
+model_dir = f'../Model_Training/layers/layers_{args.nlayers}/{args.tag}/model/'
 
 json_file = open(model_dir + f'model_{args.run}.json', 'r')
 loaded_model_json = json_file.read()
@@ -61,7 +61,7 @@ part_dict = {0:HX_b1, 1:HX_b2, 2:HY1_b1, 3:HY1_b2, 4:HY2_b1, 5:HY2_b2}
 predictions = np.array(())
 for i in range(5):
     for j in range(i+1, 6):
-        X = np.transpose(np.array((part_dict[i]['pt'], part_dict[i]['eta'], part_dict[i]['phi'], part_dict[j]['pt'], part_dict[j]['eta'], part_dict[j]['phi'], part_dict[i]['pt']*part_dict[j]['pt'], calcDeltaR(part_dict[i]['eta'], part_dict[j]['eta'], part_dict[i]['phi'], part_dict[j]['phi']))))
+        X = np.transpose(np.array((part_dict[i]['pt'], part_dict[i]['eta'], part_dict[i]['phi'], part_dict[j]['pt'], part_dict[j]['eta'], part_dict[j]['phi'], calcDeltaR(part_dict[i]['eta'], part_dict[j]['eta'], part_dict[i]['phi'], part_dict[j]['phi']))))
 
         x = scaler.transform(X)
 

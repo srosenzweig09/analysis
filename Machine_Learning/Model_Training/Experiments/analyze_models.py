@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from argparse import ArgumentParser
 from sklearn.metrics import roc_curve
 from sklearn.metrics import auc
+from keras.models import model_from_json
 
 # custom libraries and modules
 from logger import info, error
@@ -13,9 +14,11 @@ from consistent_plots import hist, hist2d
 
 
 
-def return_predictions(inputs, nmodels, tag, pred_file):
-    if os.path.exists(pred_file):
-        predictions = np.load(pred_file)
+def return_predictions(nmodels, tag, pred_file, nlayers):
+    dirname = f'layers/layers_{nlayers}/{tag}/'
+    dir_model = dirname + 'model/'
+    if pred_file:
+        predictions = np.load(dirname + 'evaluation/test_predictions.npz')
         return predictions['predictions']
 
     else:
@@ -25,23 +28,23 @@ def return_predictions(inputs, nmodels, tag, pred_file):
         for i in np.arange(1, nmodels + 1):
 
             # Load inputs
-            inputs = np.load(inputs + f'test_set_{i}.npz')
+            inputs = np.load(dir_model + f'test_set_{i}.npz')
 
             x = inputs['x_test']
             y = inputs['y_test']
             X = inputs['X_test']
             m = inputs['mjj_test']
 
-            info(f"Evaluating model {inputs + 'model_' + str(i) + '.json'}")
+            info(f"Evaluating model {dir_model + 'model_' + str(i) + '.json'}")
 
             # load json and create model
-            model_json_file = open(inputs + 'model_' + str(i) + '.json', 'r')
+            model_json_file = open(dir_model + 'model_' + str(i) + '.json', 'r')
             model_json = model_json_file.read()
             model_json_file.close()
             model = model_from_json(model_json)
 
             # load weights into new model
-            model.load_weights(inputs + 'model_' + str(i) + '.h5')
+            model.load_weights(dir_model + 'model_' + str(i) + '.h5')
 
             pred = model.predict(x)
 
@@ -78,16 +81,17 @@ info("Parsing command line arguments.")
 parser = ArgumentParser(description='Command line parser of model options and tags')
 parser.add_argument('--tag'       , dest = 'tag'       , help = 'production tag'              ,  required = True  )
 parser.add_argument('--nlayers'   , dest = 'nlayers'   , help = 'number of hidden layers'     ,  required = True  )
-parser.add_argument('--test_set'  , dest = 'test_set'  , help = 'test_sets for model'         ,  required = True  )
+# parser.add_argument('--test_set'  , dest = 'test_set'  , help = 'test_sets for model'         ,  required = True  )
 parser.add_argument('--pred_file' , dest = 'pred_file' , help = 'predictions.npz'             ,  required = False ,   default = False  )
-parser.add_argument('--nmodels'   , dest = 'nmodels'   , help = 'number of models trained'    ,  required = False ,   default = 1      )
+parser.add_argument('--nmodels'   , dest = 'nmodels'   , help = 'number of models trained'    ,  required = False ,   default = 1      , type=int)
 
 args = parser.parse_args()
 
-info(f"Evaluating {args.nmodels} models with {args.tag} hidden layers from location {args.input}")
 input_dir = f"layers/layers_{args.nlayers}/{args.tag}/"
 model_dir = input_dir + "model/"
 eval_dir = input_dir + "evaluation/"
+info(f"Evaluating {args.nmodels} models with {args.tag} hidden layers from location {input_dir}")
+
 
 nn_info =  model_dir + 'nn_info.txt'
 with open(nn_info, 'r') as nn_info:
@@ -99,14 +103,14 @@ for line in lines:
 ### ------------------------------------------------------------------------------------
 ## Load or generate predictions npz file
 
-predictions, high_peak = return_predictions(args.inputs, args.nmodels, args.tag, args.pred_file)
+predictions, high_peak = return_predictions(args.nmodels, args.tag, args.pred_file, args.nlayers)
 
 
 ### ------------------------------------------------------------------------------------
 ## Sample the ROC curve for a random model
 
 
-i = np.random.randint(1, args.nmodels)
+i = np.random.randint(1, int(args.nmodels))
 ex_file = f"{model_dir}test_set_{i}.npz"
 info(f"Importing test set from file: {ex_file}")
 examples = np.load(ex_file)
@@ -157,13 +161,15 @@ fig.savefig(eval_dir + 'scatter')
 ### ------------------------------------------------------------------------------------
 ## Plot distribution of test predictions
 
-fig, ax = plt.subplots()
+fig, axs = plt.subplots(nrows=1, ncols=2)
 
 for pred in predictions:
-    hist(ax, pred)
+    hist(axs[0], pred[H_mask], label='True Higgs Pair')
+    hist(axs[1], pred[~H_mask], label='True Non-Higgs Pair')
 
 ax.set_xlabel('Prediction')
 ax.set_ylabel('Count')
+ax.legend()
 ax.text(0.2, 0.8, f"Number of Hidden Layers: {args.nlayers}\nMax: {np.max(high_peak):.3f}, Min: {np.min(high_peak):.3f}, Avg: {np.average(high_peak):.3f}\nNumber of distributions: {len(predictions):d}", transform=ax.transAxes)
 
 fig.savefig(eval_dir + 'test_predictions')

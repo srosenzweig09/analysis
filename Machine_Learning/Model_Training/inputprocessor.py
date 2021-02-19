@@ -11,19 +11,25 @@ class InputProcessor():
     This class prepares the training examples used to train the neural network.
     """
     
-    def __init__(self, filename, balanced=True):
+    def __init__(self, filename, include_pt1pt2=True, include_DeltaR=True):
+        
         self.inputs = np.load(filename)
         
-        # Option for a balanced or imbalanced set of training examples
-        # Imbalanced set may be dealt with in the future but is not
-        # currently an option.
-        if balanced:
-            self.X = self.inputs['x']
-            self.y = self.inputs['y']
-            self.mjj = self.inputs['mjj'] # GeV
-
+        if not include_pt1pt2 and include_DeltaR:
+            self.X = np.column_stack((self.inputs['x'][:,:6], self.inputs['x'][:,7]))
+            self.params = np.concatenate((self.inputs['params'][:6], self.inputs['params'][:7]))
+        elif include_pt1pt2 and not include_DeltaR:
+            self.X = self.inputs['x'][:,:7]
+            self.params = self.inputs['params'][:7]
+        elif not include_pt1pt2 and not include_DeltaR:
+            self.X = self.inputs['x'][:,:6]
+            self.params = self.inputs['params'][:6]
         else:
-            raise Exception("Code under construction! Only balanced training examples can be handled currently.")
+            self.X = self.inputs['x']
+            self.params = self.inputs['params']
+
+        self.y = self.inputs['y']
+        self.mjj = self.inputs['mjj'] # GeV
         
         # Feature size of training example set
         self.param_dim = np.shape(self.X)[1]

@@ -11,7 +11,7 @@ from argparse import ArgumentParser
 from sys import argv
 import os
 from keras.models import Sequential
-from keras.layers import Dense, Dropout, Activation, Flatten, LeakyReLU
+from keras.layers import Dense
 from keras.callbacks import EarlyStopping
 from tensorflow import compat
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # suppress Keras/TF warnings
@@ -30,10 +30,11 @@ print()
 info("Parsing command line arguments.")
 
 parser = ArgumentParser(description='Command line parser of model options and tags')
-parser.add_argument('--tag'       , dest = 'tag'       , help = 'production tag'                      ,  required = True  )
-parser.add_argument('--nlayers'   , dest = 'nlayers'   , help = 'number of hidden layers'             ,  required = False , type = int )
-parser.add_argument('--cfg'       , dest = 'cfg'       , help = 'configuration file for model'        ,  required = True  )
-parser.add_argument('--run'       , dest = 'run'       , help = 'index of current training session'   ,  required = True , type = int )
+parser.add_argument('--tag'       , dest = 'tag'       , help = 'production tag'                      ,  required = True                                       )
+parser.add_argument('--nlayers'   , dest = 'nlayers'   , help = 'number of hidden layers'             ,  required = False   ,   type = int   ,   default = 4   )
+parser.add_argument('--cfg'       , dest = 'cfg'       , help = 'configuration file for model'        ,  required = True                                       )
+parser.add_argument('--run'       , dest = 'run'       , help = 'index of current training session'   ,  required = True    ,   type = int                     )
+
 
 args = parser.parse_args()
 
@@ -61,6 +62,8 @@ config = ConfigParser()
 config.optionxform = str
 config.read(args.cfg)
 
+print(config.sections)
+
 # Hidden hyperparameters
 hidden_activations = config['HIDDEN']['HiddenActivations']
 nodes              = config['HIDDEN']['Nodes'].split('\n')
@@ -87,7 +90,7 @@ if args.nlayers:
 ## 
 
 # Load training examples
-inputs = InputProcessor(inputs_filename)
+inputs = InputProcessor(inputs_filename, include_pt1pt2=True, include_DeltaR=True)
 inputs.normalize_inputs(run=args.run, model_dir=model_dir)
 inputs.split_input_examples()
 
@@ -191,7 +194,7 @@ nn_info_list = [
         f"{np.sum(inputs.y == 1):d}\n",
     f"Input parameters:            {param_dim},\n" +
         f"                             " + 
-        f"{inputs.inputs['params'][:param_dim]}\n",
+        f"{inputs.params}\n",
     f"Optimizer:                   {optimizer}\n",
     f"Loss:                        {loss_function}\n",
     f"Num epochs:                  {nepochs}\n",
