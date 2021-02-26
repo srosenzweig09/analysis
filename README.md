@@ -1,7 +1,6 @@
 # Analysis_6b
 
-I run from LXPLUS using a CONDA environment saved in a YML file (sixb.yml).
-RECOMMENDATION: Clone conda environment for  best results
+### Preparing the environment
 
 1. [Download miniconda3](https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh) (Linux 64-bit with Python 3.8)
 2. Create a [conda environment](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html) using `conda create --name sixb`
