@@ -9,6 +9,7 @@ from sklearn.metrics import auc
 from keras.models import model_from_json
 import matplotlib as mpl
 mpl.rcParams['text.usetex'] = False
+from matplotlib.backends.backend_pdf import PdfPages
 
 # custom libraries and modules
 from logger import info, error
@@ -34,6 +35,7 @@ model_dir = input_dir + "model/"
 eval_dir = input_dir + "evaluation/"
 info(f"Evaluating {args.nmodels} models with {args.nlayers} hidden layers and tag {args.tag} from location {input_dir}")
 
+threshold = 0.5
 
 nn_info =  model_dir + 'nn_info.txt'
 with open(nn_info, 'r') as nn_info:
@@ -43,7 +45,7 @@ for line in lines:
     print(line)
 
 
-def return_predictions(nmodels, tag, pred_file, nlayers):
+def return_predictions(nmodels, tag, pred_file=False, nlayers=4):
 
     dirname = f'layers/layers_{nlayers}/{tag}/'
     dir_model = dirname + 'model/'
@@ -108,185 +110,195 @@ info("Beginning model analysis.")
 
 predictions, high_peak = return_predictions(args.nmodels, args.tag, args.pred_file, args.nlayers)
 
+pdf_file = f'Model_Eval/{args.tag}.pdf'
 
-### ------------------------------------------------------------------------------------
-## Sample the ROC curve for a random model
+with PdfPages(pdf_file) as pdf:
 
+    for nmodel in np.arange(1,args.nmodels+1):
 
-i = np.random.randint(1, args.nmodels+1)
-ex_file = f"{model_dir}test_set_{i}.npz"
-info(f"Importing test set from file: {ex_file}")
-examples = np.load(ex_file)
-y = examples['y_test']
-fpr, tpr, nn_auc = get_roc(y, predictions[i-1,:])
+        # i = np.random.randint(1, args.nmodels+1)
+        ex_file = f"{model_dir}test_set_{nmodel}.npz"
+        info(f"Importing test set from file: {ex_file}")
+        examples = np.load(ex_file)
 
-fig, ax = plt.subplots(figsize=(15,15))
-ax.plot(fpr, tpr, label='Keras (area = {:.3f})'.format(nn_auc))
-ax.set_xlabel('False positive rate')
-ax.set_ylabel('True positive rate')
-ax.legend()
-ax.set_title(f'ROC curve for model {i} with {args.nlayers} hidden layers and tag {args.tag}')
-fig.savefig(eval_dir + 'roc')
+        y = examples['y_test']
+        H_mask = (y == 1)
 
+        m = examples['mjj_test']
 
-### ------------------------------------------------------------------------------------
-## Sample mass scatter plot for the same random model
+        eta1 = examples['X_test'][:,1]
+        phi1 = examples['X_test'][:,2]
+        eta2 = examples['X_test'][:,4]
+        phi2 = examples['X_test'][:,5]
 
-m = examples['mjj_test']
+        dR = calcDeltaR(eta1, eta2, phi1, phi2)
 
-H_mask = (y == 1)
+        dR_nH = dR[~H_mask]
+        dR_H = dR[H_mask]
 
-m_bins = np.linspace(0, 600, 100)
-p_bins = np.linspace(0,1,100)
+        p_nH = predictions[nmodel-1,:][~H_mask]
+        p_H = predictions[nmodel-1,:][H_mask]
 
-fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(20,10))
-fig.suptitle(rf"NN Test Scores vs. $m_{{bb}}$ for model {i} with {args.nlayers} hidden layers and tag {args.tag}")
+        m_nH = m[~H_mask]
+        m_H = m[H_mask]
 
-ax = axs[0]
-m_nH = m[~H_mask]
-p_nH = predictions[i-1,:][~H_mask]
-n, xedges, yedges, im = hist2d(ax, m_nH, p_nH, xbins=m_bins, ybins=p_bins)
-ax.set_xlabel(r"Non-Higgs pair $m_{jj}$ [GeV]")
-ax.set_ylabel("NN Score")
-ax.set_title("Non-Higgs Pairs")
-fig.colorbar(im, ax=ax)
-
-ax = axs[1]
-m_H = m[H_mask]
-p_H = predictions[i-1,:][H_mask]
-n, xedges, yedges, im = hist2d(ax, m_H, p_H, xbins=m_bins, ybins=p_bins)
-ax.set_xlabel(r"Higgs pair $m_{jj}$ [GeV]")
-ax.set_ylabel("NN Score")
-ax.set_title("Higgs Pairs")
-fig.colorbar(im, ax=ax)
-
-fig.savefig(eval_dir + 'mass_scatter')
-
-### ------------------------------------------------------------------------------------
-## Sample DeltaR scatter plot for the same random model
-
-eta1 = examples['X_test'][:,1]
-phi1 = examples['X_test'][:,2]
-eta2 = examples['X_test'][:,4]
-phi2 = examples['X_test'][:,5]
-dR = calcDeltaR(eta1, eta2, phi1, phi2)
-
-H_mask = (y == 1)
-
-dR_bins = np.linspace(0, 7, 100)
-p_bins = np.linspace(0,1,100)
-
-fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(20,10))
-fig.suptitle(rf"NN Test Scores vs. $\Delta R_{{bb}}$ for model {i} with {args.nlayers} hidden layers and tag {args.tag}")
-
-ax = axs[0]
-dR_nH = dR[~H_mask]
-p_nH = predictions[i-1,:][~H_mask]
-n, xedges, yedges, im = hist2d(ax, dR_nH, p_nH, xbins=dR_bins, ybins=p_bins)
-ax.set_xlabel(r"Non-Higgs pair $\Delta R_{jj}$")
-ax.set_ylabel("NN Score")
-ax.set_title("Non-Higgs Pairs")
-fig.colorbar(im, ax=ax)
-
-ax = axs[1]
-dR_H = dR[H_mask]
-p_H = predictions[i-1,:][H_mask]
-n, xedges, yedges, im = hist2d(ax, dR_H, p_H, xbins=dR_bins, ybins=p_bins)
-ax.set_xlabel(r"Higgs pair $\Delta R_{jj}$")
-ax.set_ylabel("NN Score")
-ax.set_title("Higgs Pairs")
-fig.colorbar(im, ax=ax)
-
-fig.savefig(eval_dir + 'dR_scatter')
-
-### ------------------------------------------------------------------------------------
-## Plot distribution of test masses
-
-fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(15,7))
-# fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(10,4))
-
-ax1 = axs[0]
-ax0 = axs[1]
-hist(ax0, m_H, bins=m_bins)
-hist(ax1, m_nH, bins=m_bins)
+        high_nH = p_nH > threshold
+        low_H   = p_H  < threshold
 
 
-ax0.set_title("True Higgs Pairs")
-ax1.set_title("True Non-Higgs Pairs")
+        ### ------------------------------------------------------------------------------------
+        ## Prep plots
 
-ax0.set_xlabel('Prediction')
-ax0.set_ylabel('Count')
+        dR_bins = np.linspace(0, 7, 100)
+        m_bins = np.linspace(0, 600, 100)
+        p_bins = np.linspace(0,1,100)
 
-ax1.set_xlabel('Prediction')
-ax1.set_ylabel('Count')
+        fig = plt.figure(figsize=(10,20))
+        fig.suptitle(f"{args.tag}  {nmodel}")
+        gs = fig.add_gridspec(7, 8)
 
-# ax.text(0.2, 0.8, f"Number of Hidden Layers: {{{args.nlayers}}}\nMax: {{{np.max(high_peak):.3f}}}, Min: {{{np.min(high_peak):.3f}}}, Avg: {{{np.average(high_peak):.3f}}}\nNumber of distributions: {{{len(predictions):d}}}", transform=ax.transAxes)
+        # Mass distribution plots
+        mnH_ax       = fig.add_subplot(gs[0, 0:4])
+        mH_ax        = fig.add_subplot(gs[0, 4:])
 
-fig.savefig(eval_dir + 'test_mass')
+        dRnH_ax      = fig.add_subplot(gs[1, 0:4])
+        dRH_ax       = fig.add_subplot(gs[1, 4:])
 
+        mscatnH_ax   = fig.add_subplot(gs[2, 0:4])
+        mscatH_ax    = fig.add_subplot(gs[2, 4:])
 
-### ------------------------------------------------------------------------------------
-## Plot distribution of test masses
+        dRscatnH_ax  = fig.add_subplot(gs[3, 0:4])
+        dRscatH_ax   = fig.add_subplot(gs[3, 4:])
 
-fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(15,7))
-# fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(10,4))
+        massdRnH_ax   = fig.add_subplot(gs[4, 0:4])
+        massdRH_ax    = fig.add_subplot(gs[4, 4:])
 
-ax1 = axs[0]
-ax0 = axs[1]
-hist(ax0, dR_H, bins=dR_bins)
-hist(ax1, dR_nH, bins=dR_bins)
+        scoreH_ax    = fig.add_subplot(gs[5, 4:], label="Higgs")
+        scorenH_ax1  = fig.add_subplot(gs[5, 0:3], label="Regular")
+        scorenH_ax2  = fig.add_subplot(gs[5, 0:3], label="LogPlot", frameon=False)
 
-ax0.set_title("True Higgs Pairs")
-ax1.set_title("True Non-Higgs Pairs")
+        roc_ax       = fig.add_subplot(gs[6, 2:5])
 
-ax0.set_xlabel(r'$\Delta R_{jj}$')
-ax0.set_ylabel('Count')
+        ### ------------------------------------------------------------------------------------
+        ## Plot distribution of test masses
 
-ax1.set_xlabel(r'$\Delta R_{jj}$')
-ax1.set_ylabel('Count')
+        hist(mH_ax, m_H, bins=m_bins, label='All Scores')
+        hist(mH_ax, m_H[low_H], bins=m_bins, label='Low Scores')
+        hist(mnH_ax, m_nH, bins=m_bins, label='All Scores')
+        hist(mnH_ax, m_nH[high_nH], bins=m_bins, label='Low Scores')
 
-# ax.text(0.2, 0.8, f"Number of Hidden Layers: {{{args.nlayers}}}\nMax: {{{np.max(high_peak):.3f}}}, Min: {{{np.min(high_peak):.3f}}}, Avg: {{{np.average(high_peak):.3f}}}\nNumber of distributions: {{{len(predictions):d}}}", transform=ax.transAxes)
+        mH_ax.set_title("True Higgs Pairs", pad=12)
+        mnH_ax.set_title("True Non-Higgs Pairs", pad=12)
 
-fig.savefig(eval_dir + 'test_dR')
+        mH_ax.set_xlabel(r'$m_{bb}$ [GeV]')
+        mH_ax.set_ylabel('Count')
 
-### ------------------------------------------------------------------------------------
-## Plot distribution of NN Test Scores
-
-fig = plt.figure(figsize=(15,7))
-# fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(10,4))
-
-ax0 = fig.add_subplot(122, label="Higgs")
-ax1 = fig.add_subplot(121, label="Regular")
-ax2 = fig.add_subplot(121, label="LogPlot", frameon=False)
-
-c0 = 'C0'
-c1 = 'C1'
-c2 = 'C2'
-
-for pred in predictions:
-    hist(ax0, pred[H_mask], bins=p_bins, label='True Higgs Pair')
-    hist(ax1, pred[~H_mask], bins=p_bins, label='True Non-Higgs Pair', color=c1)
-    hist(ax2, pred[~H_mask], bins=p_bins, label='True Non-Higgs Pair', color=c2)
+        mnH_ax.set_xlabel(r'$m_{bb}$ [GeV]')
+        mnH_ax.set_ylabel('Count')
 
 
-ax0.set_title("True Higgs Pairs")
-ax1.set_title("True Non-Higgs Pairs")
+        ### ------------------------------------------------------------------------------------
+        ## Plot distribution of test DeltaR
 
-ax0.set_xlabel('Prediction')
-ax0.set_ylabel('Count')
+        hist(dRH_ax, dR_H, bins=dR_bins, label='All Scores')
+        hist(dRH_ax, dR_H[low_H], bins=dR_bins, label='Low Scores')
+        hist(dRnH_ax, dR_nH, bins=dR_bins, label='All Scores')
+        hist(dRnH_ax, dR_nH[high_nH], bins=dR_bins, label='Low Scores')
+        
 
-ax1.set_xlabel('Prediction')
-ax1.set_ylabel('Count', color=c1)
-ax1.tick_params(axis='y', colors=c1)
+        dRH_ax.set_xlabel(r'$\Delta R_{jj}$')
+        dRH_ax.set_ylabel('Count')
 
-ax2.tick_params(axis='x', labelbottom=False)
-ax2.set_yscale('log')
-ax2.set_ylabel('Log(Count)', color=c2, rotation=270, labelpad=25)
-ax2.yaxis.tick_right()
-ax2.yaxis.set_label_position('right')
-ax2.tick_params(axis='y',  colors=c2)
-ax2.axis()
+        dRnH_ax.set_xlabel(r'$\Delta R_{jj}$')
+        dRnH_ax.set_ylabel('Count')
 
-ax.text(0.2, 0.8, f"Number of Hidden Layers: {{{args.nlayers}}}\nMax: {{{np.max(high_peak):.3f}}}, Min: {{{np.min(high_peak):.3f}}}, Avg: {{{np.average(high_peak):.3f}}}\nNumber of distributions: {{{len(predictions):d}}}", transform=ax.transAxes)
 
-fig.savefig(eval_dir + 'test_predictions')
+        ### ------------------------------------------------------------------------------------
+        ## Sample mass scatter plot for the same random model
+
+        n, xedges, yedges, im = hist2d(mscatnH_ax, m_nH, p_nH, xbins=m_bins, ybins=p_bins)
+        mscatnH_ax.set_xlabel(r"Non-Higgs pair $m_{jj}$ [GeV]")
+        mscatnH_ax.set_ylabel("NN Score")
+        fig.colorbar(im, ax=mscatnH_ax)
+
+        n, xedges, yedges, im = hist2d(mscatH_ax, m_H, p_H, xbins=m_bins, ybins=p_bins)
+        mscatH_ax.set_xlabel(r"Higgs pair $m_{jj}$ [GeV]")
+        mscatH_ax.set_ylabel("NN Score")
+        fig.colorbar(im, ax=mscatH_ax)
+
+
+        ### ------------------------------------------------------------------------------------
+        ## Sample DeltaR scatter plot for the same random model
+
+
+        n, xedges, yedges, im = hist2d(dRscatnH_ax, dR_nH, p_nH, xbins=dR_bins, ybins=p_bins)
+        dRscatnH_ax.set_xlabel(r"Non-Higgs pair $\Delta R_{jj}$")
+        dRscatnH_ax.set_ylabel("NN Score")
+        fig.colorbar(im, ax=dRscatnH_ax)
+
+        n, xedges, yedges, im = hist2d(dRscatH_ax, dR_H, p_H, xbins=dR_bins, ybins=p_bins)
+        dRscatH_ax.set_xlabel(r"Higgs pair $\Delta R_{jj}$")
+        dRscatH_ax.set_ylabel("NN Score")
+        fig.colorbar(im, ax=dRscatH_ax)
+
+
+        ### ------------------------------------------------------------------------------------
+        ## Sample DeltaR scatter plot for the same random model
+
+
+        n, xedges, yedges, im = hist2d(massdRnH_ax, dR_nH, m_nH, xbins=dR_bins, ybins=m_bins)
+        massdRnH_ax.set_xlabel(r"Non-Higgs pair $\Delta R_{jj}$")
+        massdRnH_ax.set_ylabel(r"Higgs pair $m_{jj}$ [GeV]")
+        fig.colorbar(im, ax=massdRnH_ax)
+
+        n, xedges, yedges, im = hist2d(massdRH_ax, dR_H, m_H, xbins=dR_bins, ybins=m_bins)
+        massdRH_ax.set_xlabel(r"Higgs pair $\Delta R_{jj}$")
+        massdRH_ax.set_ylabel(r"Higgs pair $m_{jj}$ [GeV]")
+        fig.colorbar(im, ax=massdRH_ax)
+
+
+        ### ------------------------------------------------------------------------------------
+        ## Plot distribution of NN Test Scores
+
+
+        c0 = 'C0'
+        c1 = 'C0'
+        c2 = 'C1'
+
+        # for pred in predictions:
+        hist(scoreH_ax, p_H, bins=p_bins, label='True Higgs Pair')
+        hist(scorenH_ax1, p_nH, bins=p_bins, label='True Non-Higgs Pair', color=c1)
+        hist(scorenH_ax2, p_nH, bins=p_bins, label='True Non-Higgs Pair', color=c2)
+
+        scoreH_ax.set_xlabel('NN Score')
+        scoreH_ax.set_ylabel('Count')
+
+        scorenH_ax1.set_xlabel('NN Score')
+        scorenH_ax1.set_ylabel('Count', color=c1)
+        scorenH_ax1.tick_params(axis='y', colors=c1)
+
+        scorenH_ax2.tick_params(axis='x', labelbottom=False)
+        scorenH_ax2.set_yscale('log')
+        scorenH_ax2.set_ylabel('Log(Count)', color=c2, rotation=270, labelpad=25)
+        scorenH_ax2.yaxis.tick_right()
+        scorenH_ax2.yaxis.set_label_position('right')
+        scorenH_ax2.tick_params(axis='y',  colors=c2)
+        scorenH_ax2.axis()
+
+
+
+        ### ------------------------------------------------------------------------------------
+        ## Sample the ROC curve for a random model
+
+        fpr, tpr, nn_auc = get_roc(y, predictions[nmodel-1,:])
+
+        roc_ax.plot(fpr, tpr, label='Keras (area = {:.3f})'.format(nn_auc))
+        roc_ax.set_xlabel('False positive rate')
+        roc_ax.set_ylabel('True positive rate')
+        roc_ax.legend()
+
+
+        ### ------------------------------------------------------------------------------------
+        ## Save!
+
+        pdf.savefig()
