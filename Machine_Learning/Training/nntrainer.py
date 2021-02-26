@@ -64,7 +64,7 @@ if args.nlayers == 1: layers = 'layer'
 
 assert (args.type == 'parton') or (args.type == 'smeared') or (args.type == 'reco'), "--type must be 'parton', 'smeared', or 'reco'!"
 
-cfg_location = '/eos/user/s/srosenzw/SWAN_projects/sixB/Analysis_6b/Machine_Learning/Training/Config/'
+cfg_location = 'Config/'
 cfg_name = f'nn_hyperparam_{args.nlayers}{layers}_{args.type}.cfg'
 
 cfg = cfg_location + cfg_name
