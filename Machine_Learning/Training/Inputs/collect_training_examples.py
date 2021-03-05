@@ -5,6 +5,7 @@ import numpy as np
 import uproot3_methods
 from random import sample
 from argparse import ArgumentParser
+from sklearn.model_selection import train_test_split
 
 from uproot_open import get_uproot_Table
 from logger import info
@@ -79,6 +80,12 @@ random_selection = np.array(())
 nevt = len(table[f'gen_HX_b1{tag}_pt'])
 print("File contains",nevt,"events.")
 
+evt_indices = np.arange(nevt)
+test_size = 0.20
+val_size = 0.125
+evt_train, evt_test = train_test_split(evt_indices, test_size=test_size)
+evt_train, evt_val = train_test_split(evt_train, test_size=val_size)
+
 ### ------------------------------------------------------------------------------------
 ## Loop through events and build arrays of features
 
@@ -101,12 +108,23 @@ if args.presel:
     print(np.sum(evt_mask*1))
 
 
-x = np.array(())
-y = np.array(())
-mjj = np.array(())
+x_train = np.array(())
+y_train = np.array(())
+m_train = np.array(())
+
+x_test = np.array(())
+y_test = np.array(())
+m_test = np.array(())
+
+x_val = np.array(())
+y_val = np.array(())
+m_val = np.array(())
+
 # extra_bkgd_x = np.array(())
 # extra_bkgd_mjj = np.array(())
 # extra_bkgd_y = np.array(())
+
+
 
 count = 0
 
@@ -244,13 +262,32 @@ for ievt in range(nevt):
     non_Higgs = non_Higgs_bs_0 + non_Higgs_bs_1
     m_nonH = non_Higgs.mass
     
-    mjj = np.concatenate((mjj, mbb, m_nonH))
-    
-    # Append 3 true booleans and 3 false booleans, corresponding to the three Higgs pairs (1) and three non-Higgs pairs (0)
-    y = np.append(y, np.array((1,1,1,0,0,0)))
-    
-    # Stacking Higgs pair inputs, each with shape (6,1), with randomly chosen non-Higgs pair inputs
-    x = np.append(x, np.concatenate((HX_input, HY1_input, HY2_input, input_1, input_2, input_3)))
+    if ievt in evt_train:
+        m_train = np.concatenate((m_train, mbb, m_nonH))
+        
+        # Append 3 true booleans and 3 false booleans, corresponding to the three Higgs pairs (1) and three non-Higgs pairs (0)
+        y_train = np.append(y_train, np.array((1,1,1,0,0,0)))
+        
+        # Stacking Higgs pair inputs, each with shape (6,1), with randomly chosen non-Higgs pair inputs
+        x_train = np.append(x_train, np.concatenate((HX_input, HY1_input, HY2_input, input_1, input_2, input_3)))
+
+    elif ievt in evt_test:
+        m_test = np.concatenate((m_test, mbb, m_nonH))
+        
+        # Append 3 true booleans and 3 false booleans, corresponding to the three Higgs pairs (1) and three non-Higgs pairs (0)
+        y_test = np.append(y_test, np.array((1,1,1,0,0,0)))
+        
+        # Stacking Higgs pair inputs, each with shape (6,1), with randomly chosen non-Higgs pair inputs
+        x_test = np.append(x_test, np.concatenate((HX_input, HY1_input, HY2_input, input_1, input_2, input_3)))
+
+    elif ievt in evt_val:
+        m_val = np.concatenate((m_val, mbb, m_nonH))
+        
+        # Append 3 true booleans and 3 false booleans, corresponding to the three Higgs pairs (1) and three non-Higgs pairs (0)
+        y_val = np.append(y_val, np.array((1,1,1,0,0,0)))
+        
+        # Stacking Higgs pair inputs, each with shape (6,1), with randomly chosen non-Higgs pair inputs
+        x_val = np.append(x_val, np.concatenate((HX_input, HY1_input, HY2_input, input_1, input_2, input_3)))
 
 
 x = x.reshape(int(len(x)/len(HX_input)), len(HX_input))
@@ -258,4 +295,6 @@ x = x.reshape(int(len(x)/len(HX_input)), len(HX_input))
 
 # np.savez(f"{type}_Inputs/nn_input_MX{args.MX}_MY{args.MY}_class", x=x,  y=y,  mjj=mjj, extra_bkgd_x=extra_bkgd_x, extra_bkgd_mjj=extra_bkgd_mjj, extra_bkgd_y = extra_bkgd_y, params=params, random_selection=random_selection)
 
-np.savez(f"{type}_Inputs/nn_input_MX{args.MX}_MY{args.MY}_class", x=x,  y=y,  mjj=mjj, params=params, random_selection=random_selection)
+# np.savez(f"{type}_Inputs/nn_input_MX{args.MX}_MY{args.MY}_class", x=x,  y=y,  mjj=mjj, params=params, random_selection=random_selection)
+
+np.savez(f"{type}_Inputs/nn_input_MX{args.MX}_MY{args.MY}_class", x_train=x_train,  x_test=x_test, x_val=x_val,  y_train=y_train, y_test=y_test, y_val=y_val,  m_test=m_test, train=evt_train, val=evt_val, test=evt_test, params=params, random_selection=random_selection)
