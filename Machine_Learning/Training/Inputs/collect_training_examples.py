@@ -98,6 +98,7 @@ if args.presel:
                 (np.abs(table[f'gen_HY2_b2{tag}_eta']) < 2.4))
 
     evt_mask = pt_mask & eta_mask
+    print(np.sum(evt_mask*1))
 
 
 x = np.array(())
@@ -168,7 +169,7 @@ for ievt in range(nevt):
     input_1_2 = np.array((part_dict[ind_1_2]['pt'][ievt], part_dict[ind_1_2]['eta'][ievt], part_dict[ind_1_2]['phi'][ievt]))
     input_1 = np.concatenate((input_1_1, input_1_2))
     input_1_dR = calcDeltaR(part_dict[ind_1_1]['eta'][ievt], part_dict[ind_1_2]['eta'][ievt], part_dict[ind_1_1]['phi'][ievt], part_dict[ind_1_2]['phi'][ievt])
-    input_1 = np.append(input_1, (input_1_1[0]*input_1_2[0], input_1_dR)) # product of b pTs
+    input_1 = np.append(input_1, input_1_dR)) # product of b pTs
     
     ind_2_1, ind_2_2 = keep_arr[2], keep_arr[3]
     assert(pair_dict[ind_2_1] != ind_2_2) # Verify not a Higgs pair
@@ -177,7 +178,7 @@ for ievt in range(nevt):
     input_2_2 = np.array((part_dict[ind_2_2]['pt'][ievt], part_dict[ind_2_2]['eta'][ievt], part_dict[ind_2_2]['phi'][ievt]))
     input_2 = np.concatenate((input_2_1, input_2_2))
     input_2_dR = calcDeltaR(part_dict[ind_2_1]['eta'][ievt], part_dict[ind_2_2]['eta'][ievt], part_dict[ind_2_1]['phi'][ievt], part_dict[ind_2_2]['phi'][ievt])
-    input_2 = np.append(input_2, (input_2_1[0]*input_2_2[0], input_2_dR)) # product of b pTs
+    input_2 = np.append(input_2, input_2_dR)) # product of b pTs
     
     ind_3_1, ind_3_2 = keep_arr[4], keep_arr[5]
     assert(pair_dict[ind_3_1] != ind_3_2) # Verify not a Higgs pair
@@ -186,7 +187,7 @@ for ievt in range(nevt):
     input_3_2 = np.array((part_dict[ind_3_2]['pt'][ievt], part_dict[ind_3_2]['eta'][ievt], part_dict[ind_3_2]['phi'][ievt]))
     input_3 = np.concatenate((input_3_1, input_3_2))
     input_3_dR = calcDeltaR(part_dict[ind_3_1]['eta'][ievt], part_dict[ind_3_2]['eta'][ievt], part_dict[ind_3_1]['phi'][ievt], part_dict[ind_3_2]['phi'][ievt])
-    input_3 = np.append(input_3, (input_3_1[0]*input_3_2[0], input_3_dR)) # product of b pTs
+    input_3 = np.append(input_3, input_3_dR)) # product of b pTs
     
     # non_Higgs_b1s = []
     # non_Higgs_b2s = []
@@ -251,17 +252,9 @@ for ievt in range(nevt):
     # Stacking Higgs pair inputs, each with shape (6,1), with randomly chosen non-Higgs pair inputs
     x = np.append(x, np.concatenate((HX_input, HY1_input, HY2_input, input_1, input_2, input_3)))
 
-#     print("So far so good!")
-#     break
-
-# print('mjj',mjj)
-# print('x',x)
-# print('y',y)
 
 x = x.reshape(int(len(x)/len(HX_input)), len(HX_input))
 # extra_bkgd_x = extra_bkgd_x.reshape(int(len(extra_bkgd_x)/len(HX_input)), len(HX_input))
-
-
 
 # np.savez(f"{type}_Inputs/nn_input_MX{args.MX}_MY{args.MY}_class", x=x,  y=y,  mjj=mjj, extra_bkgd_x=extra_bkgd_x, extra_bkgd_mjj=extra_bkgd_mjj, extra_bkgd_y = extra_bkgd_y, params=params, random_selection=random_selection)
 
