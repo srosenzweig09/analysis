@@ -20,10 +20,11 @@ info("Parsing command line arguments.")
 
 parser = ArgumentParser(description='Command line parser of model options and tags')
 
-parser.add_argument('--MX'    , dest = 'MX'       , help = 'Mass of X resonance'   ,  default = 700     )
-parser.add_argument('--MY'    , dest = 'MY'       , help = 'Mass of Y resonance'   ,  default = 400     )
-parser.add_argument('--presel'  , dest = 'presel' , help = 'apply preselections?'  ,  action = 'store_true'  ,  default = False   )
-parser.add_argument('--type'  , dest = 'type'     , help = 'parton or reco'        ,  required = True   )
+parser.add_argument('--MX'    , dest = 'MX'    , help = 'Mass of X resonance' , default = 700        )
+parser.add_argument('--MY'    , dest = 'MY'    , help = 'Mass of Y resonance' , default = 400        )
+parser.add_argument('--type'  , dest = 'type'  , help = 'parton or reco'      , required = True      )
+parser.add_argument('--presel', dest = 'presel', help = 'apply preselections?', action = 'store_true',
+                    default = False)
 
 args = parser.parse_args()
 
@@ -33,7 +34,7 @@ args = parser.parse_args()
 MX = args.MX
 MY = args.MY
 
-reco_filename = f'/eos/user/s/srosenzw/SWAN_projects/sixB/Analysis_6b/Data_Preparation/NMSSM_XYH_YToHH_6b_MX_{MX}_MY_{MY}_accstudies.root'
+reco_filename = f'NanoAOD/NMSSM_XYH_YToHH_6b_MX_{MX}_MY_{MY}_accstudies.root'
 table =  get_uproot_Table(reco_filename, 'sixBtree')
 nevents = table._length()
 
