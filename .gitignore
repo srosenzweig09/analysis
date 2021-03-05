@@ -5,6 +5,7 @@
 *.json
 *.h5
 *.txt
+*.pkl
 
 # Images
 *.pdf
