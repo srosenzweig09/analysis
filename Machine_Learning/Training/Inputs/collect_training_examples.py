@@ -148,6 +148,8 @@ for ievt in range(nevt):
     phi2 = np.array((b2_phi_arr[0][ievt], b2_phi_arr[1][ievt], b2_phi_arr[2][ievt]))
     m2 = np.array((b2_m_arr[0][ievt], b2_m_arr[1][ievt], b2_m_arr[2][ievt]))
 
+    print(pt1,eta1)
+
     
     b1 = uproot3_methods.TLorentzVectorArray.from_ptetaphim(pt1, eta1, phi1, m1)
     b2 = uproot3_methods.TLorentzVectorArray.from_ptetaphim(pt2, eta2, phi2, m2)
@@ -160,19 +162,19 @@ for ievt in range(nevt):
     HX_b2_input = np.array((HX_b2['pt'][ievt], HX_b2['eta'][ievt], HX_b2['phi'][ievt]))
     HX_input = np.concatenate((HX_b1_input, HX_b2_input))
     HX_dR = calcDeltaR(HX_b1['eta'][ievt], HX_b2['eta'][ievt], HX_b1['phi'][ievt], HX_b2['phi'][ievt])
-    HX_input = np.append(HX_input, (HX_b1_input[0]*HX_b2_input[0], HX_dR)) # product of b pTs, deltaR
+    HX_input = np.append(HX_input, HX_dR) # product of b pTs, deltaR
 
     HY1_b1_input = np.array((HY1_b1['pt'][ievt], HY1_b1['eta'][ievt], HY1_b1['phi'][ievt]))
     HY1_b2_input = np.array((HY1_b2['pt'][ievt], HY1_b2['eta'][ievt], HY1_b2['phi'][ievt]))
     HY1_input = np.concatenate((HY1_b1_input, HY1_b2_input))
     HY1_dR = calcDeltaR(HY1_b1['eta'][ievt], HY1_b2['eta'][ievt], HY1_b1['phi'][ievt], HY1_b2['phi'][ievt])
-    HY1_input = np.append(HY1_input, (HY1_b1_input[0]*HY1_b2_input[0], HY1_dR)) # product of b pTs, deltaR
+    HY1_input = np.append(HY1_input, HY1_dR) # product of b pTs, deltaR
     
     HY2_b1_input = np.array((HY2_b1['pt'][ievt], HY2_b1['eta'][ievt], HY2_b1['phi'][ievt]))
     HY2_b2_input = np.array((HY2_b2['pt'][ievt], HY2_b2['eta'][ievt], HY2_b2['phi'][ievt]))
     HY2_input = np.concatenate((HY2_b1_input, HY2_b2_input))
     HY2_dR = calcDeltaR(HY2_b1['eta'][ievt], HY2_b2['eta'][ievt], HY2_b1['phi'][ievt], HY2_b2['phi'][ievt])
-    HY2_input = np.append(HY2_input, (HY2_b1_input[0]*HY2_b2_input[0], HY2_dR)) # product of b pTs, deltaR
+    HY2_input = np.append(HY2_input, HY2_dR) # product of b pTs, deltaR
 
     
     # Preparing inputs for non-Higgs pairs
@@ -187,7 +189,7 @@ for ievt in range(nevt):
     input_1_2 = np.array((part_dict[ind_1_2]['pt'][ievt], part_dict[ind_1_2]['eta'][ievt], part_dict[ind_1_2]['phi'][ievt]))
     input_1 = np.concatenate((input_1_1, input_1_2))
     input_1_dR = calcDeltaR(part_dict[ind_1_1]['eta'][ievt], part_dict[ind_1_2]['eta'][ievt], part_dict[ind_1_1]['phi'][ievt], part_dict[ind_1_2]['phi'][ievt])
-    input_1 = np.append(input_1, input_1_dR)) # product of b pTs
+    input_1 = np.append(input_1, input_1_dR) # product of b pTs
     
     ind_2_1, ind_2_2 = keep_arr[2], keep_arr[3]
     assert(pair_dict[ind_2_1] != ind_2_2) # Verify not a Higgs pair
@@ -196,7 +198,7 @@ for ievt in range(nevt):
     input_2_2 = np.array((part_dict[ind_2_2]['pt'][ievt], part_dict[ind_2_2]['eta'][ievt], part_dict[ind_2_2]['phi'][ievt]))
     input_2 = np.concatenate((input_2_1, input_2_2))
     input_2_dR = calcDeltaR(part_dict[ind_2_1]['eta'][ievt], part_dict[ind_2_2]['eta'][ievt], part_dict[ind_2_1]['phi'][ievt], part_dict[ind_2_2]['phi'][ievt])
-    input_2 = np.append(input_2, input_2_dR)) # product of b pTs
+    input_2 = np.append(input_2, input_2_dR) # product of b pTs
     
     ind_3_1, ind_3_2 = keep_arr[4], keep_arr[5]
     assert(pair_dict[ind_3_1] != ind_3_2) # Verify not a Higgs pair
@@ -205,7 +207,7 @@ for ievt in range(nevt):
     input_3_2 = np.array((part_dict[ind_3_2]['pt'][ievt], part_dict[ind_3_2]['eta'][ievt], part_dict[ind_3_2]['phi'][ievt]))
     input_3 = np.concatenate((input_3_1, input_3_2))
     input_3_dR = calcDeltaR(part_dict[ind_3_1]['eta'][ievt], part_dict[ind_3_2]['eta'][ievt], part_dict[ind_3_1]['phi'][ievt], part_dict[ind_3_2]['phi'][ievt])
-    input_3 = np.append(input_3, input_3_dR)) # product of b pTs
+    input_3 = np.append(input_3, input_3_dR) # product of b pTs
     
     # non_Higgs_b1s = []
     # non_Higgs_b2s = []
