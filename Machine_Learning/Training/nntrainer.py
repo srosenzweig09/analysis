@@ -11,11 +11,18 @@ from argparse import ArgumentParser
 from sys import argv
 import os
 from keras.models import Sequential
-from keras.layers import Dense
+from keras.layers import Dense, Dropout
 from keras.callbacks import EarlyStopping
+from keras.regularizers import l1, l2, l1_l2
+from keras.constraints import max_norm
 from tensorflow import compat
+from sklearn.model_selection import train_test_split
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # suppress Keras/TF warnings
 compat.v1.logging.set_verbosity(compat.v1.logging.ERROR) # suppress Keras/TF warnings
+
+from sklearn.datasets import make_multilabel_classification
+from sklearn.model_selection import RepeatedKFold
+from sklearn.metrics import accuracy_score
 
 # Custom libraries and modules
 from inputprocessor import InputProcessor
@@ -36,14 +43,19 @@ parser.add_argument('--run'       , dest = 'run'       , help = 'index of curren
 parser.add_argument('--nlayers'   , dest = 'nlayers'   , help = 'number of hidden layers'             ,  default = 4           ,  type = int           )
 parser.add_argument('--DeltaR'    , dest = 'DeltaR'    , help = 'include DeltaR in features'          ,  action='store_true'   ,  default = False      )
 parser.add_argument('--pTprod'    , dest = 'pTprod'    , help = 'include product of pT in features'   ,  action='store_true'   ,  default = False      )
-
+parser.add_argument('--twoclass'    , dest = 'twoclass'    , help = 'two class classifier'   ,  action='store_true'   ,  default = False      )
+parser.add_argument('--outdir'    , dest = 'outdir'    , help = 'output directory'   ,    required = True      )
+parser.add_argument('--reg'    , dest = 'reg'    , help = 'regularizer? (l1, l2, l1_l2)'   ,    default = None      )
+parser.add_argument('--9feat'    , dest = 'feat9'    , help = '9 features (pt^2)'   ,    action = 'store_true', default=False      )
 
 args = parser.parse_args()
 
 ### ------------------------------------------------------------------------------------
 ## Prepare output directories
 
-input_dir = f"layers/layers_{args.nlayers}/{args.tag}/"
+input_dir = f"{args.outdir}/{args.tag}/"
+if args.feat9:
+    input_dir = f"{args.outdir}/{args.tag}_9feat/"
 model_dir = input_dir + "model/"
 eval_dir = input_dir + "evaluation/"
 
@@ -93,6 +105,13 @@ batch_size         = int(config['TRAINING']['BatchSize'])
     
 inputs_filename    = config['INPUTS']['InputFile']
 
+if args.twoclass:
+    c_ind = inputs_filename.find('class')
+    inputs_filename = inputs_filename[:c_ind] + 'two_' + inputs_filename[c_ind:]
+if args.feat9:
+    c_ind = inputs_filename.find('.npz')
+    inputs_filename = inputs_filename[:c_ind] + '_9features' + inputs_filename[c_ind:]
+
 info(f"Loading inputs from file: {inputs_filename}")
 
 if args.nlayers:
@@ -104,9 +123,14 @@ if args.nlayers:
 # Load training examples
 inputs = InputProcessor(inputs_filename, include_pt1pt2=args.pTprod, include_DeltaR=args.DeltaR)
 inputs.normalize_inputs(run=args.run, model_dir=model_dir)
-inputs.split_input_examples()
+n_events = np.shape(inputs.X)[0] / 6
+indexing = np.arange(0, n_events)
 
-# Split training examples into training, testing, and validation sets
+# test_size = 0.20
+# val_size = 0.125
+
+# if ~args.twoclass:
+inputs.split_input_examples()
 x_train, x_test, x_val = inputs.get_x()
 y_train, y_test, y_val = inputs.get_y()
 
@@ -124,9 +148,12 @@ model.add(Dense(nodes[0], input_dim=param_dim, activation=hidden_activations))
 
 # # Hidden layers
 for i in range(1,nlayers):
-    model.add(Dense(int(nodes[i]), activation=hidden_activations))
+    model.add(Dense(int(nodes[i]), activation=hidden_activations, kernel_constraint=max_norm(1.0), kernel_regularizer=l1_l2(), bias_constraint=max_norm(1.0)))
 
 # Output layer
+if args.twoclass: 
+    output_nodes = 2
+    output_activation = 'softmax'
 model.add(Dense(output_nodes, activation=output_activation))
 
 # Stop after epoch in which loss no longer decreases but save the best model.
