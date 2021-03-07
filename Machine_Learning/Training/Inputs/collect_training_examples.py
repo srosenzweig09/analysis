@@ -103,12 +103,6 @@ random_selection = np.array(())
 nevt = len(table[f'gen_HX_b1{tag}_pt'])
 print("File contains",nevt,"events.")
 
-evt_indices = np.arange(nevt)
-test_size = 0.20
-val_size = 0.125
-evt_train, evt_test = train_test_split(evt_indices, test_size=test_size)
-evt_train, evt_val = train_test_split(evt_train, test_size=val_size)
-
 ### ------------------------------------------------------------------------------------
 ## Loop through events and build arrays of features
 
@@ -128,36 +122,42 @@ if args.presel:
                 (np.abs(table[f'gen_HY2_b2{tag}_eta']) < 2.4))
 
     evt_mask = pt_mask & eta_mask
-    print(np.sum(evt_mask*1))
+    print(f"{np.sum(evt_mask*1} events pass preselections."))
 
+
+### ------------------------------------------------------------------------------------
+## Split signal events into train, test, val sets
+
+
+evt_indices = np.arange(nevt)
+test_size = 0.20
+val_size = 0.125
+evt_train, evt_test = train_test_split(evt_indices[evt_mask], test_size=test_size)
+evt_train, evt_val = train_test_split(evt_train, test_size=val_size)
+
+ntrain = len(evt_train)
+ntest  = len(evt_test)
+nval   = len(evt_val)
 
 x_train = np.array(())
-y_train = np.array(())
-m_train = np.array(())
-
 x_test = np.array(())
-y_test = np.array(())
-m_test = np.array(())
-
 x_val = np.array(())
-y_val = np.array(())
+
+m_train = np.array(())
+m_test = np.array(())
 m_val = np.array(())
 
-# extra_bkgd_x = np.array(())
-# extra_bkgd_mjj = np.array(())
-# extra_bkgd_y = np.array(())
+
+### ------------------------------------------------------------------------------------
+## Begin loop through events
+
 
 count = 0
-
 for ievt in range(nevt):
    # Loop over events, select the three Higgs pairs, select three random non-Higgs pairs
     if ievt % 10000 == 0: print("Processing evt {} / {}".format(ievt,nevt))
     if args.presel:
         if not evt_mask[ievt]: continue
-
-    # TLorentzArray requires an input of arrays (not scalars) so I have to calculate the
-    # p4 for all 6 bs together
-    # Calculate invariant mass of Higgs pairs
 
     # Prepare inputs for Higgs pairs
     HX_b1_input = np.array((HX_b1['pt'][ievt], HX_b1['eta'][ievt], HX_b1['phi'][ievt]))
@@ -181,6 +181,10 @@ for ievt in range(nevt):
     H_input = np.concatenate((HX_input, HY1_input, HY2_input))
     H_in = H_input.reshape(3, nfeatures)
 
+    # TLorentzArray requires an input of arrays (not scalars) so I have to calculate the
+    # p4 for all 6 bs together
+    # Calculate invariant mass of Higgs pairs
+
     b1 = uproot3_methods.TLorentzVectorArray.from_ptetaphim(H_in[:,0], H_in[:,1], H_in[:,2], np.zeros_like(H_in[:,2]))
     b2 = uproot3_methods.TLorentzVectorArray.from_ptetaphim(H_in[:,3], H_in[:,4], H_in[:,5], np.zeros_like(H_in[:,5]))
     b1_b2 = b1 + b2
@@ -202,38 +206,32 @@ for ievt in range(nevt):
     non_Higgs_bs_1 = uproot3_methods.TLorentzVectorArray.from_ptetaphim(nonH_in[:,3], nonH_in[:,4], nonH_in[:,5], np.zeros_like(nonH_in[:,5]))
     non_Higgs = non_Higgs_bs_0 + non_Higgs_bs_1
     m_nonH = non_Higgs.mass
-
-    y = np.concatenate((np.repeat(1, 3), np.repeat(0, 3)))
     
     if ievt in evt_train:
         m_train = np.concatenate((m_train, mbb, m_nonH))
-        # Append 3 true booleans and 3 false booleans, corresponding to the three Higgs pairs (1) and three non-Higgs pairs (0)
-        y_train = np.append(y_train, y)
         # Stacking Higgs pair inputs, each with shape (6,1), with randomly chosen non-Higgs pair inputs
         x_train = np.append(x_train, np.concatenate((H_input, nonH_kins)))
 
     elif ievt in evt_test:
         m_test = np.concatenate((m_test, mbb, m_nonH))
-        # Append 3 true booleans and 3 false booleans, corresponding to the three Higgs pairs (1) and three non-Higgs pairs (0)
-        y_test = np.append(y_test, y)
         # Stacking Higgs pair inputs, each with shape (6,1), with randomly chosen non-Higgs pair inputs
         x_test = np.append(x_test, np.concatenate((H_input, nonH_kins)))
 
     elif ievt in evt_val:
         m_val = np.concatenate((m_val, mbb, m_nonH))
-        # Append 3 true booleans and 3 false booleans, corresponding to the three Higgs pairs (1) and three non-Higgs pairs (0)
-        y_val = np.append(y_val, y)
         # Stacking Higgs pair inputs, each with shape (6,1), with randomly chosen non-Higgs pair inputs
         x_val = np.append(x_val, np.concatenate((H_input, nonH_kins)))
 
 
-x_train = x_train.reshape(evt_train, nfeatures)
-x_test = x_test.reshape(evt_test, nfeatures)
-x_val = x_val.reshape(evt_val, nfeatures)
-# extra_bkgd_x = extra_bkgd_x.reshape(int(len(extra_bkgd_x)/len(HX_input)), len(HX_input))
+x_train = x_train.reshape(ntrain*6, nfeatures)
+x_test  = x_test.reshape(ntest*6, nfeatures)
+x_val   = x_val.reshape(nval*6, nfeatures)
 
-# np.savez(f"{type}_Inputs/nn_input_MX{args.MX}_MY{args.MY}_class", x=x,  y=y,  mjj=mjj, extra_bkgd_x=extra_bkgd_x, extra_bkgd_mjj=extra_bkgd_mjj, extra_bkgd_y = extra_bkgd_y, params=params, random_selection=random_selection)
+y0 = np.array((1,1,1,0,0,0))
+y1 = np.array((0,0,0,1,1,1))
 
-# np.savez(f"{type}_Inputs/nn_input_MX{args.MX}_MY{args.MY}_class", x=x,  y=y,  mjj=mjj, params=params, random_selection=random_selection)
+y_train = np.column_stack((np.tile(y0, ntrain), np.tile(y1, ntrain)))
+y_test  = np.column_stack((np.tile(y0, ntest),  np.tile(y1, ntest)))
+y_val   = np.column_stack((np.tile(y0, nval),   np.tile(y1, nval)))
 
 np.savez(f"{type}_Inputs/nn_input_MX{args.MX}_MY{args.MY}_class", x_train=x_train,  x_test=x_test, x_val=x_val,  y_train=y_train, y_test=y_test, y_val=y_val,  m_test=m_test, train=evt_train, val=evt_val, test=evt_test, params=params, random_selection=random_selection)
