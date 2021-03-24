@@ -11,13 +11,9 @@ ex_loc = 'Gen_Inputs/'
 ex_file = 'nn_input_MX700_MY400_class.npz'
 examples = np.load(ex_loc + ex_file)
 
-X              = examples['x']
-y              = examples['y']
-mjj            = examples['mjj']
-# extra_bkgd_x   = examples['extra_bkgd_x']
-# extra_bkgd_y   = examples['extra_bkgd_y']
-# extra_bkgd_mjj = examples['extra_bkgd_mjj']
-params         = examples['params']
+X              = np.vstack((examples['x'], examples['x'], examples['x']))
+y              = np.vstack((examples['y'], examples['y'], examples['y'])) 
+mjj            = np.vstack((examples['m'], examples['m'], examples['m']))
 
 pt1 = X[:,0]
 eta1 = X[:,1]
@@ -29,9 +25,6 @@ phi2 = X[:,5]
 m1 = np.zeros_like(pt1)
 m2 = np.zeros_like(pt2)
 
-print(pt1)
-# print(pt2)
-
 pt1_smeared = (1+f_Gauss(pt1))*pt1
 pt2_smeared = (1+f_Gauss(pt2))*pt2
 
@@ -40,8 +33,6 @@ b2_p4 = TLorentzVectorArray.from_ptetaphim(pt2_smeared, eta2, phi2, m2)
 
 total_p4 = b1_p4 + b2_p4
 new_mjj =  total_p4.mass
-
-print(pt1_smeared)
 
 ratio1 = pt1_smeared / pt1
 ratio2 = pt2_smeared / pt2

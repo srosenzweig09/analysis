@@ -1,4 +1,5 @@
 from traceback import extract_stack
+from colors import H, W, FAIL
 
 for x in extract_stack():
     if not x[0].startswith('<frozen importlib'):
@@ -6,8 +7,8 @@ for x in extract_stack():
         break
 
 def info(string):
-    print(f"-- [INFO] -- {filename} -- " + string)
+    print(f"-- [INFO] -- {H}{filename}{W} -- " + string)
 def error(string):
-    print(f"!! [ERROR] !! {filename} -- " + string)
+    print(f"!! [{FAIL}ERROR{W}] !! {H}{filename}{W} -- " + string)
 
 

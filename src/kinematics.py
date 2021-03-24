@@ -2,35 +2,33 @@ import numpy as np
 import matplotlib.colors as colors
 import matplotlib.cm as cm
 import awkward0
+import math
 
 z_ME2 = 808 # cm
 
-def calcStar(eta_gen, phi_gen, vx, vy, vz, is2darray=True):
+def calcStar(eta_gen, phi_gen, vx, vy, vz):
     """Calculate etastar and phistar for a gen particle."""
     
+    if eta_gen.ndim > 1:
+        is2darray = True
+    else:
+        is2darray = False
+
     r = (z_ME2 - abs(vz))/abs(np.sinh(eta_gen))
     xStar = vx + r * np.cos(phi_gen)
     yStar = vy + r * np.sin(phi_gen)
     rStar = np.sqrt(xStar*xStar + yStar*yStar)
     
     etaStar_gen = np.arcsinh(z_ME2/rStar) * (eta_gen/abs(eta_gen))
+    phiStar_gen = []
 
-    if is2darray:
-        phiStar_gen = []
-        for i,evt in enumerate(phi_gen):
-            temp = evt.copy()
-            temp = np.where(xStar[i] >= 0, np.arctan(yStar[i]/xStar[i]), temp)
-            temp = np.where(np.logical_and(xStar[i] < 0, yStar[i] >= 0), np.pi + np.arctan(yStar[i]/xStar[i]), temp)
-            temp = np.where(np.logical_and(xStar[i] < 0, yStar[i] < 0), np.arctan(yStar[i]/xStar[i]) - np.pi, temp)
-            phiStar_gen.append(temp)
-        phiStar_gen = awkward0.fromiter(phiStar_gen)    
-    else:
-        temp = phi_gen.copy()
-        temp = np.where(xStar >= 0, np.arctan(yStar/xStar), temp)
-        temp = np.where(np.logical_and(xStar < 0, yStar >= 0), np.pi + np.arctan(yStar/xStar), temp)
-        temp = np.where(np.logical_and(xStar < 0, yStar < 0), np.arctan(yStar/xStar) - np.pi, temp)
-        phiStar_gen = awkward0.fromiter(temp)    
-
+    for x,y in zip(xStar, yStar):
+        if x >= 0:
+            phiStar_gen.append(np.arctan(y/x))
+        elif y >= 0 and x < 0:
+            phiStar_gen.append(np.pi + np.arctan(y/x))
+        elif y <= 0 and x < 0:
+            phiStar_gen.append(np.arctan(y/x) - np.pi)
     return etaStar_gen, phiStar_gen
 
 def calc_d0(pt, phi, vx, vy, q, B=3.811):
