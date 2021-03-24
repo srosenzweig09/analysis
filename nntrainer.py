@@ -33,34 +33,25 @@ print()
 info("Parsing command line arguments.")
 
 parser = ArgumentParser(description='Command line parser of model options and tags')
-parser.add_argument('--type', dest = 'type', help = 'parton, smeared, or reco'         , required = True )
-parser.add_argument('--task', dest = 'task', help = 'class or reg?'                    , required = True )
-parser.add_argument('--run' , dest = 'run' , help = 'index of current training session', required = True )
+
+parser.add_argument('--type', dest = 'type', help = 'parton, smeared, or reco' , default = 'reco' )
+parser.add_argument('--task', dest = 'task', help = 'classifier or regressor'  , default = 'classifier' )
+parser.add_argument('--run' , dest = 'run' , help = 'index of training session', default = 1 )
 
 args = parser.parse_args()
 
 ### ------------------------------------------------------------------------------------
 ## Prepare output directories
 
-assert (args.task == 'class') or (args.task == 'reg'), "--task must be 'class' or 'reg'!"
-
-if args.task == 'class':
-    out_dir = "models/classifier/"
-elif args.task == 'reg':
-    out_dir = "models/regressor/"
-
-out_dir += f"{args.type}/"
+out_dir = f"models/{args.task}/{args.type}/"
 model_dir = out_dir + "model/"
-eval_dir = out_dir + "evaluation/"
 
 if not os.path.exists(out_dir):
     os.makedirs(out_dir)
 if not os.path.exists(model_dir):
     os.makedirs(model_dir)
-if not os.path.exists(eval_dir):
-    os.makedirs(eval_dir)
 
-info(f"Training sessions will be saved in {out_dir}")
+info(f"Training sessions will be saved in {model_dir}")
 
 ### ------------------------------------------------------------------------------------
 ## Import configuration file
@@ -106,9 +97,11 @@ info(f"Loading inputs from file:\n\t{CYAN}{inputs_filename}{W}")
 # Load training examples
 examples = np.load(inputs_filename)
 x_train = examples['x_train']
+x_test = examples['x_test']
 x_val = examples['x_val']
 
 y_train = examples['y_train']
+y_test = examples['y_test']
 y_val = examples['y_val']
 
 param_dim = x_train.shape[1]
@@ -125,9 +118,9 @@ model.add(Dense(nodes[0], input_dim=param_dim, activation=hidden_activations))
 
 # # Hidden layers
 for i in range(1,nlayers):
-    if args.task == 'class':
+    if args.task == 'classifier':
         model.add(Dense(int(nodes[i]), activation=hidden_activations, kernel_constraint=max_norm(1.0), kernel_regularizer=l1_l2(), bias_constraint=max_norm(1.0)))
-    elif args.task == 'reg':
+    elif args.task == 'regressor':
         model.add(Dense(int(nodes[i]), activation=hidden_activations, kernel_regularizer=l1_l2()))
 
 # Output layer
@@ -136,9 +129,9 @@ model.add(Dense(output_nodes, activation=output_activation))
 # Stop after epoch in which loss no longer decreases but save the best model.
 es = EarlyStopping(monitor='loss', restore_best_weights=True)
 
-if args.task == 'class':
+if args.task == 'classifier':
     met = ['accuracy']
-elif args.task == 'reg':
+elif args.task == 'regressor':
     met = None
 
 info("Compiling the model.")
@@ -164,7 +157,7 @@ for line in nn_info_list:
     print(line)
 
 ### ------------------------------------------------------------------------------------
-## 
+## Fit the model
 
 print()
 info("Preparing to fit the model!\n")
@@ -179,7 +172,14 @@ history = model.fit(x_train,
                     callbacks=[es])
 
 ### ------------------------------------------------------------------------------------
-## 
+## Apply the model (predict)
+
+scores = model.predict(x_test)
+
+### ------------------------------------------------------------------------------------
+## Save the model, history, and predictions
+
+np.savez(out_dir + f"scores_{args.run}", scores=scores)
 
 # convert the history.history dict to a pandas DataFrame   
 hist_df = DataFrame(history.history) 
