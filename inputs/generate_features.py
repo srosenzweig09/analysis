@@ -11,7 +11,7 @@ import os
 from tqdm import tqdm
 from keras.models import model_from_json
 
-from uproot_open import get_uproot_Table
+from myuproot import get_uproot_Table
 from logger import info
 from kinematics import calcDeltaR
 from colors import CYAN, W
@@ -24,7 +24,7 @@ info("Parsing command line arguments.")
 parser = ArgumentParser(description='Command line parser of model options and tags')
 
 parser.add_argument('--type'      , dest = 'type'   , help = 'parton or reco'       , default = 'reco' )
-parser.add_argument('--task'      , dest = 'task'   , help = 'class or reg?'        , default = 'class' )
+parser.add_argument('--task'      , dest = 'task'   , help = 'class or reg?'        , default = 'classifier' )
 parser.add_argument('--MX'        , dest = 'MX'     , help = 'mass of X resonance'  , default = 700   )
 parser.add_argument('--MY'        , dest = 'MY'     , help = 'mass of Y resonance'  , default = 400   )
 parser.add_argument('--no_presel' , dest = 'presel' , help = 'apply preselections?' , default = True  , action = 'store_false')
@@ -52,10 +52,8 @@ nevents = table._length()
 
 if args.type == 'parton':
     tag = ''
-    intype = 'Gen'
 if args.type == 'reco':
     tag = '_recojet'
-    intype = 'Reco'
 
 HX_b1  = {'pt': table[f'HX_b1{tag}_pt' ],
           'eta':table[f'HX_b1{tag}_eta'],
@@ -107,7 +105,7 @@ info(f"Files contain {nevents} events.")
 ### ------------------------------------------------------------------------------------
 ## Classifier
 
-if args.task == 'class':
+if args.task == 'classifier':
 
     evt_indices = np.arange(nevents)
     test_size = 0.20
@@ -284,13 +282,13 @@ if args.task == 'class':
     x_test = scaler.transform(X_test)
     x_val = scaler.transform(X_val)
 
-    filename = dir_prefix + f"{intype}_Inputs/nn_input_MX{args.MX}_MY{args.MY}_class"
-    scaler_file = dir_prefix + f'{intype}_Inputs/nn_input_MX{args.MX}_MY{args.MY}_class_scaler.pkl'
+    filename = dir_prefix + f"{args.type}/nn_input_MX{args.MX}_MY{args.MY}_classifier"
+    info(f"Saving training examples to {filename}")
 
+    scaler_file = dir_prefix + f'{args.type}/nn_input_MX{args.MX}_MY{args.MY}_classifier_scaler.pkl'
     info(f"Saving training example scaler to {scaler_file}")
     dump(scaler, open(scaler_file, 'wb'))
 
-    info(f"Saving training example numpy to {filename}")
     np.savez(filename, nonHiggs_indices=random_indices,
         X_train=X_train,  X_test=X_test, X_val=X_val, 
         x_train=x_train,  x_test=x_test, x_val=x_val,  
@@ -303,9 +301,9 @@ if args.task == 'class':
 ### ------------------------------------------------------------------------------------
 ## Regressor
 
-elif args.task == 'reg':
+elif args.task == 'regressor':
 
-    ex_file = f"inputs/Reco_Inputs/nn_input_MX700_MY400_{args.task}.npz"
+    ex_file = f"inputs/reco/nn_input_MX700_MY400_{args.task}.npz"
     info(f"Importing test set from file: {ex_file}")
     examples = np.load(ex_file)
 
@@ -341,12 +339,13 @@ elif args.task == 'reg':
     class_scores = []
     Higgs_p4 = []
     for i in range(0,5,2):
-        j = i+1
+        j = i+2
         b1 = uproot3_methods.TLorentzVectorArray.from_ptetaphim(part_dict[i]['pt'], part_dict[i]['eta'], part_dict[i]['phi'], np.repeat(4e-9, nevents))
         b2 = uproot3_methods.TLorentzVectorArray.from_ptetaphim(part_dict[j]['pt'], part_dict[j]['eta'], part_dict[j]['phi'],  np.repeat(4e-9, nevents))
         dR = calcDeltaR(part_dict[i]['eta'], part_dict[j]['eta'], part_dict[i]['phi'], part_dict[j]['phi'])
         ins = np.column_stack((part_dict[i]['pt'], part_dict[i]['eta'], part_dict[i]['phi'], part_dict[j]['pt'], part_dict[j]['eta'], part_dict[j]['phi'], dR))
         scores = model.predict(ins)
+        print(scores)
         scores = scores[:,0]
         class_scores.append(scores)
 
@@ -396,9 +395,10 @@ elif args.task == 'reg':
     assert(X_val.shape[0] == y_val.shape[0])
     assert(X_test.shape[0] == y_test.shape[0])
 
-    filename = dir_prefix + f"{intype}_Inputs/nn_input_MX{args.MX}_MY{args.MY}_reg"
-    scaler_file = dir_prefix + f'{intype}_Inputs/nn_input_MX{args.MX}_MY{args.MY}_reg_scaler.pkl'
+    filename = dir_prefix + f"{args.type}/nn_input_MX{args.MX}_MY{args.MY}_regressor"
+    info(f"Saving training examples to {filename}")
 
+    scaler_file = dir_prefix + f'{args.type}/nn_input_MX{args.MX}_MY{args.MY}_regressor_scaler.pkl'
     info(f"Saving training example scaler to {scaler_file}")
     dump(scaler, open(scaler_file, 'wb'))
 
