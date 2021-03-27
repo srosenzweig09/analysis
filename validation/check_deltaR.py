@@ -1,4 +1,4 @@
-from uproot_open import get_uproot_Table
+from myuproot import get_uproot_Table
 from uproot3_methods import TLorentzVectorArray
 import numpy as np
 import matplotlib.pyplot as plt
