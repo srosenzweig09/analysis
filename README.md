@@ -2,8 +2,9 @@
 
 ## Table of Contents
 1. [Preparing conda environment](#1.-preparing-conda-environment)
-2. [Creating training examples](#2.-creating-training-examples)
-3. [Training the neural network](#3.-training-the-neural-network)
+2. [Repo Navigation](#2.-repo-navigation)
+3. [Creating training examples](#3.-creating-training-examples)
+4. [Training the neural network](#4.-training-the-neural-network)
 <!-- 4. [Analyzing the network performance](#4.-analyzing-network-performance) -->
 
 
@@ -19,7 +20,32 @@
  ```conda create --name sixb --file spec-file.txt```
  6. Recommended: Add custom_scripts to your python path using<br> `conda-develop custom_scripts`
 
-## 2. Generating features
+## 2. Repo Navigation
+.
++-- config
+|   +-- classifier
+|   +-- regressor
++-- inputs
+|   +-- debugging
+|   +-- parton
+|   +-- reco
+|   +-- smearing
+|   +-- visualize
++-- _includes
+|   +-- footer.html
+|   +-- header.html
++-- _layouts
+|   +-- default.html
+|   +-- post.html
++-- _posts
+|   +-- 2007-10-29-why-every-programmer-should-play-nethack.textile
+|   +-- 2009-04-26-barcamp-boston-4-roundup.textile
++-- _data
+|   +-- members.yml
++-- _site
++-- index.html
+
+## 3. Generating features
  A machine learning model learns the relationship between a set of features and their target output. Naturally, the first step to developing a model is to generate the features.
 
  Location: ```ml/inputs/generate_features.py```<br>
@@ -29,4 +55,4 @@
  ```--run```  &nbsp;&nbsp;Description: 
               
 
- ## 3. Training the neural network
+ ## 4. Training the neural network
