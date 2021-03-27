@@ -1,5 +1,3 @@
-# Analysis_6b
-
 ## Table of Contents
 1. [Preparing conda environment](#1.-preparing-conda-environment)
 2. [Repo Navigation](#2.-repo-navigation)
@@ -20,30 +18,26 @@
  ```conda create --name sixb --file spec-file.txt```
  6. Recommended: Add custom_scripts to your python path using<br> `conda-develop custom_scripts`
 
+
 ## 2. Repo Navigation
-.
-+-- config
-|   +-- classifier
-|   +-- regressor
-+-- inputs
-|   +-- debugging
-|   +-- parton
-|   +-- reco
-|   +-- smearing
-|   +-- visualize
-+-- _includes
-|   +-- footer.html
-|   +-- header.html
-+-- _layouts
-|   +-- default.html
-|   +-- post.html
-+-- _posts
-|   +-- 2007-10-29-why-every-programmer-should-play-nethack.textile
-|   +-- 2009-04-26-barcamp-boston-4-roundup.textile
-+-- _data
-|   +-- members.yml
-+-- _site
-+-- index.html
++-- config/
+|   +-- classifier/
+|       +--- parton.cfg
+|       +--- reco.cfg
+|       +--- smeared.cfg
+|   +-- regressor/
+|       +--- reco.cfg
++-- inputs/
+|   +-- debugging/
+|   +-- parton/
+|   +-- reco/
+|   +-- smearing/
+|   +-- visualize/
+|   +-- apply_preselections.c
+|   +-- generate_features.py
++-- scripts/
++-- signal/
++-- validation/
 
 ## 3. Generating features
  A machine learning model learns the relationship between a set of features and their target output. Naturally, the first step to developing a model is to generate the features.
