@@ -16,7 +16,7 @@
 4. Some packages will require included a new source<br> `conda config --append channels conda-forge` 
 5. Install the packages contained in `sixb-spec.txt` using the command<br>
  ```conda create --name sixb --file spec-file.txt```
- 6. Recommended: Add custom_scripts to your python path using<br> `conda-develop custom_scripts`
+ 6. Recommended: Clone and add modules/ to your python path using<br> `conda develop modules`
 
 
 ## 2. Repo Navigation
