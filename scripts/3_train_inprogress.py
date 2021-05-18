@@ -4,26 +4,33 @@ user-specified configuration file. The user may also provide a hyperparameter
 and value to override the configuration file.
 """
 
+print("Loading libraries. May take a few minutes.")
+
 from argparse import ArgumentParser
 from configparser import ConfigParser
 import numpy as np
 import os
-from keras.models import Sequential
-from keras.layers import Dense, Dropout
-from keras.callbacks import EarlyStopping
-from keras.regularizers import l1, l2, l1_l2
-from keras.constraints import max_norm
-from pandas import DataFrame
+# from keras.models import Sequential
+# from keras.layers import Dense, Dropout
+# from keras.callbacks import EarlyStopping
+# from keras.regularizers import l1, l2, l1_l2
+# from keras.constraints import max_norm
+# from pandas import DataFrame
+from sixb import get_sixb_p4, get_6jet_p4
+# from sklearn.model_selection import train_test_split
+# from tensorflow import compat
+# from sys import argv
+# os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # suppress Keras/TF warnings
+# compat.v1.logging.set_verbosity(compat.v1.logging.ERROR) # suppress Keras/TF warnings
+
 from sklearn.model_selection import train_test_split
-from tensorflow import compat
-from sys import argv
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # suppress Keras/TF warnings
-compat.v1.logging.set_verbosity(compat.v1.logging.ERROR) # suppress Keras/TF warnings
+from sklearn.preprocessing import MinMaxScaler
 
 # Custom libraries and modules
 from colors import CYAN, W
 from logger import info, error
 
+print("Libraries loaded.")
 print()
 
 
@@ -44,17 +51,17 @@ args = parser.parse_args()
 ### ------------------------------------------------------------------------------------
 ## Prepare output directories
 
-out_dir = f"models/{args.task}/{args.type}/"
-if args.tag:
-    out_dir += f'{args.tag}/'
-model_dir = out_dir + "model/"
+# out_dir = f"models/{args.task}/{args.type}/"
+# if args.tag:
+#     out_dir += f'{args.tag}/'
+# model_dir = out_dir + "model/"
 
-if not os.path.exists(out_dir):
-    os.makedirs(out_dir)
-if not os.path.exists(model_dir):
-    os.makedirs(model_dir)
+# if not os.path.exists(out_dir):
+#     os.makedirs(out_dir)
+# if not os.path.exists(model_dir):
+#     os.makedirs(model_dir)
 
-info(f"Training sessions will be saved in {model_dir}")
+# info(f"Training sessions will be saved in {model_dir}")
 
 ### ------------------------------------------------------------------------------------
 ## Import configuration file
@@ -94,14 +101,31 @@ if args.tag:
 
 nn_type            = config['TYPE']['Type']
 
-info(f"Loading inputs from file:\n\t{CYAN}{inputs_filename}{W}")
+# info(f"Loading inputs from file:\n\t{CYAN}{inputs_filename}{W}")
+signal_p4s = get_6jet_p4() # FIXME Will have to add a filename later.
+info("p4s loaded.")
+
+output_activation = 'sigmoid' # allows for multiple 'true' assignments
+output_nodes = 4
+
+inputs = []
+for p4 in signal_p4s:
+    inputs.append([p4.pt, p4.eta, p4.phi])
+for i,features in enumerate(inputs):
+    inputs[i] = np.concatenate((features))
+print(inputs)
+
+targets = np.tile(np.array(([1, 1, 1])), np.shape(inputs)[0])
+targets = targets.reshape(np.shape(inputs)[0],4)
+print(targets.shape)
+print(targets)
 
 ### ------------------------------------------------------------------------------------
 ## 
 
 test_size = 0.20
 val_size = 0.125
-x_train, x_test, y_train, y_test = train_test_split(inputs, target, test_size=test_size)
+x_train, x_test, y_train, y_test = train_test_split(inputs, targets, test_size=test_size)
 x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=val_size)
 
 # Load training examples
@@ -114,7 +138,8 @@ x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=va
 # y_test = examples['y_test']
 # y_val = examples['y_val']
 
-param_dim = x_train.shape[1]
+# param_dim = x_train.shape[1]
+param_dim = np.shape(inputs)[1]
 
 ### ------------------------------------------------------------------------------------
 ## 
@@ -185,44 +210,46 @@ history = model.fit(x_train,
 ## Apply the model (predict)
 
 scores = model.predict(x_test)
+print(scores)
+print(scores.shape)
 
 ### ------------------------------------------------------------------------------------
 ## Save the model, history, and predictions
 
-np.savez(out_dir + f"scores_{args.run}", scores=scores)
+# np.savez(out_dir + f"scores_{args.run}", scores=scores)
 
-# convert the history.history dict to a pandas DataFrame   
-hist_df = DataFrame(history.history) 
+# # convert the history.history dict to a pandas DataFrame   
+# hist_df = DataFrame(history.history) 
 
-# Save to json:  
-hist_json_file = model_dir + f'history_{args.run}.json' 
+# # Save to json:  
+# hist_json_file = model_dir + f'history_{args.run}.json' 
 
-with open(hist_json_file, mode='w') as f:
-    hist_df.to_json(f)
+# with open(hist_json_file, mode='w') as f:
+#     hist_df.to_json(f)
 
-# Save model to json and weights to h5
-model_json = model.to_json()
+# # Save model to json and weights to h5
+# model_json = model.to_json()
 
-json_save = model_dir + f"model_{args.run}.json"
-h5_save   = json_save.replace(".json", ".h5")
+# json_save = model_dir + f"model_{args.run}.json"
+# h5_save   = json_save.replace(".json", ".h5")
 
-with open(json_save, "w") as json_file:
-    json_file.write(model_json)
+# with open(json_save, "w") as json_file:
+#     json_file.write(model_json)
 
-# serialize weights to HDF5
-model.save_weights(h5_save)
+# # serialize weights to HDF5
+# model.save_weights(h5_save)
 
-info(f"Saved model and history to disk in location:"
-      f"\n   {json_save}\n   {h5_save}\n   {hist_json_file}")
+# info(f"Saved model and history to disk in location:"
+#       f"\n   {json_save}\n   {h5_save}\n   {hist_json_file}")
 
 
 ### ------------------------------------------------------------------------------------
 ## 
 
-nn_info_list[3] = f"Num epochs:                  {len(hist_df)}\n"
+# nn_info_list[3] = f"Num epochs:                  {len(hist_df)}\n"
 
-with open(out_dir + 'nn_info.txt', "w") as f:
-    for line in nn_info_list:
-        f.writelines(line)
+# with open(out_dir + 'nn_info.txt', "w") as f:
+#     for line in nn_info_list:
+#         f.writelines(line)
 
-print("-"*45 + CYAN + " Training ended " + W + "-"*45)
+# print("-"*45 + CYAN + " Training ended " + W + "-"*45)

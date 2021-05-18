@@ -29,6 +29,7 @@ parser.add_argument('--task'      , dest = 'task'   , help = 'class or reg?'    
 parser.add_argument('--MX'        , dest = 'MX'     , help = 'mass of X resonance'  , default = 700   )
 parser.add_argument('--MY'        , dest = 'MY'     , help = 'mass of Y resonance'  , default = 400   )
 parser.add_argument('--no_presel' , dest = 'presel' , help = 'apply preselections?' , default = True  , action = 'store_false')
+parser.add_argument('--tag'       , dest = 'tag'    , help = 'production tag'       , default = ''   )
 
 args = parser.parse_args()
 
@@ -42,10 +43,10 @@ MY = args.MY
 cwd = os.getcwd()
 dir_prefix = 'inputs/'
 
-reco_filename = f'signal/NanoAOD/NMSSM_XYH_YToHH_6b_MX_700_MY_400_reco_preselections.root'
+reco_filename = f'signal/NanoAOD/NMSSM_XYH_YToHH_6b_MX_700_MY_400_reco_preselections_500k.root'
 info(f"Opening ROOT file {CYAN}{reco_filename}{W} with columns")
-table =  open_up(reco_filename, 'sixBtree')
-nevents = table._length()
+tree, table, nptab =  open_up(reco_filename, 'sixBtree')
+nevents = len(table)
 
 ### ------------------------------------------------------------------------------------
 ## Prepare bs for pairing
@@ -57,30 +58,37 @@ if args.type == 'reco':
     tag1 = '_recojet'
     tag2 = 'Regressed'
 
-HX_b1  = {'pt': table[f'HX_b1{tag1}_pt{tag2}' ],
-          'eta':table[f'HX_b1{tag1}_eta'],
-          'phi':table[f'HX_b1{tag1}_phi'],
-          'm':  table[f'HX_b1{tag1}_m'  ]}
-HX_b2  = {'pt': table[f'HX_b2{tag1}_pt{tag2}' ],
-          'eta':table[f'HX_b2{tag1}_eta'],
-          'phi':table[f'HX_b2{tag1}_phi'],
-          'm':  table[f'HX_b2{tag1}_m'  ]}
-HY1_b1 = {'pt': table[f'HY1_b1{tag1}_pt{tag2}'],
-          'eta':table[f'HY1_b1{tag1}_eta'],
-          'phi':table[f'HY1_b1{tag1}_phi'],
-          'm':  table[f'HY1_b1{tag1}_m' ]}
-HY1_b2 = {'pt': table[f'HY1_b2{tag1}_pt{tag2}'],
-          'eta':table[f'HY1_b2{tag1}_eta'],
-          'phi':table[f'HY1_b2{tag1}_phi'],
-          'm':  table[f'HY1_b2{tag1}_m' ]}
-HY2_b1 = {'pt': table[f'HY2_b1{tag1}_pt{tag2}'],
-          'eta':table[f'HY2_b1{tag1}_eta'],
-          'phi':table[f'HY2_b1{tag1}_phi'],
-          'm':  table[f'HY2_b1{tag1}_m' ]}
-HY2_b2 = {'pt': table[f'HY2_b2{tag1}_pt{tag2}'],
-          'eta':table[f'HY2_b2{tag1}_eta'],
-          'phi':table[f'HY2_b2{tag1}_phi'],
-          'm':  table[f'HY2_b2{tag1}_m' ]}
+HX_b1  = {'pt': nptab[f'HX_b1{tag1}_pt{tag2}' ],
+          'eta':nptab[f'HX_b1{tag1}_eta'],
+          'phi':nptab[f'HX_b1{tag1}_phi'],
+          'm':  nptab[f'HX_b1{tag1}_m'  ]}
+HX_b2  = {'pt': nptab[f'HX_b2{tag1}_pt{tag2}' ],
+          'eta':nptab[f'HX_b2{tag1}_eta'],
+          'phi':nptab[f'HX_b2{tag1}_phi'],
+          'm':  nptab[f'HX_b2{tag1}_m'  ]}
+HY1_b1 = {'pt': nptab[f'HY1_b1{tag1}_pt{tag2}'],
+          'eta':nptab[f'HY1_b1{tag1}_eta'],
+          'phi':nptab[f'HY1_b1{tag1}_phi'],
+          'm':  nptab[f'HY1_b1{tag1}_m' ]}
+HY1_b2 = {'pt': nptab[f'HY1_b2{tag1}_pt{tag2}'],
+          'eta':nptab[f'HY1_b2{tag1}_eta'],
+          'phi':nptab[f'HY1_b2{tag1}_phi'],
+          'm':  nptab[f'HY1_b2{tag1}_m' ]}
+HY2_b1 = {'pt': nptab[f'HY2_b1{tag1}_pt{tag2}'],
+          'eta':nptab[f'HY2_b1{tag1}_eta'],
+          'phi':nptab[f'HY2_b1{tag1}_phi'],
+          'm':  nptab[f'HY2_b1{tag1}_m' ]}
+HY2_b2 = {'pt': nptab[f'HY2_b2{tag1}_pt{tag2}'],
+          'eta':nptab[f'HY2_b2{tag1}_eta'],
+          'phi':nptab[f'HY2_b2{tag1}_phi'],
+          'm':  nptab[f'HY2_b2{tag1}_m' ]}
+
+boosted_HX_b1  = {}
+boosted_HX_b2  = {}
+boosted_HY1_b1 = {}
+boosted_HY1_b2 = {}
+boosted_HY2_b1 = {}
+boosted_HY2_b2 = {}
 
 part_dict = {0:HX_b1, 1:HX_b2, 2:HY1_b1, 3:HY1_b2, 4:HY2_b1, 5:HY2_b2}
 part_name = {0:'HX_b1', 1:'HX_b2', 2:'HY1_b1', 3:'HY1_b2', 4:'HY2_b1', 5:'HY2_b2'}
@@ -150,19 +158,15 @@ if args.task == 'classifier':
     for i in range(5):
         for j in range(i+1,6):
             pair_name = part_name[i] + " & " + part_name[j]
-            # print(f"Generating features for pair: {pair_name}")
-            
-            # b1 = uproot3_methods.TLorentzVectorArray.from_ptetaphim(part_dict[i]['pt'], part_dict[i]['eta'], part_dict[i]['phi'], np.repeat(4e-9, nevents))
-            # b2 = uproot3_methods.TLorentzVectorArray.from_ptetaphim(part_dict[j]['pt'], part_dict[j]['eta'], part_dict[j]['phi'],  np.repeat(4e-9, nevents))
             
             b1 = vector.obj(pt=part_dict[i]['pt'], 
-                eta=part_dict[i]['eta'], 
-                phi=part_dict[i]['phi'], 
-                mass=np.repeat(4e-9, nevents))
+                            eta=part_dict[i]['eta'], 
+                            phi=part_dict[i]['phi'], 
+                            mass=np.repeat(4e-9, nevents))
             b2 = vector.obj(pt=part_dict[j]['pt'], 
-                eta=part_dict[j]['eta'], 
-                phi=part_dict[j]['phi'],  
-                mass=np.repeat(4e-9, nevents))
+                            eta=part_dict[j]['eta'], 
+                            phi=part_dict[j]['phi'],  
+                            mass=np.repeat(4e-9, nevents))
 
             H_candidate = b1 + b2
             invm = H_candidate.mass
@@ -171,8 +175,9 @@ if args.task == 'classifier':
             boosted_b2 = b2.boost(-H_candidate)
             
             dR = boosted_b1.deltaR(boosted_b2)
+            dPhi = np.abs(boosted_b1.deltaphi(boosted_b2))
             
-            inputs = np.column_stack((boosted_b1.pt, boosted_b1.eta, boosted_b1.phi, boosted_b2.pt, boosted_b2.eta, boosted_b2.phi, dR))
+            inputs = np.column_stack((b1.pt, boosted_b1.pt, np.abs(boosted_b1.eta), b2.pt, boosted_b2.pt, dPhi, dR))
             
             # inputs = np.column_stack((invm, dR))
 
@@ -224,7 +229,7 @@ if args.task == 'classifier':
     # X_train = np.row_stack((HX, HY1, HY2, nH1, nH2, nH3))
     X_train = []
     m_train = np.append(m_train, np.array((m[0][i], m[1][i], m[2][i], m_temp[random_indices[i,0]][i], m_temp[random_indices[i,1]][i], m_temp[random_indices[i,2]][i])))
-    y_train = np.append(y_train, np.array((1,1,1,0,0,0)))
+    y_train = np.append(y_train, np.row_stack((np.eye(4), (0,0,0,1), (0,0,0,1))) )
     train_pair_label = np.append(train_pair_label, np.concatenate((np.array(('HX', 'HY1', 'HY2')), nonHiggs_labels[random_indices[i,:]])))
     train_label = np.append(train_label, np.array((['Higgs']*3, ['Non-Higgs']*3)))
     
