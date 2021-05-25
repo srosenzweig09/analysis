@@ -6,22 +6,23 @@ and value to override the configuration file.
 
 print("Loading libraries. May take a few minutes.")
 
-from argparse import ArgumentParser
-from configparser import ConfigParser
 import numpy as np
 import os
-# from keras.models import Sequential
-# from keras.layers import Dense, Dropout
-# from keras.callbacks import EarlyStopping
-# from keras.regularizers import l1, l2, l1_l2
-# from keras.constraints import max_norm
-# from pandas import DataFrame
-from sixb import get_sixb_p4, get_6jet_p4
-# from sklearn.model_selection import train_test_split
-# from tensorflow import compat
-# from sys import argv
-# os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # suppress Keras/TF warnings
-# compat.v1.logging.set_verbosity(compat.v1.logging.ERROR) # suppress Keras/TF warnings
+from argparse import ArgumentParser
+from configparser import ConfigParser
+from keras.models import Sequential
+from keras.layers import Dense, Dropout
+from keras.callbacks import EarlyStopping
+from keras.regularizers import l1, l2, l1_l2
+from keras.constraints import max_norm
+from pandas import DataFrame
+from sixb import get_sixb_p4, get_6jet_p4, get_background_p4
+from sklearn.model_selection import train_test_split
+from tensorflow import compat
+from tqdm import tqdm
+from sys import argv
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # suppress Keras/TF warnings
+compat.v1.logging.set_verbosity(compat.v1.logging.ERROR) # suppress Keras/TF warnings
 
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
@@ -51,15 +52,15 @@ args = parser.parse_args()
 ### ------------------------------------------------------------------------------------
 ## Prepare output directories
 
-# out_dir = f"models/{args.task}/{args.type}/"
-# if args.tag:
-#     out_dir += f'{args.tag}/'
-# model_dir = out_dir + "model/"
+out_dir = f"models/{args.task}/{args.type}/"
+if args.tag:
+    out_dir += f'{args.tag}/'
+model_dir = out_dir + "model/"
 
-# if not os.path.exists(out_dir):
-#     os.makedirs(out_dir)
-# if not os.path.exists(model_dir):
-#     os.makedirs(model_dir)
+if not os.path.exists(out_dir):
+    os.makedirs(out_dir)
+if not os.path.exists(model_dir):
+    os.makedirs(model_dir)
 
 # info(f"Training sessions will be saved in {model_dir}")
 
@@ -102,23 +103,28 @@ if args.tag:
 nn_type            = config['TYPE']['Type']
 
 # info(f"Loading inputs from file:\n\t{CYAN}{inputs_filename}{W}")
-signal_p4s = get_6jet_p4() # FIXME Will have to add a filename later.
+signal_p4s, background_p4s = get_6jet_p4() # FIXME Will have to add a filename later.
+# background_p4s = get_background_p4()
 info("p4s loaded.")
 
-output_activation = 'sigmoid' # allows for multiple 'true' assignments
-output_nodes = 4
+# output_activation = 'sigmoid' # allows for multiple 'true' assignments
+output_nodes = 2
 
 inputs = []
-for p4 in signal_p4s:
-    inputs.append([p4.pt, p4.eta, p4.phi])
+for i,p4 in tqdm(enumerate(signal_p4s)):
+    dR = [(p4[i]+other_p4).deltaR for other_p4 in other_p4s]
+    inputs.append([p4.pt, p4.pt**2, p4.eta, p4.phi, dR])
+for p4 in background_p4s:
+    inputs.append([p4.pt, p4.pt**2, p4.eta, p4.phi])
 for i,features in enumerate(inputs):
     inputs[i] = np.concatenate((features))
-print(inputs)
 
-targets = np.tile(np.array(([1, 1, 1])), np.shape(inputs)[0])
-targets = targets.reshape(np.shape(inputs)[0],4)
+inputs = np.array((inputs))
+print(inputs.shape)
+targets = np.concatenate((np.repeat(1, len(signal_p4s)), np.repeat(0, len(background_p4s))))
+targets2 = np.where(targets == 1, 0, 1)
+targets = np.column_stack((targets, targets2))
 print(targets.shape)
-print(targets)
 
 ### ------------------------------------------------------------------------------------
 ## 
@@ -216,40 +222,40 @@ print(scores.shape)
 ### ------------------------------------------------------------------------------------
 ## Save the model, history, and predictions
 
-# np.savez(out_dir + f"scores_{args.run}", scores=scores)
+np.savez(out_dir + f"scores_{args.run}", scores=scores)
 
-# # convert the history.history dict to a pandas DataFrame   
-# hist_df = DataFrame(history.history) 
+# convert the history.history dict to a pandas DataFrame   
+hist_df = DataFrame(history.history) 
 
-# # Save to json:  
-# hist_json_file = model_dir + f'history_{args.run}.json' 
+# Save to json:  
+hist_json_file = model_dir + f'history_{args.run}.json' 
 
-# with open(hist_json_file, mode='w') as f:
-#     hist_df.to_json(f)
+with open(hist_json_file, mode='w') as f:
+    hist_df.to_json(f)
 
-# # Save model to json and weights to h5
-# model_json = model.to_json()
+# Save model to json and weights to h5
+model_json = model.to_json()
 
-# json_save = model_dir + f"model_{args.run}.json"
-# h5_save   = json_save.replace(".json", ".h5")
+json_save = model_dir + f"model_{args.run}.json"
+h5_save   = json_save.replace(".json", ".h5")
 
-# with open(json_save, "w") as json_file:
-#     json_file.write(model_json)
+with open(json_save, "w") as json_file:
+    json_file.write(model_json)
 
-# # serialize weights to HDF5
-# model.save_weights(h5_save)
+# serialize weights to HDF5
+model.save_weights(h5_save)
 
-# info(f"Saved model and history to disk in location:"
-#       f"\n   {json_save}\n   {h5_save}\n   {hist_json_file}")
+info(f"Saved model and history to disk in location:"
+      f"\n   {json_save}\n   {h5_save}\n   {hist_json_file}")
 
 
 ### ------------------------------------------------------------------------------------
 ## 
 
-# nn_info_list[3] = f"Num epochs:                  {len(hist_df)}\n"
+nn_info_list[3] = f"Num epochs:                  {len(hist_df)}\n"
 
-# with open(out_dir + 'nn_info.txt', "w") as f:
-#     for line in nn_info_list:
-#         f.writelines(line)
+with open(out_dir + 'nn_info.txt', "w") as f:
+    for line in nn_info_list:
+        f.writelines(line)
 
-# print("-"*45 + CYAN + " Training ended " + W + "-"*45)
+print("-"*45 + CYAN + " Training ended " + W + "-"*45)
