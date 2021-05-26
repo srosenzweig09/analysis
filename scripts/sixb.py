@@ -16,6 +16,8 @@ from tqdm import tqdm
 def get_6jet_p4(filename=None):
 
     vector.register_awkward()
+    signal_builder = ak.ArrayBuilder()
+    bkgd_builder = ak.ArrayBuilder()
     
     if filename:
         reco_filename = filename
@@ -34,42 +36,51 @@ def get_6jet_p4(filename=None):
 #     jet_m = nptab['jet_m']
 #     jet_btag = nptab['jet_btag']
     
-    signal_p4 = []
-    background_p4 = []
+    # signal_p4 = []
+    # background_p4 = []
+    global_list = [] # list of events
     
     pass_count = 0
     for evt in tqdm(range(nevents)):
-        # if pass_count == 2120: break
+
         # Make a mask for jets matched to signal bs
         signal_mask = [i for i,obj in enumerate(jet_idx[evt]) if obj > -1]
-        if len(jet_pt[evt][signal_mask]) < 6: continue
-        # Skip any events with duplicate matches (for now)
-        if len(np.unique(jet_idx[evt][signal_mask])) < len(jet_idx[evt][signal_mask]): continue
-        # Skip and events with less than 6 matching signal bs (for now)
         
         # Mask the background jets
         background_mask = [i for i,obj in enumerate(jet_idx[evt]) if obj == -1]
         # Cound the background jets
         n_nonHiggs = len(jet_pt[evt][background_mask])
-        if (n_nonHiggs < 1): continue
+
+        
+        # Skip and events with less than 6 matching signal bs (for now)
+        if len(jet_pt[evt][signal_mask]) < 6: continue
+        # Skip any events with duplicate matches (for now)
+        if len(np.unique(jet_idx[evt][signal_mask])) < len(jet_idx[evt][signal_mask]): continue
+        if (n_nonHiggs < 3): continue
+
+        evt_list = [] # list of dictionaries
+
         # Choose a random background jet
-        random_nonHiggs = random.choice(np.arange(0,n_nonHiggs))
-        random_signalb_to_replace = random.choice(np.arange(0,6))
+        random_nonHiggs = random.choices(np.arange(0,n_nonHiggs), k=3)
+        random_signalb_to_replace = random.choices(np.arange(0,6), k=3)
         
         sixb_pt = jet_pt[evt][signal_mask]
-        random_pt = jet_pt[evt][background_mask][random_nonHiggs]
         non_sixb_pt = sixb_pt.copy()
-        non_sixb_pt[random_signalb_to_replace] = random_pt
+        for nH, sb in zip(random_nonHiggs, random_signalb_to_replace):
+            bkgd_pt = jet_pt[evt][background_mask][nH]
+            non_sixb_pt[sb] = bkgd_pt
         
         sixb_eta = jet_eta[evt][signal_mask]
-        random_eta = jet_eta[evt][background_mask][random_nonHiggs]
         non_sixb_eta = sixb_eta.copy()
-        non_sixb_eta[random_signalb_to_replace] = random_eta
+        for nH, sb in zip(random_nonHiggs, random_signalb_to_replace):
+            bkgd_eta = jet_eta[evt][background_mask][nH]
+            non_sixb_eta[sb] = bkgd_eta
         
         sixb_phi = jet_phi[evt][signal_mask]
-        random_phi = jet_phi[evt][background_mask][random_nonHiggs]
         non_sixb_phi = sixb_phi.copy()
-        non_sixb_phi[random_signalb_to_replace] = random_phi
+        for nH, sb in zip(random_nonHiggs, random_signalb_to_replace):
+            bkgd_phi = jet_phi[evt][background_mask][nH]
+            non_sixb_phi[sb] = bkgd_phi
         
         sixb_pt = np.sort(sixb_pt)
         sixb_eta = sixb_eta[np.argsort(sixb_pt)]
@@ -79,31 +90,58 @@ def get_6jet_p4(filename=None):
         non_sixb_eta = non_sixb_eta[np.argsort(non_sixb_pt)]
         non_sixb_phi = non_sixb_phi[np.argsort(non_sixb_pt)]
 
-        signal = []
-        for pt, eta, phi in zip(sixb_pt, sixb_eta, sixb_phi): 
-            signal.append({
-                        "pt":pt, 
-                        "eta":eta, 
-                        "phi":phi, 
-                        "mass":4})
-        background = []
-        for pt, eta, phi in zip(non_sixb_pt, non_sixb_eta, non_sixb_phi):
-            background.append({
-                        "pt":pt, 
-                        "eta":eta, 
-                        "phi":phi, 
-                        "mass":4})
+        # for pt, eta, phi in zip(sixb_pt, sixb_eta, sixb_phi):
+        #     evt_list.append({"pt":pt, "eta":eta, "phi":phi, "mass":0})
+        # global_list.append(evt_list)
 
-        signal_p4.append(ak.Array(signal, with_name="MomentumObject4D"))
-        background_p4.append(ak.Array(background, with_name="MomentumObject4D"))
+        # for pt, eta, phi in zip(non_sixb_pt, non_sixb_eta, non_sixb_phi):
+        #     evt_list.append({"pt":pt, "eta":eta, "phi":phi, "mass":0})
+        # global_list.append(evt_list)
 
-        signal_p4.append(signal)
-        background_p4.append(background)
+        with signal_builder.list():
+
+            for pt, eta, phi in zip(sixb_pt, sixb_eta, sixb_phi):
+
+                with signal_builder.record("Momentum4D"):   # not MomentumObject4D
+
+                    signal_builder.field("pt"); signal_builder.real(pt)
+
+                    signal_builder.field("eta"); signal_builder.real(eta)
+
+                    signal_builder.field("phi"); signal_builder.real(phi)
+
+    with bkgd_builder.list():
+
+            for pt, eta, phi in zip(sixb_pt, sixb_eta, sixb_phi):
+
+                with bkgd_builder.record("Momentum4D"):   # not MomentumObject4D
+
+                    bkgd_builder.field("pt"); bkgd_builder.real(pt)
+
+                    bkgd_builder.field("eta"); bkgd_builder.real(eta)
+
+                    bkgd_builder.field("phi"); bkgd_builder.real(phi)
+
+    signal_p4 = signal_builder.snapshot()
+    bkgd_p4 = bkgd_builder.snapshot()
+
+
+        # signal = []
+        # for pt, eta, phi in zip(sixb_pt, sixb_eta, sixb_phi):
+        #     evt_sig = vector.obj(pt=pt, eta=eta, phi=phi, mass=0) 
+        #     signal.append(evt_sig)
+        # background = []
+        # for pt, eta, phi in zip(non_sixb_pt, non_sixb_eta, non_sixb_phi):
+        #     background.append({
+        #                 "pt":pt, 
+        #                 "eta":eta, 
+        #                 "phi":phi, 
+        #                 "mass":0})
+
+        # signal_p4.append(ak.Array(signal, with_name="Momentum4D"))
+        # background_p4.append(ak.Array(background, with_name="Momentum4D"))
         
-        pass_count += 1
-
-        
-    return signal_p4, background_p4
+    return signal_p4, bkgd_p4
 
 def get_sixb_p4(filename=None):
     
