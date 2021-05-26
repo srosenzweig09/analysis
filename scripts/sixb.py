@@ -2,7 +2,7 @@
 This will be a class that collects the six bs from the signal event and returns their p4s.
 """
 
-import awkward1 as ak
+import awkward as ak
 import itertools
 import numpy as np
 import random
@@ -33,6 +33,7 @@ def get_6jet_p4(filename=None):
     jet_pt = nptab['jet_pt']
     jet_eta = nptab['jet_eta']
     jet_phi = nptab['jet_phi']
+    signal_idx = []
 #     jet_m = nptab['jet_m']
 #     jet_btag = nptab['jet_btag']
     
@@ -44,7 +45,7 @@ def get_6jet_p4(filename=None):
     for evt in tqdm(range(nevents)):
 
         # Make a mask for jets matched to signal bs
-        signal_mask = [i for i,obj in enumerate(jet_idx[evt]) if obj > -1]
+        signal_mask = np.array(([i for i,obj in enumerate(jet_idx[evt]) if obj > -1]))
         
         # Mask the background jets
         background_mask = [i for i,obj in enumerate(jet_idx[evt]) if obj == -1]
@@ -81,26 +82,24 @@ def get_6jet_p4(filename=None):
         for nH, sb in zip(random_nonHiggs, random_signalb_to_replace):
             bkgd_phi = jet_phi[evt][background_mask][nH]
             non_sixb_phi[sb] = bkgd_phi
-        
-        sixb_pt = np.sort(sixb_pt)
-        sixb_eta = sixb_eta[np.argsort(sixb_pt)]
-        sixb_phi = sixb_phi[np.argsort(sixb_pt)]
-        
-        non_sixb_pt = np.sort(non_sixb_pt)
-        non_sixb_eta = non_sixb_eta[np.argsort(non_sixb_pt)]
-        non_sixb_phi = non_sixb_phi[np.argsort(non_sixb_pt)]
 
-        # for pt, eta, phi in zip(sixb_pt, sixb_eta, sixb_phi):
-        #     evt_list.append({"pt":pt, "eta":eta, "phi":phi, "mass":0})
-        # global_list.append(evt_list)
+        sixb_idx = signal_mask[np.argsort(sixb_pt)][::-1]
+        signal_idx.append(sixb_idx)
+        
+        sixb_eta = sixb_eta[np.argsort(sixb_pt)][::-1]
+        sixb_phi = sixb_phi[np.argsort(sixb_pt)][::-1]
+        sixb_pt = np.sort(sixb_pt)[::-1]
+        sixb_m = np.repeat(0, 6)
+        
+        non_sixb_eta = non_sixb_eta[np.argsort(non_sixb_pt)][::-1]
+        non_sixb_phi = non_sixb_phi[np.argsort(non_sixb_pt)][::-1]
+        non_sixb_pt = np.sort(non_sixb_pt)[::-1]
+        non_sixb_m = np.repeat(0, 6)
 
-        # for pt, eta, phi in zip(non_sixb_pt, non_sixb_eta, non_sixb_phi):
-        #     evt_list.append({"pt":pt, "eta":eta, "phi":phi, "mass":0})
-        # global_list.append(evt_list)
 
         with signal_builder.list():
 
-            for pt, eta, phi in zip(sixb_pt, sixb_eta, sixb_phi):
+            for pt, eta, phi, m in zip(sixb_pt, sixb_eta, sixb_phi, sixb_m):
 
                 with signal_builder.record("Momentum4D"):   # not MomentumObject4D
 
@@ -110,38 +109,27 @@ def get_6jet_p4(filename=None):
 
                     signal_builder.field("phi"); signal_builder.real(phi)
 
-    with bkgd_builder.list():
+                    signal_builder.field("m"); signal_builder.real(m)
 
-            for pt, eta, phi in zip(sixb_pt, sixb_eta, sixb_phi):
+        with bkgd_builder.list():
 
-                with bkgd_builder.record("Momentum4D"):   # not MomentumObject4D
+                for pt, eta, phi,m  in zip(non_sixb_pt, non_sixb_eta, non_sixb_phi, non_sixb_m):
 
-                    bkgd_builder.field("pt"); bkgd_builder.real(pt)
+                    with bkgd_builder.record("Momentum4D"):   # not MomentumObject4D
 
-                    bkgd_builder.field("eta"); bkgd_builder.real(eta)
+                        bkgd_builder.field("pt"); bkgd_builder.real(pt)
 
-                    bkgd_builder.field("phi"); bkgd_builder.real(phi)
+                        bkgd_builder.field("eta"); bkgd_builder.real(eta)
+
+                        bkgd_builder.field("phi"); bkgd_builder.real(phi)
+
+                        bkgd_builder.field("m"); bkgd_builder.real(m)
 
     signal_p4 = signal_builder.snapshot()
     bkgd_p4 = bkgd_builder.snapshot()
-
-
-        # signal = []
-        # for pt, eta, phi in zip(sixb_pt, sixb_eta, sixb_phi):
-        #     evt_sig = vector.obj(pt=pt, eta=eta, phi=phi, mass=0) 
-        #     signal.append(evt_sig)
-        # background = []
-        # for pt, eta, phi in zip(non_sixb_pt, non_sixb_eta, non_sixb_phi):
-        #     background.append({
-        #                 "pt":pt, 
-        #                 "eta":eta, 
-        #                 "phi":phi, 
-        #                 "mass":0})
-
-        # signal_p4.append(ak.Array(signal, with_name="Momentum4D"))
-        # background_p4.append(ak.Array(background, with_name="Momentum4D"))
+    signal_idx = np.array((signal_idx))
         
-    return signal_p4, bkgd_p4
+    return signal_p4, bkgd_p4, signal_idx
 
 def get_sixb_p4(filename=None):
     
