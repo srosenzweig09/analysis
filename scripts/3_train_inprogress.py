@@ -13,20 +13,20 @@ import vector
 vector.register_awkward()
 from argparse import ArgumentParser
 from configparser import ConfigParser
-# from keras.models import Sequential
-# from keras.layers import Dense, Dropout
-# from keras.callbacks import EarlyStopping
-# from keras.regularizers import l1, l2, l1_l2
-# from keras.constraints import max_norm
+from keras.models import Sequential
+from keras.layers import Dense, Dropout
+from keras.callbacks import EarlyStopping
+from keras.regularizers import l1, l2, l1_l2
+from keras.constraints import max_norm
 from pandas import DataFrame
 from sixb import get_sixb_p4, get_6jet_p4, get_background_p4
-# from sklearn.model_selection import train_test_split
-# from sklearn.preprocessing import MinMaxScaler
-# from tensorflow import compat
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler
+from tensorflow import compat
 from tqdm import tqdm
 from sys import argv
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # suppress Keras/TF warnings
-# compat.v1.logging.set_verbosity(compat.v1.logging.ERROR) # suppress Keras/TF warnings
+compat.v1.logging.set_verbosity(compat.v1.logging.ERROR) # suppress Keras/TF warnings
 
 # Custom libraries and modules
 from colors import CYAN, W
@@ -105,169 +105,174 @@ if args.tag:
 nn_type            = config['TYPE']['Type']
 
 # info(f"Loading inputs from file:\n\t{CYAN}{inputs_filename}{W}")
-signal_p4s, background_p4s, sixb_ids = get_6jet_p4() # FIXME Will have to add a filename later.
+signal_p4, background_p4, sixb_ids, sixb_btag, bkgd_btag, nbkgd = get_6jet_p4() # FIXME Will have to add a filename later.
 # background_p4s = get_background_p4()
 info("p4s loaded.")
+
+combos_2 = ak.combinations(signal_p4, 2)
+lefts, rights = ak.unzip(combos_2)
+sixb_deltaR = lefts.deltaR(rights)
+combos_6 = ak.combinations(signal_p4, 6)
+part0, part1, part2, part3, part4, part5 = ak.unzip(combos_6)
+evt_sixb_p4 = part0 + part1 + part2 + part3 + part4 + part5
+
+combos_2 = ak.combinations(background_p4, 2)
+lefts, rights = ak.unzip(combos_2)
+bkgd_deltaR = lefts.deltaR(rights)
+combos_6 = ak.combinations(background_p4, 6)
+part0, part1, part2, part3, part4, part5 = ak.unzip(combos_6)
+evt_bkgd_p4 = part0 + part1 + part2 + part3 + part4 + part5
 
 # output_activation = 'sigmoid' # allows for multiple 'true' assignments
 output_nodes = 2
 
 inputs = []
-for p4 in tqdm(signal_p4s):
-    in_arr = [p4.pt, p4.eta, p4.phi]
-    combos = ak.combinations(p4, 2, axis=0)
-    lefts, rights = ak.unzip(combos)
-    pairs = lefts + rights
-    dR = calcDeltaR(lefts.eta, rights.eta, lefts.phi, rights.phi)
-    in_arr.append(dR)
+for p4, btag, dR, evt_p4 in tqdm(zip(signal_p4, sixb_btag, sixb_deltaR, evt_sixb_p4)):
+    in_arr = [p4.pt, p4.eta, p4.phi, btag, dR, evt_p4.pt]
     inputs.append(in_arr)
-for p4 in tqdm(background_p4s):
-    in_arr = [p4.pt, p4.eta, p4.phi]
-    combos = ak.combinations(p4, 2, axis=0)
-    lefts, rights = ak.unzip(combos)
-    dR = calcDeltaR(lefts.eta, rights.eta, lefts.phi, rights.phi)
-    in_arr.append(dR)
+for p4, btag, dR, evt_p4 in tqdm(zip(background_p4, bkgd_btag, bkgd_deltaR, evt_bkgd_p4)):
+    in_arr = [p4.pt, p4.eta, p4.phi, btag, dR, evt_p4.pt]
     inputs.append(in_arr)
 for i,features in enumerate(inputs):
     inputs[i] = np.concatenate((features))
 inputs = np.array((inputs))
 print(inputs.shape)
 
-targets = np.concatenate((np.repeat(1, len(signal_p4s)), np.repeat(0, len(background_p4s))))
+targets = np.concatenate((np.repeat(1, len(signal_p4)), np.repeat(0, len(background_p4))))
 targets2 = np.where(targets == 1, 0, 1)
 targets = np.column_stack((targets, targets2))
 print(targets.shape)
 
-# ### ------------------------------------------------------------------------------------
-# ## 
+### ------------------------------------------------------------------------------------
+## 
 
-# test_size = 0.20
-# val_size = 0.125
-# x_train, x_test, y_train, y_test = train_test_split(inputs, targets, test_size=test_size)
-# x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=val_size)
+test_size = 0.20
+val_size = 0.125
+x_train, x_test, y_train, y_test = train_test_split(inputs, targets, test_size=test_size)
+x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=val_size)
 
-# # Load training examples
-# # examples = np.load(inputs_filename)
-# # x_train = examples['x_train']
-# # x_test = examples['x_test']
-# # x_val = examples['x_val']
+# Load training examples
+# examples = np.load(inputs_filename)
+# x_train = examples['x_train']
+# x_test = examples['x_test']
+# x_val = examples['x_val']
 
-# # y_train = examples['y_train']
-# # y_test = examples['y_test']
-# # y_val = examples['y_val']
+# y_train = examples['y_train']
+# y_test = examples['y_test']
+# y_val = examples['y_val']
 
-# # param_dim = x_train.shape[1]
-# param_dim = np.shape(inputs)[1]
+# param_dim = x_train.shape[1]
+param_dim = np.shape(inputs)[1]
 
-# ### ------------------------------------------------------------------------------------
-# ## 
+### ------------------------------------------------------------------------------------
+## 
 
-# info("Defining the model.")
-# # Define the keras model
-# model = Sequential()
+info("Defining the model.")
+# Define the keras model
+model = Sequential()
 
-# # Input layers
-# model.add(Dense(nodes[0], input_dim=param_dim, activation=hidden_activations))
+# Input layers
+model.add(Dense(nodes[0], input_dim=param_dim, activation=hidden_activations))
 
-# # # Hidden layers
-# for i in range(1,nlayers):
-#     if args.task == 'classifier':
-#         model.add(Dense(int(nodes[i]), activation=hidden_activations, kernel_constraint=max_norm(1.0), kernel_regularizer=l1_l2(), bias_constraint=max_norm(1.0)))
-#     elif args.task == 'regressor':
-#         model.add(Dense(int(nodes[i]), activation=hidden_activations, kernel_regularizer=l1_l2()))
+# # Hidden layers
+for i in range(1,nlayers):
+    if args.task == 'classifier':
+        model.add(Dense(int(nodes[i]), activation=hidden_activations, kernel_constraint=max_norm(1.0), kernel_regularizer=l1_l2(), bias_constraint=max_norm(1.0)))
+    elif args.task == 'regressor':
+        model.add(Dense(int(nodes[i]), activation=hidden_activations, kernel_regularizer=l1_l2()))
 
-# # Output layer
-# model.add(Dense(output_nodes, activation=output_activation))
+# Output layer
+model.add(Dense(output_nodes, activation=output_activation))
 
-# # Stop after epoch in which loss no longer decreases but save the best model.
-# es = EarlyStopping(monitor='loss', restore_best_weights=True)
+# Stop after epoch in which loss no longer decreases but save the best model.
+es = EarlyStopping(monitor='loss', restore_best_weights=True)
 
-# if args.task == 'classifier':
-#     met = ['accuracy']
-# elif args.task == 'regressor':
-#     met = None
+if args.task == 'classifier':
+    met = ['accuracy']
+elif args.task == 'regressor':
+    met = None
 
-# info("Compiling the model.")
-# model.compile(loss=loss_function, 
-#               optimizer=optimizer, 
-#               metrics=met)
+info("Compiling the model.")
+model.compile(loss=loss_function, 
+              optimizer=optimizer, 
+              metrics=met)
 
-# # Make a list of the hyperparameters and print them to the screen.
-# nn_info_list = [
-#     f"Input parameters:            {param_dim},\n",
-#     f"Optimizer:                   {optimizer}\n",
-#     f"Loss:                        {loss_function}\n",
-#     f"Num epochs:                  {nepochs}\n",
-#     f"Batch size:                  {batch_size}\n",
-#     f"Num hidden layers:           {nlayers}\n",
-#     f"Input activation function:   {hidden_activations}\n",
-#     f"Hidden layer nodes:          {nodes}\n",
-#     f"Hidden activation functions: {hidden_activations}\n",
-#     f"Num output nodes:            {output_nodes}\n",
-#     f"Output activation function:  {output_activation}"]
+# Make a list of the hyperparameters and print them to the screen.
+nn_info_list = [
+    f"Input parameters:            {param_dim},\n",
+    f"Optimizer:                   {optimizer}\n",
+    f"Loss:                        {loss_function}\n",
+    f"Num epochs:                  {nepochs}\n",
+    f"Batch size:                  {batch_size}\n",
+    f"Num hidden layers:           {nlayers}\n",
+    f"Input activation function:   {hidden_activations}\n",
+    f"Hidden layer nodes:          {nodes}\n",
+    f"Hidden activation functions: {hidden_activations}\n",
+    f"Num output nodes:            {output_nodes}\n",
+    f"Output activation function:  {output_activation}"]
 
-# for line in nn_info_list:
-#     print(line)
+for line in nn_info_list:
+    print(line)
 
-# ### ------------------------------------------------------------------------------------
-# ## Fit the model
+### ------------------------------------------------------------------------------------
+## Fit the model
 
-# print()
-# info("Preparing to fit the model!\n")
-# info(f"Training with {len(x_train)} examples")
+print()
+info("Preparing to fit the model!\n")
+info(f"Training with {len(x_train)} examples")
 
-# # fit the keras model on the dataset
-# history = model.fit(x_train,
-#                     y_train, 
-#                     validation_data=(x_val, y_val), 
-#                     epochs=nepochs, 
-#                     batch_size=batch_size, 
-#                     callbacks=[es])
+# fit the keras model on the dataset
+history = model.fit(x_train,
+                    y_train, 
+                    validation_data=(x_val, y_val), 
+                    epochs=nepochs, 
+                    batch_size=batch_size, 
+                    callbacks=[es])
 
-# ### ------------------------------------------------------------------------------------
-# ## Apply the model (predict)
+### ------------------------------------------------------------------------------------
+## Apply the model (predict)
 
-# scores = model.predict(x_test)
-# print(scores)
-# print(scores.shape)
+scores = model.predict(x_test)
+print(scores)
+print(scores.shape)
 
-# ### ------------------------------------------------------------------------------------
-# ## Save the model, history, and predictions
+### ------------------------------------------------------------------------------------
+## Save the model, history, and predictions
 
-# np.savez(out_dir + f"scores_{args.run}", scores=scores)
+np.savez(out_dir + f"scores_{args.run}", scores=scores)
 
-# # convert the history.history dict to a pandas DataFrame   
-# hist_df = DataFrame(history.history) 
+# convert the history.history dict to a pandas DataFrame   
+hist_df = DataFrame(history.history) 
 
-# # Save to json:  
-# hist_json_file = model_dir + f'history_{args.run}.json' 
+# Save to json:  
+hist_json_file = model_dir + f'history_{args.run}.json' 
 
-# with open(hist_json_file, mode='w') as f:
-#     hist_df.to_json(f)
+with open(hist_json_file, mode='w') as f:
+    hist_df.to_json(f)
 
-# # Save model to json and weights to h5
-# model_json = model.to_json()
+# Save model to json and weights to h5
+model_json = model.to_json()
 
-# json_save = model_dir + f"model_{args.run}.json"
-# h5_save   = json_save.replace(".json", ".h5")
+json_save = model_dir + f"model_{args.run}.json"
+h5_save   = json_save.replace(".json", ".h5")
 
-# with open(json_save, "w") as json_file:
-#     json_file.write(model_json)
+with open(json_save, "w") as json_file:
+    json_file.write(model_json)
 
-# # serialize weights to HDF5
-# model.save_weights(h5_save)
+# serialize weights to HDF5
+model.save_weights(h5_save)
 
-# info(f"Saved model and history to disk in location:"
-#       f"\n   {json_save}\n   {h5_save}\n   {hist_json_file}")
+info(f"Saved model and history to disk in location:"
+      f"\n   {json_save}\n   {h5_save}\n   {hist_json_file}")
 
 
-# ### ------------------------------------------------------------------------------------
-# ## 
+### ------------------------------------------------------------------------------------
+## 
 
-# nn_info_list[3] = f"Num epochs:                  {len(hist_df)}\n"
+nn_info_list[3] = f"Num epochs:                  {len(hist_df)}\n"
 
-# with open(out_dir + 'nn_info.txt', "w") as f:
-#     for line in nn_info_list:
-#         f.writelines(line)
+with open(out_dir + 'nn_info.txt', "w") as f:
+    for line in nn_info_list:
+        f.writelines(line)
 
-# print("-"*45 + CYAN + " Training ended " + W + "-"*45)
+print("-"*45 + CYAN + " Training ended " + W + "-"*45)
