@@ -2,6 +2,7 @@
 This will be a class that collects the six bs from the signal event and returns their p4s.
 """
 
+from particle import Particle
 import awkward as ak
 import itertools
 import numpy as np
@@ -33,14 +34,19 @@ def get_6jet_p4(filename=None):
     jet_pt = nptab['jet_pt']
     jet_eta = nptab['jet_eta']
     jet_phi = nptab['jet_phi']
+    jet_m = nptab['jet_m']
+    jet_btag = nptab['jet_btag']
     signal_idx = []
-#     jet_m = nptab['jet_m']
-#     jet_btag = nptab['jet_btag']
+    signal_btag = []
+    background_btag = []
     
     # signal_p4 = []
     # background_p4 = []
     global_list = [] # list of events
-    
+
+    # b_mass = Particle.from_pdgid(5).mass / 1000 # Convert from MeV to GeV
+    available_bkgd = []
+
     pass_count = 0
     for evt in tqdm(range(nevents)):
 
@@ -51,19 +57,30 @@ def get_6jet_p4(filename=None):
         background_mask = [i for i,obj in enumerate(jet_idx[evt]) if obj == -1]
         # Cound the background jets
         n_nonHiggs = len(jet_pt[evt][background_mask])
-
         
         # Skip and events with less than 6 matching signal bs (for now)
         if len(jet_pt[evt][signal_mask]) < 6: continue
         # Skip any events with duplicate matches (for now)
         if len(np.unique(jet_idx[evt][signal_mask])) < len(jet_idx[evt][signal_mask]): continue
-        if (n_nonHiggs < 3): continue
+        if (n_nonHiggs < 1): continue
+        available_bkgd.append(n_nonHiggs)
 
         evt_list = [] # list of dictionaries
 
-        # Choose a random background jet
-        random_nonHiggs = random.choices(np.arange(0,n_nonHiggs), k=3)
-        random_signalb_to_replace = random.choices(np.arange(0,6), k=3)
+        # n_bkgd = np.min(n_nonHiggs, 6)
+        # n_sig = 6 - n_bkgd
+        # random_nonHiggs = random.choices(np.arange(1,n_nonHiggs), k=n_bkgd)
+        # random_signalb_to_replace = random.choices(np.arange(0,6), k=n_bkgd)
+
+        if n_nonHiggs > 1:
+            # Choose a random background jet
+            # n_bkgd = random.randint(1,n_nonHiggs)
+            n_bkgd = n_nonHiggs
+            random_nonHiggs = random.choices(np.arange(1,n_nonHiggs), k=n_bkgd)
+            random_signalb_to_replace = random.choices(np.arange(0,6), k=n_bkgd)
+        else:
+            random_nonHiggs = [0]
+            random_signalb_to_replace = random.choices(np.arange(0,6), k=1)
         
         sixb_pt = jet_pt[evt][signal_mask]
         non_sixb_pt = sixb_pt.copy()
@@ -83,18 +100,34 @@ def get_6jet_p4(filename=None):
             bkgd_phi = jet_phi[evt][background_mask][nH]
             non_sixb_phi[sb] = bkgd_phi
 
+        sixb_m = jet_m[evt][signal_mask]
+        non_sixb_m = sixb_m.copy()
+        for nH, sb in zip(random_nonHiggs, random_signalb_to_replace):
+            bkgd_m = jet_m[evt][background_mask][nH]
+            non_sixb_m[sb] = bkgd_m
+
+        sixb_btag = jet_btag[evt][signal_mask]
+        non_sixb_btag = sixb_btag.copy()
+        for nH, sb in zip(random_nonHiggs, random_signalb_to_replace):
+            bkgd_btag = jet_btag[evt][background_mask][nH]
+            non_sixb_btag[sb] = bkgd_btag
+
         sixb_idx = signal_mask[np.argsort(sixb_pt)][::-1]
         signal_idx.append(sixb_idx)
         
-        sixb_eta = sixb_eta[np.argsort(sixb_pt)][::-1]
-        sixb_phi = sixb_phi[np.argsort(sixb_pt)][::-1]
-        sixb_pt = np.sort(sixb_pt)[::-1]
-        sixb_m = np.repeat(0, 6)
+        sixb_eta  = sixb_eta[np.argsort(sixb_pt)][::-1]
+        sixb_phi  = sixb_phi[np.argsort(sixb_pt)][::-1]
+        sixb_m    = sixb_m[np.argsort(sixb_pt)][::-1]
+        sixb_btag = sixb_btag[np.argsort(sixb_pt)][::-1]
+        signal_btag.append(sixb_btag)
+        sixb_pt   = np.sort(sixb_pt)[::-1]
         
-        non_sixb_eta = non_sixb_eta[np.argsort(non_sixb_pt)][::-1]
-        non_sixb_phi = non_sixb_phi[np.argsort(non_sixb_pt)][::-1]
-        non_sixb_pt = np.sort(non_sixb_pt)[::-1]
-        non_sixb_m = np.repeat(0, 6)
+        non_sixb_eta  = non_sixb_eta[np.argsort(non_sixb_pt)][::-1]
+        non_sixb_phi  = non_sixb_phi[np.argsort(non_sixb_pt)][::-1]
+        non_sixb_m    = non_sixb_m[np.argsort(non_sixb_pt)][::-1]
+        non_sixb_btag = non_sixb_btag[np.argsort(non_sixb_pt)][::-1]
+        background_btag.append(non_sixb_btag)
+        non_sixb_pt   = np.sort(non_sixb_pt)[::-1]
 
 
         with signal_builder.list():
@@ -128,8 +161,16 @@ def get_6jet_p4(filename=None):
     signal_p4 = signal_builder.snapshot()
     bkgd_p4 = bkgd_builder.snapshot()
     signal_idx = np.array((signal_idx))
+    signal_btag = np.array((signal_btag))
+    bkgd_btag = np.array((bkgd_btag))
         
-    return signal_p4, bkgd_p4, signal_idx
+    return signal_p4, bkgd_p4, signal_idx, signal_btag, background_btag, available_bkgd
+
+
+
+
+
+
 
 def get_sixb_p4(filename=None):
     
