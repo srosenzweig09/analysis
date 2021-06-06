@@ -109,16 +109,16 @@ signal_p4, background_p4, sixb_ids, sixb_btag, bkgd_btag, nbkgd = get_6jet_p4() 
 # background_p4s = get_background_p4()
 info("p4s loaded.")
 
-combos_2 = ak.combinations(signal_p4, 2)
-lefts, rights = ak.unzip(combos_2)
-sixb_deltaR = lefts.deltaR(rights)
+# combos_2 = ak.combinations(signal_p4, 2)
+# lefts, rights = ak.unzip(combos_2)
+# sixb_deltaR = lefts.deltaR(rights)
 combos_6 = ak.combinations(signal_p4, 6)
 part0, part1, part2, part3, part4, part5 = ak.unzip(combos_6)
 evt_sixb_p4 = part0 + part1 + part2 + part3 + part4 + part5
 
-combos_2 = ak.combinations(background_p4, 2)
-lefts, rights = ak.unzip(combos_2)
-bkgd_deltaR = lefts.deltaR(rights)
+# combos_2 = ak.combinations(background_p4, 2)
+# lefts, rights = ak.unzip(combos_2)
+# bkgd_deltaR = lefts.deltaR(rights)
 combos_6 = ak.combinations(background_p4, 6)
 part0, part1, part2, part3, part4, part5 = ak.unzip(combos_6)
 evt_bkgd_p4 = part0 + part1 + part2 + part3 + part4 + part5
@@ -127,11 +127,11 @@ evt_bkgd_p4 = part0 + part1 + part2 + part3 + part4 + part5
 output_nodes = 2
 
 inputs = []
-for p4, btag, dR, evt_p4 in tqdm(zip(signal_p4, sixb_btag, sixb_deltaR, evt_sixb_p4)):
-    in_arr = [p4.pt, p4.eta, p4.phi, btag, dR, evt_p4.pt]
+for p4, btag, evt_p4 in tqdm(zip(signal_p4, sixb_btag, evt_sixb_p4)):
+    in_arr = [p4.pt, p4.eta, p4.phi, btag, evt_p4.pt]
     inputs.append(in_arr)
-for p4, btag, dR, evt_p4 in tqdm(zip(background_p4, bkgd_btag, bkgd_deltaR, evt_bkgd_p4)):
-    in_arr = [p4.pt, p4.eta, p4.phi, btag, dR, evt_p4.pt]
+for p4, btag, evt_p4 in tqdm(zip(background_p4, bkgd_btag, evt_bkgd_p4)):
+    in_arr = [p4.pt, p4.eta, p4.phi, btag, evt_p4.pt]
     inputs.append(in_arr)
 for i,features in enumerate(inputs):
     inputs[i] = np.concatenate((features))
@@ -146,10 +146,17 @@ print(targets.shape)
 ### ------------------------------------------------------------------------------------
 ## 
 
+scaler = MinMaxScaler()
+scaler.fit(inputs)
+x = scaler.transform(inputs)
+
 test_size = 0.20
 val_size = 0.125
-x_train, x_test, y_train, y_test = train_test_split(inputs, targets, test_size=test_size)
+X_train, X_test, x_train, x_test, y_train, y_test = train_test_split(inputs, x, targets, test_size=test_size)
 x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=val_size)
+
+# Save training examples
+np.savez("training_examples.npz", x_test=X_test, y_test=y_test, x_train=X_train, y_train=y_train, sixb_ids=sixb_id, nbkgd=nbkgd)
 
 # Load training examples
 # examples = np.load(inputs_filename)
