@@ -16,23 +16,17 @@
 
 int apply_preselections(){
 
-  int nmin_presel = 7;
+  int nmin_presel = 6;
 
-  TFile *fout = new TFile("signal/NanoAOD/NMSSM_XYH_YToHH_6b_MX_700_MY_400_reco_preselections.root","RECREATE");
+  TFile *fout = new TFile("signal/skimmed/NMSSM_XYH_YToHH_6b_MX_700_MY_400_training_set_skimmed.root","RECREATE");
   TTree *t1   = new TTree("sixBtree","sixBtree");
 
   TString tree = "sixBtree";
   TChain *cc  = new TChain(tree);
 
-  // TString file1 = "signal/NanoAOD/NMSSM_XYH_YToHH_6b_MX_700_MY_400_accstudies.root";
-  // TString file2 = "signal/NanoAOD/NMSSM_XYH_YToHH_6b_MX_700_MY_400_accstudies_2.root";
-  // TString file3 = "signal/NanoAOD/NMSSM_XYH_YToHH_6b_MX_700_MY_400_accstudies_500k.root";
-  TString file4 = "signal/NanoAOD/NMSSM_XYH_YToHH_6b_MX_700_MY_400_accstudies_500k_May2021.root";
-
-  // cc->Add(file1);
-  // cc->Add(file2);
-  // cc->Add(file3);
-  cc->Add(file4);
+  TString file1 = "signal/NanoAOD/NMSSM_XYH_YToHH_6b_MX_700_MY_400_training_set.root";
+  
+  cc->Add(file1);
 
   TTreeReader reader(cc);
 
