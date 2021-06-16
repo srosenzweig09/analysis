@@ -19,7 +19,7 @@ from keras.callbacks import EarlyStopping
 from keras.regularizers import l1, l2, l1_l2
 from keras.constraints import max_norm
 from pandas import DataFrame
-from sixb import get_sixb_p4, get_6jet_p4, get_background_p4
+from pickle import dump
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow import compat
@@ -32,6 +32,7 @@ compat.v1.logging.set_verbosity(compat.v1.logging.ERROR) # suppress Keras/TF war
 from colors import CYAN, W
 from kinematics import calcDeltaR
 from logger import info, error
+from trsm import trsm_combos
 
 print("Libraries loaded.")
 print()
@@ -105,42 +106,25 @@ if args.tag:
 nn_type            = config['TYPE']['Type']
 
 # info(f"Loading inputs from file:\n\t{CYAN}{inputs_filename}{W}")
-signal_p4, background_p4, sixb_ids, sixb_btag, bkgd_btag, nbkgd = get_6jet_p4() # FIXME Will have to add a filename later.
-# background_p4s = get_background_p4()
+
+
+### TEMPORARY FILENAME
+filename = f'signal/skimmed/NMSSM_XYH_YToHH_6b_MX_700_MY_400_training_set_skimmed.root'
+combos = trsm_combos(filename)
+combos.build_p4()
 info("p4s loaded.")
 
-# combos_2 = ak.combinations(signal_p4, 2)
-# lefts, rights = ak.unzip(combos_2)
-# sixb_deltaR = lefts.deltaR(rights)
-combos_6 = ak.combinations(signal_p4, 6)
-part0, part1, part2, part3, part4, part5 = ak.unzip(combos_6)
-evt_sixb_p4 = part0 + part1 + part2 + part3 + part4 + part5
+signal_p4 = combos.sgnl_p4
+background_p4 = combos.bkgd_p4
 
-# combos_2 = ak.combinations(background_p4, 2)
-# lefts, rights = ak.unzip(combos_2)
-# bkgd_deltaR = lefts.deltaR(rights)
-combos_6 = ak.combinations(background_p4, 6)
-part0, part1, part2, part3, part4, part5 = ak.unzip(combos_6)
-evt_bkgd_p4 = part0 + part1 + part2 + part3 + part4 + part5
+sgnl_evt_p4 = combos.sgnl_evt_p4
+bkgd_evt_p4 = combos.bkgd_evt_p4
 
-# output_activation = 'sigmoid' # allows for multiple 'true' assignments
-output_nodes = 2
+inputs = combos.construct_features()
 
-inputs = []
-for p4, btag, evt_p4 in tqdm(zip(signal_p4, sixb_btag, evt_sixb_p4)):
-    in_arr = [p4.pt, p4.eta, p4.phi, btag, evt_p4.pt]
-    inputs.append(in_arr)
-for p4, btag, evt_p4 in tqdm(zip(background_p4, bkgd_btag, evt_bkgd_p4)):
-    in_arr = [p4.pt, p4.eta, p4.phi, btag, evt_p4.pt]
-    inputs.append(in_arr)
-for i,features in enumerate(inputs):
-    inputs[i] = np.concatenate((features))
-inputs = np.array((inputs))
-print(inputs.shape)
-
-targets = np.concatenate((np.repeat(1, len(signal_p4)), np.repeat(0, len(background_p4))))
-targets2 = np.where(targets == 1, 0, 1)
-targets = np.column_stack((targets, targets2))
+sgnl_node_targets = np.concatenate((np.repeat(1, len(signal_p4)), np.repeat(0, len(background_p4))))
+bkgd_node_targets = np.where(sgnl_node_targets == 1, 0, 1)
+targets = np.column_stack((sgnl_node_targets, bkgd_node_targets))
 print(targets.shape)
 
 ### ------------------------------------------------------------------------------------
@@ -150,25 +134,12 @@ scaler = MinMaxScaler()
 scaler.fit(inputs)
 x = scaler.transform(inputs)
 
-test_size = 0.20
-val_size = 0.125
-X_train, X_test, x_train, x_test, y_train, y_test = train_test_split(inputs, x, targets, test_size=test_size)
-x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=val_size)
+val_size = 0.10
+X_train, X_val, x_train, x_val, y_train, y_val = train_test_split(inputs, x, targets, test_size=val_size)
 
 # Save training examples
-np.savez("training_examples.npz", x_test=X_test, y_test=y_test, x_train=X_train, y_train=y_train, sixb_ids=sixb_id, nbkgd=nbkgd)
+# np.savez(out_dir + "training_examples_1.npz", x_test=X_test, y_test=y_test, x_train=X_train, y_train=y_train, sixb_ids=sixb_ids, nbkgd=nbkgd)
 
-# Load training examples
-# examples = np.load(inputs_filename)
-# x_train = examples['x_train']
-# x_test = examples['x_test']
-# x_val = examples['x_val']
-
-# y_train = examples['y_train']
-# y_test = examples['y_test']
-# y_val = examples['y_val']
-
-# param_dim = x_train.shape[1]
 param_dim = np.shape(inputs)[1]
 
 ### ------------------------------------------------------------------------------------
@@ -239,14 +210,12 @@ history = model.fit(x_train,
 ### ------------------------------------------------------------------------------------
 ## Apply the model (predict)
 
-scores = model.predict(x_test)
-print(scores)
-print(scores.shape)
+# scores = model.predict(x_test)
 
 ### ------------------------------------------------------------------------------------
 ## Save the model, history, and predictions
 
-np.savez(out_dir + f"scores_{args.run}", scores=scores)
+# np.savez(out_dir + f"scores_{args.run}", scores=scores)
 
 # convert the history.history dict to a pandas DataFrame   
 hist_df = DataFrame(history.history) 
@@ -268,6 +237,8 @@ with open(json_save, "w") as json_file:
 
 # serialize weights to HDF5
 model.save_weights(h5_save)
+
+dump(scaler, open(model_dir + f'scaler_{args.run}.pkl', 'wb'))
 
 info(f"Saved model and history to disk in location:"
       f"\n   {json_save}\n   {h5_save}\n   {hist_json_file}")
