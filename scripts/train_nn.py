@@ -55,7 +55,7 @@ args = parser.parse_args()
 ### ------------------------------------------------------------------------------------
 ## Prepare output directories
 
-out_dir = f"models/{args.task}/{args.type}/"
+out_dir = f"models/{args.task}/"
 if args.tag:
     out_dir += f'{args.tag}/'
 model_dir = out_dir + "model/"
@@ -100,27 +100,21 @@ nepochs            = int(config['TRAINING']['NumEpochs'])
 batch_size         = int(config['TRAINING']['BatchSize'])
     
 inputs_filename    = config['INPUTS']['InputFile']
-if args.tag:
-    inputs_filename = f'inputs/reco/nn_input_MX700_MY400_classifier_{args.tag}.npz'
 
 nn_type            = config['TYPE']['Type']
 
-# info(f"Loading inputs from file:\n\t{CYAN}{inputs_filename}{W}")
+info(f"Loading inputs from file:\n\t{CYAN}{inputs_filename}{W}")
 
 
 ### TEMPORARY FILENAME
-filename = f'signal/skimmed/NMSSM_XYH_YToHH_6b_MX_700_MY_400_training_set_skimmed.root'
-combos = trsm_combos(filename)
+combos = trsm_combos(inputs_filename)
 combos.build_p4()
 info("p4s loaded.")
 
 signal_p4 = combos.sgnl_p4
 background_p4 = combos.bkgd_p4
 
-sgnl_evt_p4 = combos.sgnl_evt_p4
-bkgd_evt_p4 = combos.bkgd_evt_p4
-
-inputs = combos.construct_features()
+inputs = combos.construct_training_features()
 
 sgnl_node_targets = np.concatenate((np.repeat(1, len(signal_p4)), np.repeat(0, len(background_p4))))
 bkgd_node_targets = np.where(sgnl_node_targets == 1, 0, 1)
@@ -135,7 +129,7 @@ scaler.fit(inputs)
 x = scaler.transform(inputs)
 
 val_size = 0.10
-X_train, X_val, x_train, x_val, y_train, y_val = train_test_split(inputs, x, targets, test_size=val_size)
+x_train, x_val, y_train, y_val = train_test_split(x, targets, test_size=val_size)
 
 # Save training examples
 # np.savez(out_dir + "training_examples_1.npz", x_test=X_test, y_test=y_test, x_train=X_train, y_train=y_train, sixb_ids=sixb_ids, nbkgd=nbkgd)
@@ -154,7 +148,7 @@ model.add(Dense(nodes[0], input_dim=param_dim, activation=hidden_activations))
 
 # # Hidden layers
 for i in range(1,nlayers):
-    if args.task == 'classifier':
+    if 'classifier' in args.task:
         model.add(Dense(int(nodes[i]), activation=hidden_activations, kernel_constraint=max_norm(1.0), kernel_regularizer=l1_l2(), bias_constraint=max_norm(1.0)))
     elif args.task == 'regressor':
         model.add(Dense(int(nodes[i]), activation=hidden_activations, kernel_regularizer=l1_l2()))
@@ -165,7 +159,7 @@ model.add(Dense(output_nodes, activation=output_activation))
 # Stop after epoch in which loss no longer decreases but save the best model.
 es = EarlyStopping(monitor='loss', restore_best_weights=True)
 
-if args.task == 'classifier':
+if 'classifier' in args.task:
     met = ['accuracy']
 elif args.task == 'regressor':
     met = None
