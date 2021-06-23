@@ -9,8 +9,10 @@ print("Loading libraries. May take a few minutes.")
 import awkward as ak
 import numpy as np
 import os
+import tensorflow as tf
 import vector
 vector.register_awkward()
+
 from argparse import ArgumentParser
 from configparser import ConfigParser
 from keras.models import Sequential
@@ -46,7 +48,7 @@ info("Parsing command line arguments.")
 parser = ArgumentParser(description='Command line parser of model options and tags')
 
 parser.add_argument('--type', dest = 'type', help = 'parton, smeared, or reco' , default = 'reco' )
-parser.add_argument('--task', dest = 'task', help = 'classifier or regressor'  , default = 'classifier' )
+parser.add_argument('--task', dest = 'task', help = 'classifier or regressor'  , default = 'classifier_6jet' )
 parser.add_argument('--run' , dest = 'run' , help = 'index of training session', default = 1 )
 parser.add_argument('--tag' , dest = 'tag' , help = 'special tag', default = None )
 
@@ -94,7 +96,9 @@ output_activation  = config['OUTPUT']['OutputActivation']
 output_nodes       = int(config['OUTPUT']['OutputNodes'])
 
 # Fitting hyperparameters
-optimizer          = config['OPTIMIZER']['OptimizerFunction']
+# optimizer          = config['OPTIMIZER']['OptimizerFunction']
+optimizer = tf.keras.optimizers.Nadam(
+    learning_rate=0.00001, beta_1=0.1, beta_2=0.1, epsilon=1e-07, name="Nadam")
 loss_function      = config['LOSS']['LossFunction']
 nepochs            = int(config['TRAINING']['NumEpochs'])
 batch_size         = int(config['TRAINING']['BatchSize'])
@@ -116,10 +120,11 @@ background_p4 = combos.bkgd_p4
 
 inputs = combos.construct_training_features()
 
-sgnl_node_targets = np.concatenate((np.repeat(1, len(signal_p4)), np.repeat(0, len(background_p4))))
+sgnl_node_targets = np.concatenate((np.repeat(1, len(inputs)/2), np.repeat(0, len(inputs)/2)))
 bkgd_node_targets = np.where(sgnl_node_targets == 1, 0, 1)
 targets = np.column_stack((sgnl_node_targets, bkgd_node_targets))
-print(targets.shape)
+print(f"Targets shape: {targets.shape}")
+print(targets)
 
 ### ------------------------------------------------------------------------------------
 ## 
@@ -132,7 +137,7 @@ val_size = 0.10
 x_train, x_val, y_train, y_val = train_test_split(x, targets, test_size=val_size)
 
 # Save training examples
-# np.savez(out_dir + "training_examples_1.npz", x_test=X_test, y_test=y_test, x_train=X_train, y_train=y_train, sixb_ids=sixb_ids, nbkgd=nbkgd)
+np.savez(out_dir + "training_examples_1.npz", x_train=x_train, y_train=y_train)
 
 param_dim = np.shape(inputs)[1]
 
