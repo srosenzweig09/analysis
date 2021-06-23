@@ -18,13 +18,13 @@ int apply_preselections(){
 
   int nmin_presel = 6;
 
-  TFile *fout = new TFile("signal/skimmed/NMSSM_XYH_YToHH_6b_MX_700_MY_400_training_set_skimmed.root","RECREATE");
+  TFile *fout = new TFile("signal/skimmed/NMSSM_XYH_YToHH_6b_MX_700_MY_400_testing_set_skimmed.root","RECREATE");
   TTree *t1   = new TTree("sixBtree","sixBtree");
 
   TString tree = "sixBtree";
   TChain *cc  = new TChain(tree);
 
-  TString file1 = "signal/NanoAOD/NMSSM_XYH_YToHH_6b_MX_700_MY_400_training_set.root";
+  TString file1 = "signal/NanoAOD/NMSSM_XYH_YToHH_6b_MX_700_MY_400_testing_set.root";
   
   cc->Add(file1);
 
@@ -36,7 +36,10 @@ int apply_preselections(){
   TTreeReaderArray<float> jet_phi(reader,"jet_phi");
   TTreeReaderArray<float> jet_mass(reader,"jet_m");
   TTreeReaderArray<float> jet_btag(reader,"jet_btag");
+  TTreeReaderArray<float> jet_qgl(reader,"jet_qgl");
   TTreeReaderArray<int> jet_idx(reader,"jet_idx");
+  TTreeReaderArray<int> jet_hadronFlav(reader,"jet_hadronFlav");
+  TTreeReaderArray<int> jet_partonFlav(reader,"jet_partonFlav");
         
   TTreeReaderValue<float> gen_HX_b1_recojet_m(reader,"gen_HX_b1_recojet_m");
   TTreeReaderValue<float> gen_HX_b1_recojet_pt(reader,"gen_HX_b1_recojet_pt");
@@ -76,16 +79,19 @@ int apply_preselections(){
 
   float HX_b1_recojet_m, HX_b1_recojet_pt, HX_b1_recojet_ptRegressed, HX_b1_recojet_eta, HX_b1_recojet_phi,  HX_b2_recojet_m, HX_b2_recojet_pt, HX_b2_recojet_ptRegressed, HX_b2_recojet_eta, HX_b2_recojet_phi, HY1_b1_recojet_m, HY1_b1_recojet_pt, HY1_b1_recojet_ptRegressed, HY1_b1_recojet_eta, HY1_b1_recojet_phi,  HY1_b2_recojet_m, HY1_b2_recojet_pt, HY1_b2_recojet_ptRegressed, HY1_b2_recojet_eta, HY1_b2_recojet_phi, HY2_b1_recojet_m, HY2_b1_recojet_pt, HY2_b1_recojet_ptRegressed, HY2_b1_recojet_eta, HY2_b1_recojet_phi,  HY2_b2_recojet_m, HY2_b2_recojet_pt, HY2_b2_recojet_ptRegressed, HY2_b2_recojet_eta, HY2_b2_recojet_phi;
   
-  std::vector<float> jets_pt, jets_eta, jets_phi, jets_btag, jets_m;
+  std::vector<float> jets_pt, jets_eta, jets_phi, jets_btag, jets_m, jets_qgl;
 
-  std::vector<int> jets_idx;
+  std::vector<int> jets_idx, jets_hadronFlav, jets_partonFlav;
 
   t1->Branch("jet_pt",& jets_pt);
   t1->Branch("jet_eta",& jets_eta);
   t1->Branch("jet_phi",& jets_phi);
   t1->Branch("jet_m",& jets_m);
   t1->Branch("jet_btag",& jets_btag);
+  t1->Branch("jet_qgl",& jets_qgl);
   t1->Branch("jet_idx",& jets_idx);
+  t1->Branch("jet_hadronFlav",& jets_hadronFlav);
+  t1->Branch("jet_partonFlav",& jets_partonFlav);
 
   t1->Branch("HX_b1_recojet_m",& HX_b1_recojet_m);
   t1->Branch("HX_b1_recojet_pt",& HX_b1_recojet_pt);
@@ -142,8 +148,11 @@ int apply_preselections(){
     jets_eta.clear();
     jets_phi.clear();
     jets_btag.clear();
+    jets_qgl.clear();
     jets_m.clear();
     jets_idx.clear();
+    jets_partonFlav.clear();
+    jets_hadronFlav.clear();
 
     // if (*gen_HX_b1_recojet_ptRegressed < pt_threshold) continue;
     // if (*gen_HX_b2_recojet_ptRegressed < pt_threshold) continue;
@@ -167,7 +176,10 @@ int apply_preselections(){
       jets_phi.emplace_back(jet_phi[i]);
       jets_m.emplace_back(jet_mass[i]);
       jets_btag.emplace_back(jet_btag[i]);
+      jets_qgl.emplace_back(jet_qgl[i]);
       jets_idx.emplace_back(jet_idx[i]);
+      jets_hadronFlav.emplace_back(jet_hadronFlav[i]);
+      jets_partonFlav.emplace_back(jet_partonFlav[i]);
     }
 
     // jets_pt   = *jet_pt;
