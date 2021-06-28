@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 """
 This program trains a neural network with hyperparameters that are read from a
 user-specified configuration file. The user may also provide a hyperparameter
@@ -9,6 +11,7 @@ print("Loading libraries. May take a few minutes.")
 import awkward as ak
 import numpy as np
 import os
+import sys
 import tensorflow as tf
 import vector
 vector.register_awkward()
@@ -26,7 +29,6 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow import compat
 from tqdm import tqdm
-from sys import argv
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # suppress Keras/TF warnings
 compat.v1.logging.set_verbosity(compat.v1.logging.ERROR) # suppress Keras/TF warnings
 
@@ -50,16 +52,25 @@ parser = ArgumentParser(description='Command line parser of model options and ta
 parser.add_argument('--type', dest = 'type', help = 'parton, smeared, or reco' , default = 'reco' )
 parser.add_argument('--task', dest = 'task', help = 'classifier or regressor'  , default = 'classifier_6jet' )
 parser.add_argument('--run' , dest = 'run' , help = 'index of training session', default = 1 )
-parser.add_argument('--tag' , dest = 'tag' , help = 'special tag', default = None )
+parser.add_argument('--tag' , dest = 'tag' , help = 'special tag', default = None)
+parser.add_argument('--lr' , dest = 'lr' , help = 'learning rate', default = 0.001)
+parser.add_argument('--beta1' , dest = 'beta1' , help = 'exponential decay rate for first moment', default = 0.9)
+parser.add_argument('--beta2' , dest = 'beta2' , help = 'beta_2 value', default = 0.999)
+parser.add_argument('--epsilon' , dest = 'epsilon' , help = 'epsilon value', default = 1e-07)
 
 args = parser.parse_args()
 
 ### ------------------------------------------------------------------------------------
 ## Prepare output directories
 
+lr_folder = str(args.lr).split('.')[1]
+beta1_folder = str(args.lr).split('.')[1]
+beta2_folder = str(args.lr).split('.')[1]
+
 out_dir = f"models/{args.task}/"
-if args.tag:
-    out_dir += f'{args.tag}/'
+# if args.tag:
+    # out_dir += f'{args.tag}/'
+out_dir = f"lr_pt{lr_folder}/beta1_pt{beta1_folder}/beta2_pt{beta2_folder}"
 model_dir = out_dir + "model/"
 
 if not os.path.exists(out_dir):
@@ -97,8 +108,13 @@ output_nodes       = int(config['OUTPUT']['OutputNodes'])
 
 # Fitting hyperparameters
 # optimizer          = config['OPTIMIZER']['OptimizerFunction']
+
+# Nadam defaults:
+# learning_rate = 0.001
+# beta_1 = 0.9
+# beta_2 = 0.999
 optimizer = tf.keras.optimizers.Nadam(
-    learning_rate=0.00001, beta_1=0.1, beta_2=0.1, epsilon=1e-07, name="Nadam")
+    learning_rate=float(args.lr), beta_1=float(args.beta1), beta_2=float(args.beta2), epsilon=float(args.epsilon), name="Nadam")
 loss_function      = config['LOSS']['LossFunction']
 nepochs            = int(config['TRAINING']['NumEpochs'])
 batch_size         = int(config['TRAINING']['BatchSize'])
@@ -178,6 +194,10 @@ model.compile(loss=loss_function,
 nn_info_list = [
     f"Input parameters:            {param_dim},\n",
     f"Optimizer:                   {optimizer}\n",
+    f"Learning Rate:               {args.lr}\n",
+    f"beta_1:                      {args.beta1}\n",
+    f"beta_2:                      {args.beta2}\n",
+    f"epsilon:                     {args.epsilon}\n",
     f"Loss:                        {loss_function}\n",
     f"Num epochs:                  {nepochs}\n",
     f"Batch size:                  {batch_size}\n",
