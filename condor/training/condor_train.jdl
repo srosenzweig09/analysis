@@ -1,3 +1,4 @@
+universe               = vanilla
 Executable             = /afs/cern.ch/user/s/srosenzw/public/condor/training/train.sh
 Output                 = /afs/cern.ch/user/s/srosenzw/public/condor/training/output/train_nn-$(ProcId).out
 Error                  = /afs/cern.ch/user/s/srosenzw/public/condor/training/output/train_nn-$(ProcId).err
@@ -5,9 +6,9 @@ Log                    = /afs/cern.ch/user/s/srosenzw/public/condor/training/out
 
 initial_dir = /afs/cern.ch/user/s/srosenzw/public/condor/training/
 should_transfer_files = YES
-when_to_transfer_output = on_exit
+when_to_transfer_output = ON_EXIT
 transfer_input_files = 4layers_15_25_15_10.cfg, NMSSM_XYH_YToHH_6b_MX_700_MY_400_training_set_skimmed.root
 
-Request_memory         = 10 GB
+Request_memory         = 1 MB
 Getenv                 = True
-Queue 
+Queue

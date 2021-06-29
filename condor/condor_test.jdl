@@ -1,9 +1,8 @@
+universe               = vanilla
 Executable             = /afs/cern.ch/user/s/srosenzw/public/condor/test.sh
 Output                 = /afs/cern.ch/user/s/srosenzw/public/condor/output/train_nn-$(ProcId).out
 Error                  = /afs/cern.ch/user/s/srosenzw/public/condor/output/train_nn-$(ProcId).err
 Log                    = /afs/cern.ch/user/s/srosenzw/public/condor/log/train_nn-$(ProcId).log
 Request_memory         = 2 GB
-Notification           = complete
-Notify_user            = s.rosenzweig@cern.ch
 Getenv                 = True
-Queue 2
+Queue 1
