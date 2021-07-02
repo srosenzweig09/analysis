@@ -34,9 +34,8 @@ compat.v1.logging.set_verbosity(compat.v1.logging.ERROR) # suppress Keras/TF war
 
 # Custom libraries and modules
 from colors import CYAN, W
-from kinematics import calcDeltaR
 from logger import info, error
-from trsm import trsm_combos
+from trsm import TRSM, training
 
 print("Libraries loaded.")
 print()
@@ -50,7 +49,8 @@ info("Parsing command line arguments.")
 parser = ArgumentParser(description='Command line parser of model options and tags')
 
 parser.add_argument('--type', dest = 'type', help = 'parton, smeared, or reco' , default = 'reco' )
-parser.add_argument('--task', dest = 'task', help = 'classifier or regressor'  , default = 'classifier_6jet' )
+parser.add_argument('--task', dest = 'task', help = 'classifier or regressor'  , default = 'classifier' )
+parser.add_argument('--njet', dest = 'njet', help = 'how many input jets'      , default = 6 )
 parser.add_argument('--run' , dest = 'run' , help = 'index of training session', default = 1 )
 parser.add_argument('--tag' , dest = 'tag' , help = 'special tag', default = None)
 parser.add_argument('--lr' , dest = 'lr' , help = 'learning rate', default = 0.001)
@@ -67,10 +67,10 @@ lr_folder = str(args.lr).split('.')[1]
 beta1_folder = str(args.lr).split('.')[1]
 beta2_folder = str(args.lr).split('.')[1]
 
-out_dir = f"models/{args.task}/"
-# if args.tag:
-    # out_dir += f'{args.tag}/'
-out_dir = f"lr_pt{lr_folder}/beta1_pt{beta1_folder}/beta2_pt{beta2_folder}"
+out_dir = f"{args.njet}jet_{args.task}/models/"
+if args.tag:
+    out_dir += f'{args.tag}/'
+# out_dir = f"lr_pt{lr_folder}/beta1_pt{beta1_folder}/beta2_pt{beta2_folder}"
 model_dir = out_dir + "model/"
 
 if not os.path.exists(out_dir):
@@ -86,7 +86,7 @@ if not os.path.exists(model_dir):
 assert (args.type == 'parton') or (args.type == 'smeared') or (args.type == 'reco'), "--type must be 'parton', 'smeared', or 'reco'!"
 
 cfg_location = 'config/'
-cfg_name = f'{args.task}/{args.type}.cfg'
+cfg_name = f'{args.task}_{args.njet}jet/{args.type}.cfg'
 
 cfg = cfg_location + cfg_name
 
@@ -127,14 +127,10 @@ info(f"Loading inputs from file:\n\t{CYAN}{inputs_filename}{W}")
 
 
 ### TEMPORARY FILENAME
-combos = trsm_combos(inputs_filename)
-combos.build_p4()
+trsm = TRSM(inputs_filename)
+training = training(trsm)
+inputs = training.inputs
 info("p4s loaded.")
-
-signal_p4 = combos.sgnl_p4
-background_p4 = combos.bkgd_p4
-
-inputs = combos.construct_training_features()
 
 sgnl_node_targets = np.concatenate((np.repeat(1, len(inputs)/2), np.repeat(0, len(inputs)/2)))
 bkgd_node_targets = np.where(sgnl_node_targets == 1, 0, 1)
