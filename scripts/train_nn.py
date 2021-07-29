@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 """
 This program trains a neural network with hyperparameters that are read from a
 user-specified configuration file. The user may also provide a hyperparameter
@@ -9,6 +7,9 @@ and value to override the configuration file.
 print("Loading libraries. May take a few minutes.")
 
 import awkward as ak
+import colorama
+colorama.init(autoreset=True)
+from colorama import Fore, Back
 import numpy as np
 import os
 import sys
@@ -48,7 +49,7 @@ info("Parsing command line arguments.")
 
 parser = ArgumentParser(description='Command line parser of model options and tags')
 
-parser.add_argument('--type', dest = 'type', help = 'parton, smeared, or reco' , default = 'reco' )
+parser.add_argument('--cfg', dest = 'cfg', help = 'config file' , required = True )
 parser.add_argument('--task', dest = 'task', help = 'classifier or regressor'  , default = 'classifier' )
 parser.add_argument('--njet', dest = 'njet', help = 'how many input jets'      , default = 6 )
 parser.add_argument('--run' , dest = 'run' , help = 'index of training session', default = 1 )
@@ -83,12 +84,11 @@ if not os.path.exists(model_dir):
 ### ------------------------------------------------------------------------------------
 ## Import configuration file
 
-assert (args.type == 'parton') or (args.type == 'smeared') or (args.type == 'reco'), "--type must be 'parton', 'smeared', or 'reco'!"
+# cfg_location = 'config/'
+# cfg_name = f'{args.task}_{args.njet}jet/{args.cfg}'
+# cfg = cfg_location + cfg_name
 
-cfg_location = 'config/'
-cfg_name = f'{args.task}_{args.njet}jet/{args.type}.cfg'
-
-cfg = cfg_location + cfg_name
+cfg = args.cfg
 
 info(f"Loading configuration file from {cfg}")
 
@@ -123,7 +123,7 @@ inputs_filename    = config['INPUTS']['InputFile']
 
 nn_type            = config['TYPE']['Type']
 
-info(f"Loading inputs from file:\n\t{CYAN}{inputs_filename}{W}")
+info(f"Loading inputs from file:\n\t{Fore.CYAN}{inputs_filename}")
 
 
 ### TEMPORARY FILENAME
@@ -174,7 +174,7 @@ for i in range(1,nlayers):
 model.add(Dense(output_nodes, activation=output_activation))
 
 # Stop after epoch in which loss no longer decreases but save the best model.
-es = EarlyStopping(monitor='loss', restore_best_weights=True)
+es = EarlyStopping(monitor='loss', restore_best_weights=True, patience=50)
 
 if 'classifier' in args.task:
     met = ['accuracy']
@@ -221,6 +221,8 @@ history = model.fit(x_train,
                     epochs=nepochs, 
                     batch_size=batch_size, 
                     callbacks=[es])
+
+model.summary()
 
 ### ------------------------------------------------------------------------------------
 ## Apply the model (predict)
