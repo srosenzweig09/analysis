@@ -36,7 +36,7 @@ compat.v1.logging.set_verbosity(compat.v1.logging.ERROR) # suppress Keras/TF war
 # Custom libraries and modules
 from colors import CYAN, W
 from logger import info, error
-from trsm import TRSM, training
+from trsm import TRSM, training_6j
 
 print("Libraries loaded.")
 print()
@@ -50,6 +50,7 @@ info("Parsing command line arguments.")
 parser = ArgumentParser(description='Command line parser of model options and tags')
 
 parser.add_argument('--cfg', dest = 'cfg', help = 'config file' , required = True )
+parser.add_argument('--filelist', dest = 'filelist', help = 'tag for reading list of files from .txt file', action = 'store_true', default = False )
 parser.add_argument('--task', dest = 'task', help = 'classifier or regressor'  , default = 'classifier' )
 parser.add_argument('--njet', dest = 'njet', help = 'how many input jets'      , default = 6 )
 parser.add_argument('--run' , dest = 'run' , help = 'index of training session', default = 1 )
@@ -123,20 +124,24 @@ inputs_filename    = config['INPUTS']['InputFile']
 
 nn_type            = config['TYPE']['Type']
 
-info(f"Loading inputs from file:\n\t{Fore.CYAN}{inputs_filename}")
+# info(f"Loading inputs from file:\n\t{Fore.CYAN}{inputs_filename}")
 
 
-### TEMPORARY FILENAME
-trsm = TRSM(inputs_filename)
-training = training(trsm)
-inputs = training.inputs
+#####
+if args.filelist:
+    with open("training_event_list.txt") as f:
+        list_of_files = f.readlines()
+    trsm = TRSM(list_of_files)
+else:
+    trsm = TRSM(inputs_filename)
+
+training = training_6j(trsm)
+inputs = training_6j.inputs
+target = training_6j.targets
 info("p4s loaded.")
 
-sgnl_node_targets = np.concatenate((np.repeat(1, len(inputs)/2), np.repeat(0, len(inputs)/2)))
-bkgd_node_targets = np.where(sgnl_node_targets == 1, 0, 1)
-targets = np.column_stack((sgnl_node_targets, bkgd_node_targets))
+print(f"Inputs shape:  {inputs.shape")
 print(f"Targets shape: {targets.shape}")
-print(targets)
 
 ### ------------------------------------------------------------------------------------
 ## 
@@ -149,7 +154,7 @@ val_size = 0.10
 x_train, x_val, y_train, y_val = train_test_split(x, targets, test_size=val_size)
 
 # Save training examples
-np.savez(out_dir + "training_examples_1.npz", x_train=x_train, y_train=y_train)
+# np.savez(out_dir + "training_examples_1.npz", x_train=x_train, y_train=y_train)
 
 param_dim = np.shape(inputs)[1]
 
