@@ -80,10 +80,15 @@ int prepare_training_file(){
   TTreeReaderValue<float> gen_HY2_b2_recojet_ptRegressed(reader,"gen_HY2_b2_recojet_ptRegressed");
 
   float HX_b1_recojet_m, HX_b1_recojet_pt, HX_b1_recojet_ptRegressed, HX_b1_recojet_eta, HX_b1_recojet_phi,  HX_b2_recojet_m, HX_b2_recojet_pt, HX_b2_recojet_ptRegressed, HX_b2_recojet_eta, HX_b2_recojet_phi, HY1_b1_recojet_m, HY1_b1_recojet_pt, HY1_b1_recojet_ptRegressed, HY1_b1_recojet_eta, HY1_b1_recojet_phi,  HY1_b2_recojet_m, HY1_b2_recojet_pt, HY1_b2_recojet_ptRegressed, HY1_b2_recojet_eta, HY1_b2_recojet_phi, HY2_b1_recojet_m, HY2_b1_recojet_pt, HY2_b1_recojet_ptRegressed, HY2_b1_recojet_eta, HY2_b1_recojet_phi,  HY2_b2_recojet_m, HY2_b2_recojet_pt, HY2_b2_recojet_ptRegressed, HY2_b2_recojet_eta, HY2_b2_recojet_phi;
+
+  int n_jets, n_sixbs;
   
   std::vector<float> jets_pt, jets_eta, jets_phi, jets_btag, jets_m, jets_qgl;
 
   std::vector<int> jets_idx, jets_hadronFlav, jets_partonFlav;
+
+  t1->Branch("n_jet",& n_jets);
+  t1->Branch("n_sixb",& n_sixbs);
 
   t1->Branch("jet_pt",& jets_pt);
   t1->Branch("jet_eta",& jets_eta);
@@ -165,6 +170,9 @@ int prepare_training_file(){
       jets_hadronFlav.emplace_back(jet_hadronFlav[i]);
       jets_partonFlav.emplace_back(jet_partonFlav[i]);
     }
+
+    n_jets = *n_jet;
+    n_sixbs = *n_sixb;
 
     HX_b1_recojet_m   = *gen_HX_b1_recojet_m;
     HX_b1_recojet_pt  = *gen_HX_b1_recojet_pt;
