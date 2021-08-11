@@ -133,8 +133,8 @@ else:
 
 if int(args.njet) == 6:
     training = training_6j(trsm)
-    inputs = training_6j.inputs
-    target = training_6j.targets
+    inputs = training.inputs
+    targets = training.targets
 elif int(args.njet) == 2:
     training = training_2j(trsm)
     # inputs, targets = training_2j.get_features_targets(trsm)
