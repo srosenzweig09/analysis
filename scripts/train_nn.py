@@ -36,7 +36,7 @@ compat.v1.logging.set_verbosity(compat.v1.logging.ERROR) # suppress Keras/TF war
 # Custom libraries and modules
 from colors import CYAN, W
 from logger import info, error
-from trsm import TRSM, training_6j
+from trsm import TRSM, training_6j, training_2j
 
 print("Libraries loaded.")
 print()
@@ -85,10 +85,6 @@ if not os.path.exists(model_dir):
 ### ------------------------------------------------------------------------------------
 ## Import configuration file
 
-# cfg_location = 'config/'
-# cfg_name = f'{args.task}_{args.njet}jet/{args.cfg}'
-# cfg = cfg_location + cfg_name
-
 cfg = args.cfg
 
 info(f"Loading configuration file from {cfg}")
@@ -135,12 +131,19 @@ if args.filelist:
 else:
     trsm = TRSM(inputs_filename)
 
-training = training_6j(trsm)
-inputs = training_6j.inputs
-target = training_6j.targets
+if int(args.njet) == 6:
+    training = training_6j(trsm)
+    inputs = training_6j.inputs
+    target = training_6j.targets
+elif int(args.njet) == 2:
+    training = training_2j(trsm)
+    # inputs, targets = training_2j.get_features_targets(trsm)
+    inputs = training.pair_features
+    targets = training.pair_targets
+
 info("p4s loaded.")
 
-print(f"Inputs shape:  {inputs.shape")
+print(f"Inputs shape:  {inputs.shape}")
 print(f"Targets shape: {targets.shape}")
 
 ### ------------------------------------------------------------------------------------
