@@ -25,7 +25,8 @@ int prepare_training_file(){
 
   int numFiles = 90;
   for (int fileNum=0;fileNum < numFiles;fileNum++) {
-    cc->AddFile(Form("root://cmseos.fnal.gov//store/user/srosenzw/sixb_ntuples/preselections/NMSSM_XYH_YToHH_6b_MX_700_MY_400/output/ntuple_%d.root", fileNum));
+    // cc->AddFile(Form("root://cmseos.fnal.gov//store/user/srosenzw/sixb_ntuples/preselections/NMSSM_XYH_YToHH_6b_MX_700_MY_400/output/ntuple_%d.root", fileNum));
+    cc->AddFile(Form("root://cmseos.fnal.gov//store/user/ekoenig/6BAnalysis/NTuples/2018/SR/NMSSM/NMSSM_XYH_YToHH_6b_MX_700_MY_400_10M/training/ntuple_%d.root", fileNum));
   }
 
   TTreeReader reader(cc);
@@ -40,8 +41,8 @@ int prepare_training_file(){
   TTreeReaderArray<float> jet_btag(reader,"jet_btag");
   TTreeReaderArray<float> jet_qgl(reader,"jet_qgl");
   TTreeReaderArray<int> jet_idx(reader,"jet_signalId");
-  TTreeReaderArray<int> jet_hadronFlav(reader,"jet_hadronFlav");
-  TTreeReaderArray<int> jet_partonFlav(reader,"jet_partonFlav");
+  // TTreeReaderArray<int> jet_hadronFlav(reader,"jet_hadronFlav");
+  // TTreeReaderArray<int> jet_partonFlav(reader,"jet_partonFlav");
         
   TTreeReaderValue<float> gen_HX_b1_recojet_m(reader,"gen_HX_b1_recojet_m");
   TTreeReaderValue<float> gen_HX_b1_recojet_pt(reader,"gen_HX_b1_recojet_pt");
@@ -85,7 +86,8 @@ int prepare_training_file(){
   
   std::vector<float> jets_pt, jets_eta, jets_phi, jets_btag, jets_m, jets_qgl;
 
-  std::vector<int> jets_idx, jets_hadronFlav, jets_partonFlav;
+  // std::vector<int> jets_idx, jets_hadronFlav, jets_partonFlav;
+  std::vector<int> jets_idx;
 
   t1->Branch("n_jet",& n_jets);
   t1->Branch("n_sixb",& n_sixbs);
@@ -97,8 +99,8 @@ int prepare_training_file(){
   t1->Branch("jet_btag",& jets_btag);
   t1->Branch("jet_qgl",& jets_qgl);
   t1->Branch("jet_idx",& jets_idx);
-  t1->Branch("jet_hadronFlav",& jets_hadronFlav);
-  t1->Branch("jet_partonFlav",& jets_partonFlav);
+  // t1->Branch("jet_hadronFlav",& jets_hadronFlav);
+  // t1->Branch("jet_partonFlav",& jets_partonFlav);
 
   t1->Branch("gen_HX_b1_recojet_m",& HX_b1_recojet_m);
   t1->Branch("gen_HX_b1_recojet_pt",& HX_b1_recojet_pt);
@@ -154,8 +156,8 @@ int prepare_training_file(){
     jets_m.clear();
     jets_btag.clear();
     jets_qgl.clear();
-    jets_partonFlav.clear();
-    jets_hadronFlav.clear();
+    // jets_partonFlav.clear();
+    // jets_hadronFlav.clear();
 
     passCount++;
 
@@ -167,8 +169,8 @@ int prepare_training_file(){
       jets_btag.emplace_back(jet_btag[i]);
       jets_qgl.emplace_back(jet_qgl[i]);
       jets_idx.emplace_back(jet_idx[i]);
-      jets_hadronFlav.emplace_back(jet_hadronFlav[i]);
-      jets_partonFlav.emplace_back(jet_partonFlav[i]);
+      // jets_hadronFlav.emplace_back(jet_hadronFlav[i]);
+      // jets_partonFlav.emplace_back(jet_partonFlav[i]);
     }
 
     n_jets = *n_jet;
