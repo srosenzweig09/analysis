@@ -120,7 +120,6 @@ inputs_filename    = config['INPUTS']['InputFile']
 
 nn_type            = config['TYPE']['Type']
 
-# info(f"Loading inputs from file:\n\t{Fore.CYAN}{inputs_filename}")
 
 
 #####
@@ -130,6 +129,7 @@ if args.filelist:
     trsm = TRSM(list_of_files)
 else:
     trsm = TRSM(inputs_filename)
+    print(f"Loading inputs from file: {inputs_filename}")
 
 if int(args.njet) == 6:
     training = training_6j(trsm)
@@ -182,7 +182,7 @@ for i in range(1,nlayers):
 model.add(Dense(output_nodes, activation=output_activation))
 
 # Stop after epoch in which loss no longer decreases but save the best model.
-es = EarlyStopping(monitor='loss', restore_best_weights=True, patience=50)
+es = EarlyStopping(monitor='loss', restore_best_weights=True, patience=10)
 
 if 'classifier' in args.task:
     met = ['accuracy']
