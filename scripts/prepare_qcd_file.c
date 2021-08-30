@@ -1,5 +1,6 @@
-/* 6b Preselection
+/*
  * Author: Suzanne Rosenzweig, s.rosenzweig@cern.ch
+ * Purpose: To filter the selected events
  */
 
 #include <iostream>
@@ -14,32 +15,35 @@
 #include "TTreeReader.h"
 #include "TTreeReaderValue.h"
 
-int apply_preselections(){
+int prepare_testing_file(){
 
-  int nmin_presel = 6;
-
-  TFile *fout = new TFile("signal/skimmed/NMSSM_XYH_YToHH_6b_MX_700_MY_400_training_set_skimmed.root","RECREATE");
+  TFile *fout = new TFile("NMSSM_XYH_YToHH_6b_MX_700_MY_400_6jet_testing_set.root","RECREATE");
   TTree *t1   = new TTree("sixBtree","sixBtree");
 
   TString tree = "sixBtree";
   TChain *cc  = new TChain(tree);
 
-  TString file1 = "signal/NanoAOD/NMSSM_XYH_YToHH_6b_MX_700_MY_400_training_set.root";
-  
-  cc->Add(file1);
+  int numFiles = 100;
+  for (int fileNum=90;fileNum < numFiles;fileNum++) {
+    // cc->AddFile(Form("root://cmseos.fnal.gov//store/user/srosenzw/sixb_ntuples/preselections/NMSSM_XYH_YToHH_6b_MX_700_MY_400/output2/ntuple_%d.root", fileNum));
+    cc->AddFile(Form("root://cmseos.fnal.gov//store/user/ekoenig/6BAnalysis/NTuples/2018/SR/NMSSM/NMSSM_XYH_YToHH_6b_MX_700_MY_400_10M/testing/ntuple_%d.root", fileNum));
+  }
+  // cc->AddFile("/eos/uscms/store/user/ekoenig/6BAnalysis/NTuples/2018/SR/NMSSM/NMSSM_XYH_YToHH_6b_MX_700_MY_400/ntuple.root");
 
   TTreeReader reader(cc);
 
-  TTreeReaderValue<int> njet_presel(reader,"njet_presel");
+  TTreeReaderValue<int> n_sixb(reader,"nfound_sixb");
+  TTreeReaderValue<int> n_jet(reader,"n_jet");
+
   TTreeReaderArray<float> jet_pt(reader,"jet_pt");
   TTreeReaderArray<float> jet_eta(reader,"jet_eta");
   TTreeReaderArray<float> jet_phi(reader,"jet_phi");
   TTreeReaderArray<float> jet_mass(reader,"jet_m");
   TTreeReaderArray<float> jet_btag(reader,"jet_btag");
   TTreeReaderArray<float> jet_qgl(reader,"jet_qgl");
-  TTreeReaderArray<int> jet_idx(reader,"jet_idx");
-  TTreeReaderArray<int> jet_hadronFlav(reader,"jet_hadronFlav");
-  TTreeReaderArray<int> jet_partonFlav(reader,"jet_partonFlav");
+  TTreeReaderArray<int> jet_idx(reader,"jet_signalId");
+  // TTreeReaderArray<int> jet_hadronFlav(reader,"jet_hadronFlav");
+  // TTreeReaderArray<int> jet_partonFlav(reader,"jet_partonFlav");
         
   TTreeReaderValue<float> gen_HX_b1_recojet_m(reader,"gen_HX_b1_recojet_m");
   TTreeReaderValue<float> gen_HX_b1_recojet_pt(reader,"gen_HX_b1_recojet_pt");
@@ -78,10 +82,16 @@ int apply_preselections(){
   TTreeReaderValue<float> gen_HY2_b2_recojet_ptRegressed(reader,"gen_HY2_b2_recojet_ptRegressed");
 
   float HX_b1_recojet_m, HX_b1_recojet_pt, HX_b1_recojet_ptRegressed, HX_b1_recojet_eta, HX_b1_recojet_phi,  HX_b2_recojet_m, HX_b2_recojet_pt, HX_b2_recojet_ptRegressed, HX_b2_recojet_eta, HX_b2_recojet_phi, HY1_b1_recojet_m, HY1_b1_recojet_pt, HY1_b1_recojet_ptRegressed, HY1_b1_recojet_eta, HY1_b1_recojet_phi,  HY1_b2_recojet_m, HY1_b2_recojet_pt, HY1_b2_recojet_ptRegressed, HY1_b2_recojet_eta, HY1_b2_recojet_phi, HY2_b1_recojet_m, HY2_b1_recojet_pt, HY2_b1_recojet_ptRegressed, HY2_b1_recojet_eta, HY2_b1_recojet_phi,  HY2_b2_recojet_m, HY2_b2_recojet_pt, HY2_b2_recojet_ptRegressed, HY2_b2_recojet_eta, HY2_b2_recojet_phi;
+
+  int n_jets, n_sixbs;
   
   std::vector<float> jets_pt, jets_eta, jets_phi, jets_btag, jets_m, jets_qgl;
 
-  std::vector<int> jets_idx, jets_hadronFlav, jets_partonFlav;
+  // std::vector<int> jets_idx, jets_hadronFlav, jets_partonFlav;
+  std::vector<int> jets_idx;
+
+  t1->Branch("n_jet",& n_jets);
+  t1->Branch("n_sixb",& n_sixbs);
 
   t1->Branch("jet_pt",& jets_pt);
   t1->Branch("jet_eta",& jets_eta);
@@ -90,49 +100,44 @@ int apply_preselections(){
   t1->Branch("jet_btag",& jets_btag);
   t1->Branch("jet_qgl",& jets_qgl);
   t1->Branch("jet_idx",& jets_idx);
-  t1->Branch("jet_hadronFlav",& jets_hadronFlav);
-  t1->Branch("jet_partonFlav",& jets_partonFlav);
+  // t1->Branch("jet_hadronFlav",& jets_hadronFlav);
+  // t1->Branch("jet_partonFlav",& jets_partonFlav);
 
-  t1->Branch("HX_b1_recojet_m",& HX_b1_recojet_m);
-  t1->Branch("HX_b1_recojet_pt",& HX_b1_recojet_pt);
-  t1->Branch("HX_b1_recojet_eta",& HX_b1_recojet_eta);
-  t1->Branch("HX_b1_recojet_phi",& HX_b1_recojet_phi);
-  t1->Branch("HX_b1_recojet_ptRegressed",& HX_b1_recojet_ptRegressed);
+  t1->Branch("gen_HX_b1_recojet_m",& HX_b1_recojet_m);
+  t1->Branch("gen_HX_b1_recojet_pt",& HX_b1_recojet_pt);
+  t1->Branch("gen_HX_b1_recojet_eta",& HX_b1_recojet_eta);
+  t1->Branch("gen_HX_b1_recojet_phi",& HX_b1_recojet_phi);
+  t1->Branch("gen_HX_b1_recojet_ptRegressed",& HX_b1_recojet_ptRegressed);
 
-  t1->Branch("HX_b2_recojet_m",& HX_b2_recojet_m);
-  t1->Branch("HX_b2_recojet_pt",& HX_b2_recojet_pt);
-  t1->Branch("HX_b2_recojet_eta",& HX_b2_recojet_eta);
-  t1->Branch("HX_b2_recojet_phi",& HX_b2_recojet_phi);
-  t1->Branch("HX_b2_recojet_ptRegressed",& HX_b2_recojet_ptRegressed);
+  t1->Branch("gen_HX_b2_recojet_m",& HX_b2_recojet_m);
+  t1->Branch("gen_HX_b2_recojet_pt",& HX_b2_recojet_pt);
+  t1->Branch("gen_HX_b2_recojet_eta",& HX_b2_recojet_eta);
+  t1->Branch("gen_HX_b2_recojet_phi",& HX_b2_recojet_phi);
+  t1->Branch("gen_HX_b2_recojet_ptRegressed",& HX_b2_recojet_ptRegressed);
 
-  t1->Branch("HY1_b1_recojet_m",& HY1_b1_recojet_m);
-  t1->Branch("HY1_b1_recojet_pt",& HY1_b1_recojet_pt);
-  t1->Branch("HY1_b1_recojet_eta",& HY1_b1_recojet_eta);
-  t1->Branch("HY1_b1_recojet_phi",& HY1_b1_recojet_phi);
-  t1->Branch("HY1_b1_recojet_ptRegressed",& HY1_b1_recojet_ptRegressed);
+  t1->Branch("gen_HY1_b1_recojet_m",& HY1_b1_recojet_m);
+  t1->Branch("gen_HY1_b1_recojet_pt",& HY1_b1_recojet_pt);
+  t1->Branch("gen_HY1_b1_recojet_eta",& HY1_b1_recojet_eta);
+  t1->Branch("gen_HY1_b1_recojet_phi",& HY1_b1_recojet_phi);
+  t1->Branch("gen_HY1_b1_recojet_ptRegressed",& HY1_b1_recojet_ptRegressed);
 
-  t1->Branch("HY1_b2_recojet_m",& HY1_b2_recojet_m);
-  t1->Branch("HY1_b2_recojet_pt",& HY1_b2_recojet_pt);
-  t1->Branch("HY1_b2_recojet_eta",& HY1_b2_recojet_eta);
-  t1->Branch("HY1_b2_recojet_phi",& HY1_b2_recojet_phi);
-  t1->Branch("HY1_b2_recojet_ptRegressed",& HY1_b2_recojet_ptRegressed);
+  t1->Branch("gen_HY1_b2_recojet_m",& HY1_b2_recojet_m);
+  t1->Branch("gen_HY1_b2_recojet_pt",& HY1_b2_recojet_pt);
+  t1->Branch("gen_HY1_b2_recojet_eta",& HY1_b2_recojet_eta);
+  t1->Branch("gen_HY1_b2_recojet_phi",& HY1_b2_recojet_phi);
+  t1->Branch("gen_HY1_b2_recojet_ptRegressed",& HY1_b2_recojet_ptRegressed);
 
-  t1->Branch("HY2_b1_recojet_m",& HY2_b1_recojet_m);
-  t1->Branch("HY2_b1_recojet_pt",& HY2_b1_recojet_pt);
-  t1->Branch("HY2_b1_recojet_eta",& HY2_b1_recojet_eta);
-  t1->Branch("HY2_b1_recojet_phi",& HY2_b1_recojet_phi);
-  t1->Branch("HY2_b1_recojet_ptRegressed",& HY2_b1_recojet_ptRegressed);
+  t1->Branch("gen_HY2_b1_recojet_m",& HY2_b1_recojet_m);
+  t1->Branch("gen_HY2_b1_recojet_pt",& HY2_b1_recojet_pt);
+  t1->Branch("gen_HY2_b1_recojet_eta",& HY2_b1_recojet_eta);
+  t1->Branch("gen_HY2_b1_recojet_phi",& HY2_b1_recojet_phi);
+  t1->Branch("gen_HY2_b1_recojet_ptRegressed",& HY2_b1_recojet_ptRegressed);
 
-  t1->Branch("HY2_b2_recojet_m",& HY2_b2_recojet_m);
-  t1->Branch("HY2_b2_recojet_pt",& HY2_b2_recojet_pt);
-  t1->Branch("HY2_b2_recojet_eta",& HY2_b2_recojet_eta);
-  t1->Branch("HY2_b2_recojet_phi",& HY2_b2_recojet_phi);
-  t1->Branch("HY2_b2_recojet_ptRegressed",& HY2_b2_recojet_ptRegressed);
-
-  int pt_threshold = 30;
-  float eta_threshold = 2.4;
-
-
+  t1->Branch("gen_HY2_b2_recojet_m",& HY2_b2_recojet_m);
+  t1->Branch("gen_HY2_b2_recojet_pt",& HY2_b2_recojet_pt);
+  t1->Branch("gen_HY2_b2_recojet_eta",& HY2_b2_recojet_eta);
+  t1->Branch("gen_HY2_b2_recojet_phi",& HY2_b2_recojet_phi);
+  t1->Branch("gen_HY2_b2_recojet_ptRegressed",& HY2_b2_recojet_ptRegressed);
 
   int eventCount = 0;
   int passCount = 0;
@@ -142,31 +147,17 @@ int apply_preselections(){
       std::cout << eventCount << " events read!" << std::endl;
     }
 
-    if (*njet_presel < nmin_presel) continue;
+    // if (*n_jet != 9) continue;
 
+    jets_idx.clear();
     jets_pt.clear();
     jets_eta.clear();
     jets_phi.clear();
+    jets_m.clear();
     jets_btag.clear();
     jets_qgl.clear();
-    jets_m.clear();
-    jets_idx.clear();
-    jets_partonFlav.clear();
-    jets_hadronFlav.clear();
-
-    // if (*gen_HX_b1_recojet_ptRegressed < pt_threshold) continue;
-    // if (*gen_HX_b2_recojet_ptRegressed < pt_threshold) continue;
-    // if (*gen_HY1_b1_recojet_ptRegressed < pt_threshold) continue;
-    // if (*gen_HY1_b2_recojet_ptRegressed < pt_threshold) continue;
-    // if (*gen_HY2_b1_recojet_ptRegressed < pt_threshold) continue;
-    // if (*gen_HY2_b2_recojet_ptRegressed < pt_threshold) continue;
-
-    // if (abs(*gen_HX_b1_recojet_eta) > eta_threshold) continue;
-    // if (abs(*gen_HX_b2_recojet_eta) > eta_threshold) continue;
-    // if (abs(*gen_HY1_b1_recojet_eta) > eta_threshold) continue;
-    // if (abs(*gen_HY1_b2_recojet_eta) > eta_threshold) continue;
-    // if (abs(*gen_HY2_b1_recojet_eta) > eta_threshold) continue;
-    // if (abs(*gen_HY2_b2_recojet_eta) > eta_threshold) continue;
+    // jets_partonFlav.clear();
+    // jets_hadronFlav.clear();
 
     passCount++;
 
@@ -178,16 +169,12 @@ int apply_preselections(){
       jets_btag.emplace_back(jet_btag[i]);
       jets_qgl.emplace_back(jet_qgl[i]);
       jets_idx.emplace_back(jet_idx[i]);
-      jets_hadronFlav.emplace_back(jet_hadronFlav[i]);
-      jets_partonFlav.emplace_back(jet_partonFlav[i]);
+      // jets_hadronFlav.emplace_back(jet_hadronFlav[i]);
+      // jets_partonFlav.emplace_back(jet_partonFlav[i]);
     }
 
-    // jets_pt   = *jet_pt;
-    // jets_eta  = *jet_eta;
-    // jets_phi  = *jet_phi;
-    // jets_m    = *jet_mass;
-    // jets_btag = *jet_btag;
-    // jets_idx  = *jet_idx;
+    n_jets = *n_jet;
+    n_sixbs = *n_sixb;
 
     HX_b1_recojet_m   = *gen_HX_b1_recojet_m;
     HX_b1_recojet_pt  = *gen_HX_b1_recojet_pt;
@@ -231,6 +218,7 @@ int apply_preselections(){
   
   t1->Write();
 
+  std::cout << eventCount << " Total Events" << endl;
   std::cout << passCount << " Events Passed Preselections" << endl;
 
   return 0;

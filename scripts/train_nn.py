@@ -6,37 +6,34 @@ and value to override the configuration file.
 
 print("Loading libraries. May take a few minutes.")
 
-import awkward as ak
-import colorama
-colorama.init(autoreset=True)
-from colorama import Fore, Back
 import numpy as np
 import os
 import sys
 import tensorflow as tf
-import vector
-vector.register_awkward()
+import tensorflow.python.util.deprecation as deprecation
+deprecation._PRINT_DEPRECATION_WARNINGS = False
 
 from argparse import ArgumentParser
 from configparser import ConfigParser
 from keras.models import Sequential
-from keras.layers import Dense, Dropout
+from keras.layers import Activation, Dense, AlphaDropout
 from keras.callbacks import EarlyStopping
 from keras.regularizers import l1, l2, l1_l2
 from keras.constraints import max_norm
+from keras.utils.generic_utils import get_custom_objects
 from pandas import DataFrame
-from pickle import dump
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow import compat
-from tqdm import tqdm
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # suppress Keras/TF warnings
 compat.v1.logging.set_verbosity(compat.v1.logging.ERROR) # suppress Keras/TF warnings
 
 # Custom libraries and modules
 from colors import CYAN, W
 from logger import info, error
-from trsm import TRSM, training_6j, training_2j
+
+from utils.trsm import training_6j, training_2j
+from utils.model_saver import ModelSaver
 
 print("Libraries loaded.")
 print()
@@ -53,34 +50,15 @@ parser.add_argument('--cfg', dest = 'cfg', help = 'config file' , required = Tru
 parser.add_argument('--filelist', dest = 'filelist', help = 'tag for reading list of files from .txt file', action = 'store_true', default = False )
 parser.add_argument('--task', dest = 'task', help = 'classifier or regressor'  , default = 'classifier' )
 parser.add_argument('--njet', dest = 'njet', help = 'how many input jets'      , default = 6 )
-parser.add_argument('--run' , dest = 'run' , help = 'index of training session', default = 1 )
 parser.add_argument('--tag' , dest = 'tag' , help = 'special tag', default = None)
 parser.add_argument('--lr' , dest = 'lr' , help = 'learning rate', default = 0.001)
 parser.add_argument('--beta1' , dest = 'beta1' , help = 'exponential decay rate for first moment', default = 0.9)
 parser.add_argument('--beta2' , dest = 'beta2' , help = 'beta_2 value', default = 0.999)
 parser.add_argument('--epsilon' , dest = 'epsilon' , help = 'epsilon value', default = 1e-07)
+parser.add_argument('--dropout', dest = 'dropout', help='implement dropout boolean', action='store_true', default=False)
+parser.add_argument('--dijet', dest = 'dijet', help='implement dijet boolean', action='store_true', default=False)
 
 args = parser.parse_args()
-
-### ------------------------------------------------------------------------------------
-## Prepare output directories
-
-lr_folder = str(args.lr).split('.')[1]
-beta1_folder = str(args.lr).split('.')[1]
-beta2_folder = str(args.lr).split('.')[1]
-
-out_dir = f"{args.njet}jet_{args.task}/models/"
-if args.tag:
-    out_dir += f'{args.tag}/'
-# out_dir = f"lr_pt{lr_folder}/beta1_pt{beta1_folder}/beta2_pt{beta2_folder}"
-model_dir = out_dir + "model/"
-
-if not os.path.exists(out_dir):
-    os.makedirs(out_dir)
-if not os.path.exists(model_dir):
-    os.makedirs(model_dir)
-
-# info(f"Training sessions will be saved in {model_dir}")
 
 ### ------------------------------------------------------------------------------------
 ## Import configuration file
@@ -103,15 +81,7 @@ nlayers            = len(nodes)
 output_activation  = config['OUTPUT']['OutputActivation']
 output_nodes       = int(config['OUTPUT']['OutputNodes'])
 
-# Fitting hyperparameters
-# optimizer          = config['OPTIMIZER']['OptimizerFunction']
-
-# Nadam defaults:
-# learning_rate = 0.001
-# beta_1 = 0.9
-# beta_2 = 0.999
-optimizer = tf.keras.optimizers.Nadam(
-    learning_rate=float(args.lr), beta_1=float(args.beta1), beta_2=float(args.beta2), epsilon=float(args.epsilon), name="Nadam")
+optimizer_name = config['OPTIMIZER']['OptimizerFunction']
 loss_function      = config['LOSS']['LossFunction']
 nepochs            = int(config['TRAINING']['NumEpochs'])
 batch_size         = int(config['TRAINING']['BatchSize'])
@@ -121,30 +91,21 @@ inputs_filename    = config['INPUTS']['InputFile']
 nn_type            = config['TYPE']['Type']
 
 
-
 #####
-if args.filelist:
-    with open("training_event_list.txt") as f:
-        list_of_files = f.readlines()
-    trsm = TRSM(list_of_files)
-else:
-    trsm = TRSM(inputs_filename)
-    print(f"Loading inputs from file: {inputs_filename}")
-
 if int(args.njet) == 6:
-    training = training_6j(trsm)
-    inputs = training.inputs
+    training = training_6j(inputs_filename, dijet=bool(args.dijet))
+    inputs = training.features
     targets = training.targets
 elif int(args.njet) == 2:
-    training = training_2j(trsm)
-    # inputs, targets = training_2j.get_features_targets(trsm)
-    inputs = training.pair_features
-    targets = training.pair_targets
-
-info("p4s loaded.")
+    training = training_2j(inputs_filename)
+    inputs = training.features
+    targets = training.targets
 
 print(f"Inputs shape:  {inputs.shape}")
 print(f"Targets shape: {targets.shape}")
+
+print(inputs[0,:])
+print(targets[0,:])
 
 ### ------------------------------------------------------------------------------------
 ## 
@@ -156,13 +117,15 @@ x = scaler.transform(inputs)
 val_size = 0.10
 x_train, x_val, y_train, y_val = train_test_split(x, targets, test_size=val_size)
 
-# Save training examples
-# np.savez(out_dir + "training_examples_1.npz", x_train=x_train, y_train=y_train)
-
-param_dim = np.shape(inputs)[1]
+param_dim = int(np.shape(inputs)[1])
 
 ### ------------------------------------------------------------------------------------
 ## 
+
+# Add the GELU function to Keras
+def gelu(x):
+    return 0.5 * x * (1 + tf.tanh(tf.sqrt(2 / np.pi) * (x + 0.044715 * tf.pow(x, 3))))
+get_custom_objects().update({'gelu': Activation(gelu)})
 
 info("Defining the model.")
 # Define the keras model
@@ -175,8 +138,11 @@ model.add(Dense(nodes[0], input_dim=param_dim, activation=hidden_activations))
 for i in range(1,nlayers):
     if 'classifier' in args.task:
         model.add(Dense(int(nodes[i]), activation=hidden_activations, kernel_constraint=max_norm(1.0), kernel_regularizer=l1_l2(), bias_constraint=max_norm(1.0)))
+        # model.add(Dense(int(nodes[i]), kernel_initializer='lecun_normal', activation=hidden_activations, kernel_constraint=max_norm(1.0), kernel_regularizer=l1_l2(), bias_constraint=max_norm(1.0)))
+        if bool(args.dropout): model.add(AlphaDropout(0.2)) 
     elif args.task == 'regressor':
         model.add(Dense(int(nodes[i]), activation=hidden_activations, kernel_regularizer=l1_l2()))
+        # model.add(Dense(int(nodes[i]), kernel_initializer='lecun_normal', activation=hidden_activations, kernel_regularizer=l1_l2()))
 
 # Output layer
 model.add(Dense(output_nodes, activation=output_activation))
@@ -189,6 +155,13 @@ if 'classifier' in args.task:
 elif args.task == 'regressor':
     met = None
 
+# Nadam defaults:
+# learning_rate = 0.001
+# beta_1 = 0.9
+# beta_2 = 0.999
+# optimizer = tf.keras.optimizers.Nadam(learning_rate=float(args.lr), beta_1=float(args.beta1), beta_2=float(args.beta2), epsilon=float(args.epsilon), name="Nadam")
+optimizer = 'nadam'
+
 info("Compiling the model.")
 model.compile(loss=loss_function, 
               optimizer=optimizer, 
@@ -196,7 +169,7 @@ model.compile(loss=loss_function,
 
 # Make a list of the hyperparameters and print them to the screen.
 nn_info_list = [
-    f"Input parameters:            {param_dim},\n",
+    f"Input parameters:            {param_dim}\n",
     f"Optimizer:                   {optimizer}\n",
     f"Learning Rate:               {args.lr}\n",
     f"beta_1:                      {args.beta1}\n",
@@ -210,7 +183,7 @@ nn_info_list = [
     f"Hidden layer nodes:          {nodes}\n",
     f"Hidden activation functions: {hidden_activations}\n",
     f"Num output nodes:            {output_nodes}\n",
-    f"Output activation function:  {output_activation}"]
+    f"Output activation function:  {output_activation.capitalize()}"]
 
 for line in nn_info_list:
     print(line)
@@ -233,49 +206,57 @@ history = model.fit(x_train,
 model.summary()
 
 ### ------------------------------------------------------------------------------------
-## Apply the model (predict)
-
-# scores = model.predict(x_test)
-
-### ------------------------------------------------------------------------------------
 ## Save the model, history, and predictions
-
-# np.savez(out_dir + f"scores_{args.run}", scores=scores)
 
 # convert the history.history dict to a pandas DataFrame   
 hist_df = DataFrame(history.history) 
 
-# Save to json:  
-hist_json_file = model_dir + f'history_{args.run}.json' 
+out_dir = f"{args.njet}jet_{args.task}/models/{args.tag}/"
 
-with open(hist_json_file, mode='w') as f:
-    hist_df.to_json(f)
+if not os.path.exists(out_dir):
+    os.makedirs(out_dir)
 
-# Save model to json and weights to h5
-model_json = model.to_json()
+info(f"Training sessions will be saved in {out_dir}")
 
-json_save = model_dir + f"model_{args.run}.json"
-h5_save   = json_save.replace(".json", ".h5")
-
-with open(json_save, "w") as json_file:
-    json_file.write(model_json)
-
-# serialize weights to HDF5
-model.save_weights(h5_save)
-
-dump(scaler, open(model_dir + f'scaler_{args.run}.pkl', 'wb'))
-
-info(f"Saved model and history to disk in location:"
-      f"\n   {json_save}\n   {h5_save}\n   {hist_json_file}")
-
+saver = ModelSaver(out_dir, model, hist_df, scaler)
 
 ### ------------------------------------------------------------------------------------
-## 
+## Write model configuration file
 
-nn_info_list[3] = f"Num epochs:                  {len(hist_df)}\n"
+cfg_out = ConfigParser()
 
-with open(out_dir + 'nn_info.txt', "w") as f:
-    for line in nn_info_list:
-        f.writelines(line)
+cfg_out["model"] = {
+    "input_parameters" : param_dim,
+    "param1_n6" : "jet_pt",
+    "param2_n6" : "jet_eta",
+    "param3_n6" : "jet_phi",
+    "param4_n6" : "jet_btag",
+    "param5_n6" : "boosted_pt",
+    "num_hidden_layers" : nlayers,
+    "input_activation_function" : hidden_activations,
+    "hidden_layer_nodes" : ",".join(nodes),
+    "hidden_activation_function" : hidden_activations,
+    "num_output_nodes" : output_nodes,
+    "output_activation_function" : output_activation.capitalize()
+}
+
+cfg_out["training"] = {
+    "optimizer" : optimizer_name,
+    "learning_rate" : args.lr,
+    "num_epochs" : len(hist_df),
+    "beta_1" : args.beta1,
+    "beta_2" : args.beta2,
+    "epsilon" : args.epsilon,
+    "loss_function" : loss_function,
+    "batch_size" : batch_size
+}
+
+cfg_out["scaler"] = {
+    "scale_min" : ",".join(scaler.data_min_.astype('str').tolist()),
+    "scale_max" : ",".join(scaler.data_max_.astype('str').tolist())
+}
+
+with open(out_dir + 'model.cfg', "w") as conf:
+    cfg_out.write(conf)
 
 print("-"*45 + CYAN + " Training ended " + W + "-"*45)
