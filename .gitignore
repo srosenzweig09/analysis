@@ -2,8 +2,8 @@
 # Data files
 *.npz
 *.root
-*.json
-*.h5
+#*.json
+#*.h5
 *.txt
 *.pkl
 
