@@ -305,6 +305,7 @@ class training_6j():
 
         tree = Tree(filename, 'sixBtree', as_ak=True)
         if dijet:
+            # if dijet = True, sort tree by matching index
             sort_mask = ak.argsort(tree.jet_idx, axis=1)
             tree.sort(sort_mask)
         nevents = len(tree.jet_pt)
