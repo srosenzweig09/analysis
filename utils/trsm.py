@@ -383,13 +383,34 @@ class training_6j():
             H_pt_order = np.argsort(np.column_stack((
                 s_dijet1.pt.to_numpy(), 
                 s_dijet2.pt.to_numpy(), 
-                s_dijet3.pt.to_numpy())), axis=1)
+                s_dijet3.pt.to_numpy())), axis=1)[:,::-1]
+
+            s_dijet1_dR = s_jet0_p4.deltaR(s_jet1_p4).to_numpy()
+            s_dijet2_dR = s_jet2_p4.deltaR(s_jet3_p4).to_numpy()
+            s_dijet3_dR = s_jet4_p4.deltaR(s_jet5_p4).to_numpy()
+            s_dR_features = ak.from_regular(ak.from_numpy(np.column_stack((s_dijet1_dR, s_dijet2_dR, s_dijet3_dR))))
+            s_dR_features = s_dR_features[ak.from_regular(ak.from_numpy(H_pt_order))].to_numpy()
+
+            H_pt_order = np.argsort(np.column_stack((
+                s_dijet1.pt.to_numpy(), 
+                s_dijet2.pt.to_numpy(), 
+                s_dijet3.pt.to_numpy())), axis=1)[:,::-1]
 
             excess_pt_order = np.argsort(np.column_stack((
                 e_dijet1.pt.to_numpy(), 
                 e_dijet2.pt.to_numpy(), 
-                e_dijet3.pt.to_numpy())), axis=1)
+                e_dijet3.pt.to_numpy())), axis=1)[:,::-1]
+
+            fig, ax = plt.subplots(nrows=1, ncols=2)
+            s_dijet1.mass, s_dijet2.mass, s_dijet3.mass
+            e_dijet1.mass, e_dijet2.mass, e_dijet3.mass
             
+            e_dijet1_dR = e_jet0_p4.deltaR(e_jet1_p4).to_numpy()
+            e_dijet2_dR = e_jet2_p4.deltaR(e_jet3_p4).to_numpy()
+            e_dijet3_dR = e_jet4_p4.deltaR(e_jet5_p4).to_numpy()
+            e_dR_features = ak.from_regular(ak.from_numpy(np.column_stack((e_dijet1_dR, e_dijet2_dR, e_dijet3_dR))))
+            e_dR_features = e_dR_features[ak.from_regular(ak.from_numpy(excess_pt_order))].to_numpy()
+
             H_pt_order = np.where(H_pt_order == 2, 4, H_pt_order)
             H_pt_order = np.where(H_pt_order == 1, 2, H_pt_order)
             excess_pt_order = np.where(excess_pt_order == 2, 4, excess_pt_order)
@@ -423,12 +444,12 @@ class training_6j():
             xtra_signal_features = np.sort(np.column_stack((
                 s_dijet1.pt.to_numpy(), 
                 s_dijet2.pt.to_numpy(), 
-                s_dijet3.pt.to_numpy())), axis=1)
+                s_dijet3.pt.to_numpy())), axis=1)[:,::-1]
 
             xtra_excess_features = np.sort(np.column_stack((
                 e_dijet1.pt.to_numpy(), 
                 e_dijet2.pt.to_numpy(), 
-                e_dijet3.pt.to_numpy())), axis=1)
+                e_dijet3.pt.to_numpy())), axis=1)[:,::-1]
             
             signal_targets = np.tile([1,0], (nevents, 1))
             excess_targets = np.tile([0,1], (nevents, 1))
