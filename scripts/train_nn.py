@@ -32,7 +32,7 @@ compat.v1.logging.set_verbosity(compat.v1.logging.ERROR) # suppress Keras/TF war
 from colors import CYAN, W
 from logger import info, error
 
-from utils.trsm import training_6j, training_2j
+from utils.analysis import training_6j, training_2j
 from utils.model_saver import ModelSaver
 
 print("Libraries loaded.")
@@ -225,13 +225,15 @@ saver = ModelSaver(out_dir, model, hist_df, scaler)
 
 cfg_out = ConfigParser()
 
+### FIX THIS TO PROGRAMATICALLY ASSIGN PARAMETER NAMES
 cfg_out["model"] = {
     "input_parameters" : param_dim,
     "param1_n6" : "jet_pt",
     "param2_n6" : "jet_eta",
     "param3_n6" : "jet_phi",
     "param4_n6" : "jet_btag",
-    "param5_n6" : "boosted_pt",
+    "param5_n3" : "dijet_boosted_pt",
+    "param5_n3" : "delta_R",
     "num_hidden_layers" : nlayers,
     "input_activation_function" : hidden_activations,
     "hidden_layer_nodes" : ",".join(nodes),
