@@ -7,6 +7,7 @@ from matplotlib.colors import LogNorm
 import matplotlib.colors as colors
 import matplotlib.cm as cm
 import numpy as np
+from matplotlib.ticker import FormatStrFormatter
 
 file_location = '/uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_2_18/src/sixb/plots/'
 
@@ -26,27 +27,29 @@ class Plotter:
     def __init__():
         pass
 
-def hist(x, bins=100, label=None, weights=None, color=None, density=False, stacked=False, histtype='step', alpha=1.0, fig=None, ax=None, xlim=None, ylim=None, xlabel=None, ylabel=None, savefig=None, pdf=False, title=None):
-    try: bins = np.linspace(x.min(), x.max(), bins)
-    except: pass
+def hist(x, bins=100, label=None, weights=None, color=None, density=False, stacked=False, histtype='step', alpha=1.0, fig=None, ax=None, xlim=None, ylim=None, xlabel=None, ylabel=None, savefig=None, pdf=False, title=None, useMathText=False):
+    # try: bins = np.linspace(x.min(), x.max(), bins)
+    # except: pass
     if ax is None: fig, ax = plt.subplots()
     if weights is not None: x = (bins[1:] + bins[:-1])/2
-    try: bins = np.linspace(x.min(), x.max(), bins)
-    except: pass
+    # try: bins = np.linspace(x.min(), x.max(), bins)
+    # except: pass
     if xlim is not None: ax.set_xlim(xlim)
     if ylim is not None: ax.set_ylim(ylim)
     if xlabel is not None: ax.set_xlabel(xlabel)
     if ylabel is not None: ax.set_ylabel(ylabel)
     if title is not None: ax.set_title(title)
-    N = sum(x)
+    N = len(x)
     if weights is not None: N = sum(weights)
     textstr = f'Entries = {N}'
     props = dict(boxstyle='round', facecolor='white', alpha=1)
-    ax.text(0.8, 1.02, textstr, transform=ax.transAxes, fontsize=9,
-        verticalalignment='top', bbox=props)
+    ax.text(1.0, 1.0, textstr, transform=ax.transAxes, fontsize=9,
+        va='bottom', bbox=props, ha='right')
     ax.hist(x, bins=bins, histtype=histtype, align='mid', label=label, weights=weights,  color=color, density=density, stacked=stacked, alpha=alpha)
     suffix = ''
+    ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
     if pdf: suffix = '.pdf'
+    if label is not None: ax.legend()
     if savefig is not None: fig.savefig(file_location + savefig + suffix)
     plt.tight_layout()
 
