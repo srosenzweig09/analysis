@@ -8,6 +8,8 @@ import matplotlib.colors as colors
 import matplotlib.cm as cm
 import numpy as np
 
+file_location = '/uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_2_18/src/sixb/plots/'
+
 def change_cmap_bkg_to_white(colormap, n=256):
     """The lowest value of colormaps is not often white by default, which can help idenfity empty bins.
     This function will make the lowest value (typically zero) white."""
@@ -24,10 +26,10 @@ class Plotter:
     def __init__():
         pass
 
-def hist(x, bins=100, label=None, weights=None, color=None, density=False, stacked=False, histtype='step', alpha=1.0, ax=False, xlim=None, ylim=None, xlabel=None, ylabel=None):
+def hist(x, bins=100, label=None, weights=None, color=None, density=False, stacked=False, histtype='step', alpha=1.0, fig=None, ax=None, xlim=None, ylim=None, xlabel=None, ylabel=None, savefig=None, pdf=False, title=None):
     try: bins = np.linspace(x.min(), x.max(), bins)
     except: pass
-    if ~ax: fig, ax = plt.subplots()
+    if ax is None: fig, ax = plt.subplots()
     if weights is not None: x = (bins[1:] + bins[:-1])/2
     try: bins = np.linspace(x.min(), x.max(), bins)
     except: pass
@@ -35,13 +37,18 @@ def hist(x, bins=100, label=None, weights=None, color=None, density=False, stack
     if ylim is not None: ax.set_ylim(ylim)
     if xlabel is not None: ax.set_xlabel(xlabel)
     if ylabel is not None: ax.set_ylabel(ylabel)
+    if title is not None: ax.set_title(title)
     N = sum(x)
     if weights is not None: N = sum(weights)
     textstr = f'Entries = {N}'
     props = dict(boxstyle='round', facecolor='white', alpha=1)
     ax.text(0.8, 1.02, textstr, transform=ax.transAxes, fontsize=9,
         verticalalignment='top', bbox=props)
-    return ax.hist(x, bins=bins, histtype=histtype, align='mid', label=label, weights=weights,  color=color, density=density, stacked=stacked, alpha=alpha)
+    ax.hist(x, bins=bins, histtype=histtype, align='mid', label=label, weights=weights,  color=color, density=density, stacked=stacked, alpha=alpha)
+    suffix = ''
+    if pdf: suffix = '.pdf'
+    if savefig is not None: fig.savefig(file_location + savefig + suffix)
+    plt.tight_layout()
 
 def hist2d(ax, x, y, xbins=100, ybins=100, norm=LogNorm()):
     cmap = change_cmap_bkg_to_white('rainbow')
