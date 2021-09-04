@@ -32,8 +32,8 @@ compat.v1.logging.set_verbosity(compat.v1.logging.ERROR) # suppress Keras/TF war
 from colors import CYAN, W
 from logger import info, error
 
-from utils.analysis import training_6j, training_2j
-from utils.model_saver import ModelSaver
+from utils.analysis import TrainSix, TrainTwo
+from utils.models.save import ModelSaver
 
 print("Libraries loaded.")
 print()
@@ -93,11 +93,11 @@ nn_type            = config['TYPE']['Type']
 
 #####
 if int(args.njet) == 6:
-    training = training_6j(inputs_filename, dijet=bool(args.dijet))
+    training = TrainSix(inputs_filename, dijet=bool(args.dijet))
     inputs = training.features
     targets = training.targets
 elif int(args.njet) == 2:
-    training = training_2j(inputs_filename)
+    training = TrainTwo(inputs_filename)
     inputs = training.features
     targets = training.targets
 
