@@ -2,11 +2,10 @@
 I would like my plots to be consistent so I've saved what I can in the rcparams file but there are some things I cannot change. This script will help me keep those changes consistent.
 """
 
-import matplotlib.pyplot as plt
-from matplotlib.colors import LogNorm
-import matplotlib.colors as colors
+from . import *
+
+# from matplotlib.colors import LogNorm
 import matplotlib.cm as cm
-import numpy as np
 from matplotlib.ticker import FormatStrFormatter
 
 file_location = '/uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_2_18/src/sixb/plots/'
@@ -53,12 +52,129 @@ def hist(x, bins=100, label=None, weights=None, color=None, density=False, stack
     if savefig is not None: fig.savefig(file_location + savefig + suffix)
     plt.tight_layout()
 
-def hist2d(ax, x, y, xbins=100, ybins=100, norm=LogNorm()):
+def hist2d(ax, x, y, xbins=100, ybins=100, norm=clrs.LogNorm()):
     cmap = change_cmap_bkg_to_white('rainbow')
-    return ax.hist2d(x, y, bins=(xbins, ybins), norm=LogNorm(), cmap=cmap)
+    return ax.hist2d(x, y, bins=(xbins, ybins), norm=clrs.LogNorm(), cmap=cmap)
 
 def norm_hist(arr, bins=100):
     n, b = np.histogram(arr, bins=bins)
     x = (b[:-1] + b[1:]) / 2
     
     return n/n.max(), b, x
+
+
+
+def plot_highest_score(combos):
+    score_mask = combos.high_score_combo_mask
+    high_scores = combos.evt_highest_score
+    signal_mask = combos.signal_evt_mask
+    signal_highs = combos.signal_high_score
+    high_nsignal = combos.highest_score_nsignal
+    n_signal = combos.n_signal
+    
+    fig, ax = plt.subplots()
+    score_bins = np.arange(0, 1.01, 0.01)
+
+    n_signal, edges = np.histogram(high_scores[signal_mask], bins=score_bins)
+    n_bkgd, edges   = np.histogram(high_scores[~signal_mask], bins=score_bins)
+
+    x = (edges[1:] + edges[:-1])/2
+
+    n_signal = n_signal / np.sum(n_signal)
+    n_bkgd = n_bkgd / np.sum(n_bkgd)
+
+    n_signal, edges, _ = hist(ax, x, weights=n_signal, bins=score_bins, label='Events with correct combos')
+    n_bkgd, edges, _ = hist(ax, x, weights=n_bkgd, bins=score_bins, label='Events with no correct combos')
+
+    ax.legend(loc=2)
+    ax.set_xlabel('Highest Assigned Score in Event')
+    ax.set_ylabel('AU')
+    ax.set_title('Distribution of Highest Scoring Combination')
+
+    # hi_score = np.sum(n_signal[x > 0.8]) / (np.sum(n_signal[x > 0.8]) + np.sum(n_bkgd[x > 0.8]))
+    # ax.text(0.2, 0.5, f"Ratio of signal to sgnl+bkgd above 0.8 = {hi_score*100:.0f}%", transform=ax.transAxes)
+
+    return fig, ax
+
+
+
+def plot_combo_scores(combos, normalize=True):
+
+    fig, ax = plt.subplots()
+
+    if normalize:
+        c, b, x = norm_hist(combos.scores_combo[combos.signal_mask])
+        w, b, x = norm_hist(combos.scores_combo[~combos.signal_mask])
+        ax.set_ylabel('AU')
+    else:
+        c, b = np.histogram(combos.scores_combo[combos.signal_mask], bins=100)
+        w, b = np.histogram(combos.scores_combo[~combos.signal_mask], bins=100)
+        x = (b[1:] + b[:-1]) / 2
+        ax.set_ylabel('Entries Per Bin')
+
+    hist(ax, x, weights=c, bins=b, label='Correct 6-jet combo')
+    hist(ax, x, weights=w, bins=b, label='Incorrect 6-jet combo')
+    ax.legend(fontsize='small', loc=9)
+
+    ax.set_xlabel('Assigned Score')
+    
+
+    textstr = f'Entries = {len(combos.scores_combo)}'
+    props = dict(boxstyle='round', facecolor='white', alpha=1)
+    ax.text(0.8, 1.02, textstr, transform=ax.transAxes, fontsize=9,
+            verticalalignment='top', bbox=props)
+
+    return fig, ax
+
+def plot_combo_score_v_mass(combos):
+    combo_m = ak.to_numpy(combos.sixjet_p4.mass)
+    combo_m = combo_m.reshape(combo_m.shape[0])
+
+    fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(7,3))
+
+    fig.suptitle("Combination Analysis")
+
+    ax[0].set_title("Correct Combos")
+    ax[1].set_title("Incorrect Combos")
+
+    n, xedges, yedges, ims = hist2d(ax[0], combo_m[combos.signal_mask], combos.scores_combo[combos.signal_mask], xbins=np.linspace(400,900,100))
+    n, xedges, yedges, imb = hist2d(ax[1], combo_m[~combos.signal_mask], combos.scores_combo[~combos.signal_mask], xbins=np.linspace(0,2000,100))
+
+    plt.colorbar(ims, ax=ax[0])
+    plt.colorbar(imb, ax=ax[1])
+
+    ax[0].set_xlabel('Invariant Mass of 6-jet System [GeV]')
+    ax[1].set_xlabel('Invariant Mass of 6-jet System [GeV]')
+    ax[0].set_ylabel('Assigned Score')
+    ax[1].set_ylabel('Assigned Score')
+
+    plt.tight_layout()
+    return fig, ax
+
+def plot_highest_score_v_mass(combos):
+    combo_m = ak.to_numpy(combos.sixjet_p4.mass)
+    combo_m = combo_m.reshape(combo_m.shape[0])
+
+    fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(7,3))
+
+    fig.suptitle("Combination Analysis")
+
+    ax[0].set_title("Correct Combos")
+    ax[1].set_title("Incorrect Combos")
+    
+    signal_mask = combos.signal_evt_mask
+    high_score_mask = combos.high_score_combo_mask
+
+    n, xedges, yedges, ims = hist2d(ax[0], combo_m[high_score_mask][signal_mask], combos.scores_combo[high_score_mask][signal_mask], xbins=np.linspace(400,900,100))
+    n, xedges, yedges, imb = hist2d(ax[1], combo_m[high_score_mask][~signal_mask], combos.scores_combo[high_score_mask][~signal_mask], xbins=np.linspace(0,2000,100))
+
+    plt.colorbar(ims, ax=ax[0])
+    plt.colorbar(imb, ax=ax[1])
+
+    ax[0].set_xlabel('Invariant Mass of 6-jet System [GeV]')
+    ax[1].set_xlabel('Invariant Mass of 6-jet System [GeV]')
+    ax[0].set_ylabel('Assigned Score')
+    ax[1].set_ylabel('Assigned Score')
+
+    plt.tight_layout()
+    return fig, ax
