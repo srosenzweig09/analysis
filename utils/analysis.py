@@ -10,30 +10,12 @@ Training samples are prepared such that these requirements are already imposed:
 - n_sixb == 6
 """
 
-# from particle import Particle
-import awkward as ak
-from icecream import ic
+from . import *
+
+# Standard library imports
 from math import comb
-import numpy as np
-np.set_printoptions(formatter={'float': '{: 0.3f}'.format}) 
-import random
 import sys  # JAKE DELETE
 import uproot
-import vector
-from math import comb
-import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # suppress Keras/TF warnings
-
-from consistent_plots import hist, hist2d
-
-import matplotlib.pyplot as plt
-
-from keras.models import model_from_json
-import tensorflow as tf
-tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
-from pickle import load
-
-from consistent_plots import hist
 
 vector.register_awkward()
 
@@ -64,12 +46,6 @@ def broadcast(jet_arr, njets=7):
     # Jim Pivarski recommends converting to NumPy arrays to broadcast
     return ak.from_numpy(np.repeat(jet_arr[:,np.newaxis].to_numpy(), njets, axis=1))
 
-def norm_hist(arr, bins=100):
-    n, b = np.histogram(arr, bins=bins)
-    x = (b[:-1] + b[1:]) / 2
-    
-    return n/n.max(), b, x
-
 def get_6jet_p4(p4):
     combos = ak.combinations(p4, 6)
     part0, part1, part2, part3, part4, part5 = ak.unzip(combos)
@@ -82,148 +58,25 @@ def get_6jet_p4(p4):
     boost_5 = part5.boost_p4(evt_p4)
     return evt_p4, [boost_0, boost_1, boost_2, boost_3, boost_4, boost_5]
 
-def load_model(location, tag):
-    try:
-        json_file = open(location + f'models/{tag}/model/model_1.json', 'r')
-        loaded_model_json = json_file.read()
-        json_file.close()
-        loaded_model = model_from_json(loaded_model_json)
-        loaded_model.load_weights(location + f'models/{tag}/model/model_1.h5')
-        scaler = load(open(location + f'models/{tag}/model/scaler_1.pkl', 'rb'))
-    except:
-        json_file = open(location + f'models/{tag}/model.json', 'r')
-        loaded_model_json = json_file.read()
-        json_file.close()
-        loaded_model = model_from_json(loaded_model_json)
-        loaded_model.load_weights(location + f'models/{tag}/model.h5')
-        scaler = load(open(location + f'models/{tag}/scaler.pkl', 'rb'))
-    return scaler, loaded_model
-
-def plot_highest_score(combos):
-    score_mask = combos.high_score_combo_mask
-    high_scores = combos.evt_highest_score
-    signal_mask = combos.signal_evt_mask
-    signal_highs = combos.signal_high_score
-    high_nsignal = combos.highest_score_nsignal
-    n_signal = combos.n_signal
-    
-    fig, ax = plt.subplots()
-    score_bins = np.arange(0, 1.01, 0.01)
-
-    n_signal, edges = np.histogram(high_scores[signal_mask], bins=score_bins)
-    n_bkgd, edges   = np.histogram(high_scores[~signal_mask], bins=score_bins)
-
-    x = (edges[1:] + edges[:-1])/2
-
-    n_signal = n_signal / np.sum(n_signal)
-    n_bkgd = n_bkgd / np.sum(n_bkgd)
-
-    n_signal, edges, _ = hist(ax, x, weights=n_signal, bins=score_bins, label='Events with correct combos')
-    n_bkgd, edges, _ = hist(ax, x, weights=n_bkgd, bins=score_bins, label='Events with no correct combos')
-
-    ax.legend(loc=2)
-    ax.set_xlabel('Highest Assigned Score in Event')
-    ax.set_ylabel('AU')
-    ax.set_title('Distribution of Highest Scoring Combination')
-
-    # hi_score = np.sum(n_signal[x > 0.8]) / (np.sum(n_signal[x > 0.8]) + np.sum(n_bkgd[x > 0.8]))
-    # ax.text(0.2, 0.5, f"Ratio of signal to sgnl+bkgd above 0.8 = {hi_score*100:.0f}%", transform=ax.transAxes)
-
-    return fig, ax
-
-def plot_combo_scores(combos, normalize=True):
-
-    fig, ax = plt.subplots()
-
-    if normalize:
-        c, b, x = norm_hist(combos.scores_combo[combos.signal_mask])
-        w, b, x = norm_hist(combos.scores_combo[~combos.signal_mask])
-        ax.set_ylabel('AU')
-    else:
-        c, b = np.histogram(combos.scores_combo[combos.signal_mask], bins=100)
-        w, b = np.histogram(combos.scores_combo[~combos.signal_mask], bins=100)
-        x = (b[1:] + b[:-1]) / 2
-        ax.set_ylabel('Entries Per Bin')
-
-    hist(ax, x, weights=c, bins=b, label='Correct 6-jet combo')
-    hist(ax, x, weights=w, bins=b, label='Incorrect 6-jet combo')
-    ax.legend(fontsize='small', loc=9)
-
-    ax.set_xlabel('Assigned Score')
-    
-
-    textstr = f'Entries = {len(combos.scores_combo)}'
-    props = dict(boxstyle='round', facecolor='white', alpha=1)
-    ax.text(0.8, 1.02, textstr, transform=ax.transAxes, fontsize=9,
-            verticalalignment='top', bbox=props)
-
-    return fig, ax
-
-def plot_combo_score_v_mass(combos):
-    combo_m = ak.to_numpy(combos.sixjet_p4.mass)
-    combo_m = combo_m.reshape(combo_m.shape[0])
-
-    fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(7,3))
-
-    fig.suptitle("Combination Analysis")
-
-    ax[0].set_title("Correct Combos")
-    ax[1].set_title("Incorrect Combos")
-
-    n, xedges, yedges, ims = hist2d(ax[0], combo_m[combos.signal_mask], combos.scores_combo[combos.signal_mask], xbins=np.linspace(400,900,100))
-    n, xedges, yedges, imb = hist2d(ax[1], combo_m[~combos.signal_mask], combos.scores_combo[~combos.signal_mask], xbins=np.linspace(0,2000,100))
-
-    plt.colorbar(ims, ax=ax[0])
-    plt.colorbar(imb, ax=ax[1])
-
-    ax[0].set_xlabel('Invariant Mass of 6-jet System [GeV]')
-    ax[1].set_xlabel('Invariant Mass of 6-jet System [GeV]')
-    ax[0].set_ylabel('Assigned Score')
-    ax[1].set_ylabel('Assigned Score')
-
-    plt.tight_layout()
-    return fig, ax
-
-def plot_highest_score_v_mass(combos):
-    combo_m = ak.to_numpy(combos.sixjet_p4.mass)
-    combo_m = combo_m.reshape(combo_m.shape[0])
-
-    fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(7,3))
-
-    fig.suptitle("Combination Analysis")
-
-    ax[0].set_title("Correct Combos")
-    ax[1].set_title("Incorrect Combos")
-    
-    signal_mask = combos.signal_evt_mask
-    high_score_mask = combos.high_score_combo_mask
-
-    n, xedges, yedges, ims = hist2d(ax[0], combo_m[high_score_mask][signal_mask], combos.scores_combo[high_score_mask][signal_mask], xbins=np.linspace(400,900,100))
-    n, xedges, yedges, imb = hist2d(ax[1], combo_m[high_score_mask][~signal_mask], combos.scores_combo[high_score_mask][~signal_mask], xbins=np.linspace(0,2000,100))
-
-    plt.colorbar(ims, ax=ax[0])
-    plt.colorbar(imb, ax=ax[1])
-
-    ax[0].set_xlabel('Invariant Mass of 6-jet System [GeV]')
-    ax[1].set_xlabel('Invariant Mass of 6-jet System [GeV]')
-    ax[0].set_ylabel('Assigned Score')
-    ax[1].set_ylabel('Assigned Score')
-
-    plt.tight_layout()
-    return fig, ax
-
 class Tree():
-    def __init__(self, filename, treename='sixBtree', as_ak=False):
+    def __init__(self, filename, treename='sixBtree'):
         """
-        as_ak = False will open arrays as numpy libraries
+        A class for handling TTrees. 
         """
 
-        if as_ak: library = 'ak'
-        else: library = 'np'
         tree = uproot.open(f"{filename}:{treename}")
         self.tree = tree
         for k, v in tree.items():
-            setattr(self, k, v.array(library=library))
+            setattr(self, k, v.array())
+
+        self.local_ind = ak.local_index(self.jet_pt)
+
+        self.signal_evt_mask = ak.sum(self.jet_signalId > -1, axis=1) == 6
+        self.signal_jet_mask = self.jet_signalId[self.signal_evt_mask] > -1
+
+        for k, v in tree.items():
+            try: setattr(self, 'signal_' + k, v.array()[self.signal_evt_mask][self.signal_jet_mask])
+            except: continue
 
     def sort(self, mask):
         for k, v in self.tree.items():
@@ -233,8 +86,26 @@ class Tree():
     def keys(self):
         print(self.tree.keys())
 
-class training_6j():
+    def get(self, key):
+        return tree[key]
 
+    def get_combos(self, n, signal=False):
+        """
+        Return a tree mask that produces all possible combinations of n jets from each event.
+        """
+        if signal: mask = self.local_ind[self.signal_evt_mask][self.signal_jet_mask]
+        else: mask = ak.local_index(self.jet_pt)
+        # Arrays of indices representing the pt-ordered event
+        local_index = ak.local_index(self.jet_pt[mask])
+        # Arrays containing indices representing all 6-jet combinations in each event
+        jet_comb = ak.combinations(local_index, n)
+        # Unzip the combinations into their constituent jets
+        jets = ak.unzip(jet_comb)
+        # Zip the constituents back together
+        self.combos = ak.concatenate([jeti[:,:,np.newaxis] for jeti in jets], axis=-1)
+
+class TrainSix():
+    
     def get_boosted(self, tree, ind_array):
 
         jet0_p4 = build_p4(tree.jet_pt[ind_array][:,0], 
@@ -712,23 +583,7 @@ class dijet():
         assert len(self.features) == len(self.targets)
         assert np.isnan(self.features).sum() == 0
 
-class training_2j():
-
-    def Higgs_masks(self, jet_idx):
-
-        mask0 = ak.where(jet_idx == 0, 1, 0) # find HX b1
-        mask1 = ak.where(jet_idx == 1, 1, 0) # find HX b1
-        HX_mask = ak.where(mask1, 1, mask0) # include HX b2
-
-        mask2 = ak.where(jet_idx == 2, 1, 0) # find HY1 b1
-        mask3 = ak.where(jet_idx == 3, 1, 0) # find HY1 b1
-        H1_mask = ak.where(mask3, 1, mask2) # include HY1 b2
-
-        mask4 = ak.where(jet_idx == 4, 1, 0)# find HY2 b1
-        mask5 = ak.where(jet_idx == 5, 1, 0)# find HY2 b1
-        H2_mask = ak.where(mask5, 1, mask4)# include HY2 b2
-
-        return  HX_mask, H1_mask, H2_mask
+class TrainTwo():
 
     def __init__(self, filename):
 
@@ -774,6 +629,22 @@ class training_2j():
 
         self.signal_features = signal_inputs
         self.excess_features = excess_inputs
+
+        def Higgs_masks(self, jet_idx):
+
+        mask0 = ak.where(jet_idx == 0, 1, 0) # find HX b1
+        mask1 = ak.where(jet_idx == 1, 1, 0) # find HX b1
+        HX_mask = ak.where(mask1, 1, mask0) # include HX b2
+
+        mask2 = ak.where(jet_idx == 2, 1, 0) # find HY1 b1
+        mask3 = ak.where(jet_idx == 3, 1, 0) # find HY1 b1
+        H1_mask = ak.where(mask3, 1, mask2) # include HY1 b2
+
+        mask4 = ak.where(jet_idx == 4, 1, 0)# find HY2 b1
+        mask5 = ak.where(jet_idx == 5, 1, 0)# find HY2 b1
+        H2_mask = ak.where(mask5, 1, mask4)# include HY2 b2
+
+        return  HX_mask, H1_mask, H2_mask
 
 class combos():
 
@@ -936,3 +807,14 @@ class combos():
 
         print("Selecting highest scoring combination from each event.")
         # self.select_highest_scoring_combos()
+
+
+    
+
+
+class EventShapes():
+
+    def __init__(self, filename):
+        
+        tree = Tree(filename)
+        
