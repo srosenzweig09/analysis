@@ -61,9 +61,23 @@ def get_6jet_p4(p4):
 class Tree():
     def __init__(self, filename, treename='sixBtree'):
         """
-        A class for handling TTrees. 
+        A class for handling TTrees.
+
+        args:
+            filename: string containing name of a single file OR a list of several files to open
+            treename: default is 'sixBtree,' which is the named TTree output from the analysis code
+
+        returns:
+            Nothing. Initializes attributes of Tree class.
         """
 
+        if type(filename) != list:
+            self.single_init(filename, treename)
+        else:
+            self.multi_init(filename, treename)
+
+    def single_init(self, filename, treename):
+        """Opens a single file into a TTree"""
         tree = uproot.open(f"{filename}:{treename}")
         self.tree = tree
         for k, v in tree.items():
@@ -77,6 +91,35 @@ class Tree():
         for k, v in tree.items():
             try: setattr(self, 'signal_' + k, v.array()[self.signal_evt_mask][self.signal_jet_mask])
             except: continue
+
+    def multi_init(self, filelist, treename):
+        """Opens a list of files into several TTrees. Typically used for bkgd events."""
+        trees = []
+        xsecs = []
+        nevent = []
+        sample = []
+        for filename in filelist:
+            # Open tree
+            tree = uproot.open(f"{filename}:{treename}")
+            # How many events in the tree?
+            n = len(tree['n_jet'].array())
+            if n == 0: continue # Skip if no events
+            nevent.append(n)
+            trees.append(tree)
+            # Bkgd events must be scaled to the appropriate xs in order to compare fairly with signal yield
+            samp, xsec = next( ((key,value) for key,value in xsecMap.items() if key in filename),("unk",1) )
+            sample.append(samp)
+            xsecs.append(xsec)
+        self.tree = trees
+        self.xsec = xsecs
+        self.nevents = nevent
+        self.sample = sample
+        
+    def get_scale(self, branch, mask=':'):
+        nevents = 0
+        for tree, xs in zip(self.tree, self.xsecs):
+            nevents += len(tree[branch][mask].array())
+        return self.xsec/nevents if type(self.xsec) == float else 1
 
     def sort(self, mask):
         for k, v in self.tree.items():
@@ -632,17 +675,17 @@ class TrainTwo():
 
         def Higgs_masks(self, jet_idx):
 
-        mask0 = ak.where(jet_idx == 0, 1, 0) # find HX b1
-        mask1 = ak.where(jet_idx == 1, 1, 0) # find HX b1
-        HX_mask = ak.where(mask1, 1, mask0) # include HX b2
+            mask0 = ak.where(jet_idx == 0, 1, 0) # find HX b1
+            mask1 = ak.where(jet_idx == 1, 1, 0) # find HX b1
+            HX_mask = ak.where(mask1, 1, mask0) # include HX b2
 
-        mask2 = ak.where(jet_idx == 2, 1, 0) # find HY1 b1
-        mask3 = ak.where(jet_idx == 3, 1, 0) # find HY1 b1
-        H1_mask = ak.where(mask3, 1, mask2) # include HY1 b2
+            mask2 = ak.where(jet_idx == 2, 1, 0) # find HY1 b1
+            mask3 = ak.where(jet_idx == 3, 1, 0) # find HY1 b1
+            H1_mask = ak.where(mask3, 1, mask2) # include HY1 b2
 
-        mask4 = ak.where(jet_idx == 4, 1, 0)# find HY2 b1
-        mask5 = ak.where(jet_idx == 5, 1, 0)# find HY2 b1
-        H2_mask = ak.where(mask5, 1, mask4)# include HY2 b2
+            mask4 = ak.where(jet_idx == 4, 1, 0)# find HY2 b1
+            mask5 = ak.where(jet_idx == 5, 1, 0)# find HY2 b1
+            H2_mask = ak.where(mask5, 1, mask4)# include HY2 b2
 
         return  HX_mask, H1_mask, H2_mask
 
