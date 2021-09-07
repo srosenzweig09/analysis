@@ -10,6 +10,14 @@ from matplotlib.ticker import FormatStrFormatter
 
 file_location = '/uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_2_18/src/sixb/plots/'
 
+easy_bins = {
+    'pt' : np.linspace(0, 300, 100),
+    'eta' : np.linspace(-3, 3, 100)
+}
+easy_labels = {
+    'pt' : r'jet $p_T$ [GeV]'
+}
+
 def change_cmap_bkg_to_white(colormap, n=256):
     """The lowest value of colormaps is not often white by default, which can help idenfity empty bins.
     This function will make the lowest value (typically zero) white."""
@@ -177,4 +185,23 @@ def plot_highest_score_v_mass(combos):
     ax[1].set_ylabel('Assigned Score')
 
     plt.tight_layout()
+    return fig, ax
+
+
+plot_dict = {
+    'histtype' : 'step',
+    'align' : 'mid'
+    }
+def plot(**kwargs):
+    if 'ax' not in kwargs: fig, ax = plt.subplots(figsize=(10,6))
+    else: 
+        fig, ax = kwargs['fig'], kwargs['ax']
+        kwargs.pop('fig')
+        kwargs.pop('ax')
+    for k,v in plot_dict.items():
+        if k not in kwargs: kwargs[k] = v
+    n, edges, im = ax.hist(**kwargs)
+    if 'label' in kwargs: ax.legend()
+    print(n)
+    print(edges)
     return fig, ax
