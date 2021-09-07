@@ -11,6 +11,7 @@ Training samples are prepared such that these requirements are already imposed:
 """
 
 from . import *
+from .plotter import easy_bins
 
 # Standard library imports
 from math import comb
@@ -59,7 +60,7 @@ def get_6jet_p4(p4):
     return evt_p4, [boost_0, boost_1, boost_2, boost_3, boost_4, boost_5]
 
 class Tree():
-    def __init__(self, filename, treename='sixBtree'):
+    def __init__(self, filename, treename='sixBtree', year=2018, training=False):
         """
         A class for handling TTrees.
 
@@ -72,54 +73,160 @@ class Tree():
         """
 
         if type(filename) != list:
-            self.single_init(filename, treename)
+            self.single_init(filename, treename, year, training=training)
         else:
-            self.multi_init(filename, treename)
+            self.multi_init(filename, treename, year)
 
-    def single_init(self, filename, treename):
+    def single_init(self, filename, treename, year=2018, training=False):
         """Opens a single file into a TTree"""
+        self.is_signal = True
+        self.is_bkgd = False
         tree = uproot.open(f"{filename}:{treename}")
         self.tree = tree
         for k, v in tree.items():
             setattr(self, k, v.array())
+        nevents = len(tree[k].array())
 
         self.local_ind = ak.local_index(self.jet_pt)
 
-        self.signal_evt_mask = ak.sum(self.jet_signalId > -1, axis=1) == 6
-        self.signal_jet_mask = self.jet_signalId[self.signal_evt_mask] > -1
+        try:
+            self.signal_evt_mask = ak.sum(self.jet_signalId > -1, axis=1) == 6
+            self.signal_jet_mask = self.jet_signalId[self.signal_evt_mask] > -1
+        except:
+            self.signal_evt_mask = ak.sum(self.jet_idx > -1, axis=1) == 6
+            self.signal_jet_mask = self.jet_idx[self.signal_evt_mask] > -1
+
+        if training: return
+        cutflow = uproot.open(f"{filename}:h_cutflow")
+        # save total number of events for scaling purposes
+        total = cutflow.to_numpy()[0][0]
+        samp, xsec = next( ((key,value) for key,value in xsecMap.items() if key in filename),("unk",1) )
+        self.sample = samp
+        self.xsec = xsec
+        self.lumi = lumiMap[year][0]
+        self.scale = self.lumi*xsec/total
+        self.weight = self.scale*nevents
 
         for k, v in tree.items():
             try: setattr(self, 'signal_' + k, v.array()[self.signal_evt_mask][self.signal_jet_mask])
             except: continue
 
-    def multi_init(self, filelist, treename):
+    def multi_init(self, filelist, treename, year=2018):
         """Opens a list of files into several TTrees. Typically used for bkgd events."""
+        self.is_signal = False
+        self.is_bkgd = True
         trees = []
         xsecs = []
         nevent = []
         sample = []
+        total = []
         for filename in filelist:
             # Open tree
             tree = uproot.open(f"{filename}:{treename}")
             # How many events in the tree?
             n = len(tree['n_jet'].array())
             if n == 0: continue # Skip if no events
+            cutflow = uproot.open(f"{filename}:h_cutflow")
+            # save total number of events for scaling purposes
+            total.append(cutflow.to_numpy()[0][0])
             nevent.append(n)
             trees.append(tree)
             # Bkgd events must be scaled to the appropriate xs in order to compare fairly with signal yield
             samp, xsec = next( ((key,value) for key,value in xsecMap.items() if key in filename),("unk",1) )
             sample.append(samp)
             xsecs.append(xsec)
+            setattr(self, samp, tree)
+            for k, v in tree.items():
+                setattr(getattr(self, samp), k, v.array())
+            
+        self.ntrees = len(trees)
         self.tree = trees
         self.xsec = xsecs
+        self.lumi = lumiMap[year][0]
         self.nevents = nevent
         self.sample = sample
-        
-    def get_scale(self, branch, mask=':'):
-        nevents = 0
-        for tree, xs in zip(self.tree, self.xsecs):
-            nevents += len(tree[branch][mask].array())
-        return self.xsec/nevents if type(self.xsec) == float else 1
+        self.total = total
+        self.scale = self.lumi*np.asarray(xsecs)/np.asarray(total)
+        self.weighted_n = np.asarray(self.nevents)*self.scale
+
+        for k in tree.keys():
+            leaves = []
+            for samp in self.sample:
+                arr = getattr(getattr(self, samp), k)
+                leaves.append(arr)
+            setattr(self, k, leaves)
+
+    def get_branches(self, key):
+        for sample in self.sample:
+            
+            n, b = np.histogram()
+        return branches
+
+    def get_hist_weights(self, key, **kwargs):
+        for k,v in easy_bins.items():
+            if k in key: bins = v
+        if self.is_bkgd: 
+            n = []
+            for sample, scale in zip(self.sample, self.scale):
+                branch = ak.flatten(getattr(getattr(self, sample), key)).to_numpy()
+                n_i, b = np.histogram(branch, bins, **kwargs)
+                centers = (b[1:] + b[:-1])/2
+                n.append(n_i*scale)
+            n = np.asarray(n)
+            n = np.sum(n, axis=0)
+            return n, b, centers
+        else: 
+            branch = ak.flatten(getattr(self, key)).to_numpy()
+            n, b = np.histogram(branch, bins, **kwargs)
+            centers = (b[1:] + b[:-1])/2
+            # n_tot = sum(n)
+            # epsilon = 5e-3
+            # max_bin = sum(n > epsilon*n_tot) + 1
+            # new_bins = np.linspace(branch.min(), bins[max_bin], 100)
+            # n, b = np.histogram(branch, new_bins, **kwargs)
+            # centers = (b[1:] + b[:-1])/2
+        return n*self.scale, b, centers
+
+    def get_min_dR(self):
+        jet1, jet2 = self.get_pair_p4()
+        all_dR = jet1.deltaR(jet2)
+        min_dR = ak.min(all_dR, axis=1)
+
+    def get_pair_p4(self, mask=None):
+        # if signal: mask = self.jet_idx > -1
+        # else: mask = self.jet_idx == -1
+        jet1_pt, jet2_pt = ak.unzip(ak.combinations(self.jet_pt[mask], 2))
+        jet1_eta, jet2_eta = ak.unzip(ak.combinations(self.jet_eta[mask], 2))
+        jet1_phi, jet2_phi = ak.unzip(ak.combinations(self.jet_phi[mask], 2))
+        jet1_m, jet2_m = ak.unzip(ak.combinations(self.jet_m[mask], 2))
+
+        jet1_p4 = vector.obj(
+            pt  = jet1_pt,
+            eta = jet1_eta,
+            phi = jet1_phi,
+            m   = jet1_m)
+
+        jet2_p4 = vector.obj(
+            pt  = jet2_pt,
+            eta = jet2_eta,
+            phi = jet2_phi,
+            m   = jet2_m)
+
+        return jet1_p4, jet2_p4
+    
+    def p4(self, pt, eta, phi, m):
+        return vector.obj(pt=pt, eta=eta, phi=phi, m=m)
+
+    def get_all_p4(self, pts, etas, phis, ms):
+        return [self.p4(pt, eta, phi, m) for pt,eta,phi,m in zip(pts,etas,phis,ms)]
+
+    def get_six_p4(self):
+        jet_pt = ak.unzip(ak.combinations(self.jet_pt, 6))
+        jet_eta = ak.unzip(ak.combinations(self.jet_eta, 6))
+        jet_phi = ak.unzip(ak.combinations(self.jet_phi, 6))
+        jet_m = ak.unzip(ak.combinations(self.jet_m, 6))
+
+        return self.get_all_p4(jet_pt, jet_eta, jet_phi, jet_m)
 
     def sort(self, mask):
         for k, v in self.tree.items():
@@ -220,7 +327,8 @@ class TrainSix():
 
     def __init__(self, filename, dijet=False):
 
-        tree = Tree(filename, 'sixBtree', as_ak=True)
+        tree = Tree(filename, 'sixBtree', training=True)
+        self.tree = tree
         if dijet:
             sort_mask = ak.argsort(tree.jet_idx, axis=1)
             tree.sort(sort_mask)
@@ -280,6 +388,9 @@ class TrainSix():
             phi = tree.jet_phi[mixed_ind],
             m   = tree.jet_m[mixed_ind]
         )
+
+        signal_min_dR = self.get_min_dR(signal_jet_ind)
+        excess_min_dR = self.get_min_dR(mixed_ind)
 
         signal_btag = tree.jet_btag[signal_jet_ind].to_numpy()
         excess_btag = tree.jet_btag[mixed_ind].to_numpy()
@@ -385,7 +496,8 @@ class TrainSix():
                 s_jet2_boosted_pt, 
                 s_jet3_boosted_pt, 
                 s_jet4_boosted_pt, 
-                s_jet5_boosted_pt))
+                s_jet5_boosted_pt,
+                signal_min_dR))
 
             xtra_excess_features = np.column_stack((
                 e_jet0_boosted_pt, 
@@ -393,19 +505,26 @@ class TrainSix():
                 e_jet2_boosted_pt, 
                 e_jet3_boosted_pt, 
                 e_jet4_boosted_pt, 
-                e_jet5_boosted_pt))
+                e_jet5_boosted_pt,
+                excess_min_dR))
 
-            n_signal = ak.count(tree.jet_idx[mixed_ind][excess_signal_mask], axis=1)
-            excess_targets = np.zeros((nevents, 7), dtype=int)
-            excess_targets[np.arange(nevents), n_signal] += 1
+            n_signal = len(xtra_signal_features)
+            n_excess = len(xtra_excess_features)
 
-            signal_targets = np.zeros_like(excess_targets)
-            signal_targets[:,-1] += 1
+            signal_targets = np.tile([1,0], (n_signal, 1))
+            excess_targets = np.tile([0,1], (n_excess, 1))
 
-            assert (np.any(~signal_targets[:,:-1]))
-            assert (np.all(signal_targets[:,-1]))
-        # assert (np.all(excess_targets[:,1]))
-        # assert (~np.any(excess_targets[:,0]))
+            # n_signal = ak.count(tree.jet_idx[mixed_ind][excess_signal_mask], axis=1)
+            # excess_targets = np.zeros((nevents, 7), dtype=int)
+            # excess_targets[np.arange(nevents), n_signal] += 1
+
+            # signal_targets = np.zeros_like(excess_targets)
+            # signal_targets[:,-1] += 1
+
+            assert (np.any(~signal_targets[:,1]))
+            assert (np.all(signal_targets[:,0]))
+            assert (np.all(excess_targets[:,1]))
+            assert (~np.any(excess_targets[:,0]))
 
         # Concatenate pT, eta, phi, and btag score
         signal_features = np.concatenate((
@@ -434,6 +553,35 @@ class TrainSix():
         assert len(self.features) == len(self.targets)
         assert np.isnan(self.features).sum() == 0
 
+
+    def get_min_dR(self, mask=None):
+        jet1, jet2 = self.get_pair_p4(mask)
+        all_dR = jet1.deltaR(jet2)
+        min_dR = ak.min(all_dR, axis=1)
+        print(min_dR)
+        return min_dR.to_numpy()
+
+    def get_pair_p4(self, mask=None):
+        # if signal: mask = self.jet_idx > -1
+        # else: mask = self.jet_idx == -1
+        jet1_pt, jet2_pt = ak.unzip(ak.combinations(self.tree.jet_pt[mask], 2))
+        jet1_eta, jet2_eta = ak.unzip(ak.combinations(self.tree.jet_eta[mask], 2))
+        jet1_phi, jet2_phi = ak.unzip(ak.combinations(self.tree.jet_phi[mask], 2))
+        jet1_m, jet2_m = ak.unzip(ak.combinations(self.tree.jet_m[mask], 2))
+
+        jet1_p4 = vector.obj(
+            pt  = jet1_pt,
+            eta = jet1_eta,
+            phi = jet1_phi,
+            m   = jet1_m)
+
+        jet2_p4 = vector.obj(
+            pt  = jet2_pt,
+            eta = jet2_eta,
+            phi = jet2_phi,
+            m   = jet2_m)
+
+        return jet1_p4, jet2_p4
 
 class dijet():
 
@@ -852,12 +1000,3 @@ class combos():
         # self.select_highest_scoring_combos()
 
 
-    
-
-
-class EventShapes():
-
-    def __init__(self, filename):
-        
-        tree = Tree(filename)
-        
