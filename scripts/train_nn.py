@@ -232,7 +232,7 @@ cfg_out["model"] = {
     "param2_n6" : "jet_eta",
     "param3_n6" : "jet_phi",
     "param4_n6" : "jet_btag",
-    "param5_n3" : "dijet_boosted_pt",
+    "param5_n3" : "boosted_pt",
     "param5_n3" : "delta_R",
     "num_hidden_layers" : nlayers,
     "input_activation_function" : hidden_activations,
