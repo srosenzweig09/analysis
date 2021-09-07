@@ -17,7 +17,7 @@
 
 int prepare_training_file(){
 
-  TFile *fout = new TFile("NMSSM_XYH_YToHH_6b_MX_700_MY_400_6jet_training_set.root","RECREATE");
+  TFile *fout = new TFile("inputs/NMSSM_XYH_YToHH_6b_MX_700_MY_400_training_set.root","RECREATE");
   TTree *t1   = new TTree("sixBtree","sixBtree");
 
   TString tree = "sixBtree";
@@ -84,7 +84,7 @@ int prepare_training_file(){
 
   int n_jets, n_sixbs;
   
-  std::vector<float> jets_pt, jets_eta, jets_phi, jets_btag, jets_m, jets_qgl;
+  std::vector<float> jets_pt, jets_eta, jets_phi, jets_btag, jets_m;
 
   // std::vector<int> jets_idx, jets_hadronFlav, jets_partonFlav;
   std::vector<int> jets_idx;
@@ -97,7 +97,7 @@ int prepare_training_file(){
   t1->Branch("jet_phi",& jets_phi);
   t1->Branch("jet_m",& jets_m);
   t1->Branch("jet_btag",& jets_btag);
-  t1->Branch("jet_qgl",& jets_qgl);
+  // t1->Branch("jet_qgl",& jets_qgl);
   t1->Branch("jet_idx",& jets_idx);
   // t1->Branch("jet_hadronFlav",& jets_hadronFlav);
   // t1->Branch("jet_partonFlav",& jets_partonFlav);
@@ -146,8 +146,8 @@ int prepare_training_file(){
       std::cout << eventCount << " events read!" << std::endl;
     }
 
-    if (*n_sixb != 6) continue;
-    if (*n_jet < 7) continue;
+    // if (*n_sixb != 6) continue;
+    // if (*n_jet < 7) continue;
 
     jets_idx.clear();
     jets_pt.clear();
@@ -155,7 +155,7 @@ int prepare_training_file(){
     jets_phi.clear();
     jets_m.clear();
     jets_btag.clear();
-    jets_qgl.clear();
+    // jets_qgl.clear();
     // jets_partonFlav.clear();
     // jets_hadronFlav.clear();
 
@@ -167,7 +167,7 @@ int prepare_training_file(){
       jets_phi.emplace_back(jet_phi[i]);
       jets_m.emplace_back(jet_mass[i]);
       jets_btag.emplace_back(jet_btag[i]);
-      jets_qgl.emplace_back(jet_qgl[i]);
+      // jets_qgl.emplace_back(jet_qgl[i]);
       jets_idx.emplace_back(jet_idx[i]);
       // jets_hadronFlav.emplace_back(jet_hadronFlav[i]);
       // jets_partonFlav.emplace_back(jet_partonFlav[i]);
