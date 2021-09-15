@@ -305,14 +305,21 @@ class TrainSix():
 
         jet6_p4 = jet0_p4 + jet1_p4 + jet2_p4 + jet3_p4 + jet4_p4 + jet5_p4
 
-        jet0_boosted_pt = jet0_p4.boost_p4(jet6_p4).pt.to_numpy()[:,np.newaxis]
-        jet1_boosted_pt = jet1_p4.boost_p4(jet6_p4).pt.to_numpy()[:,np.newaxis]
-        jet2_boosted_pt = jet2_p4.boost_p4(jet6_p4).pt.to_numpy()[:,np.newaxis]
-        jet3_boosted_pt = jet3_p4.boost_p4(jet6_p4).pt.to_numpy()[:,np.newaxis]
-        jet4_boosted_pt = jet4_p4.boost_p4(jet6_p4).pt.to_numpy()[:,np.newaxis]
-        jet5_boosted_pt = jet5_p4.boost_p4(jet6_p4).pt.to_numpy()[:,np.newaxis]
+        jet0_boost = jet0_p4.boost_p4(jet6_p4)
+        jet1_boost = jet1_p4.boost_p4(jet6_p4)
+        jet2_boost = jet2_p4.boost_p4(jet6_p4)
+        jet3_boost = jet3_p4.boost_p4(jet6_p4)
+        jet4_boost = jet4_p4.boost_p4(jet6_p4)
+        jet5_boost = jet5_p4.boost_p4(jet6_p4)
 
-        return jet0_boosted_pt, jet1_boosted_pt, jet2_boosted_pt, jet3_boosted_pt, jet4_boosted_pt, jet5_boosted_pt, jet6_p4
+        # jet0_boosted_pt = jet0_p4.boost_p4(jet6_p4).pt.to_numpy()[:,np.newaxis]
+        # jet1_boosted_pt = jet1_p4.boost_p4(jet6_p4).pt.to_numpy()[:,np.newaxis]
+        # jet2_boosted_pt = jet2_p4.boost_p4(jet6_p4).pt.to_numpy()[:,np.newaxis]
+        # jet3_boosted_pt = jet3_p4.boost_p4(jet6_p4).pt.to_numpy()[:,np.newaxis]
+        # jet4_boosted_pt = jet4_p4.boost_p4(jet6_p4).pt.to_numpy()[:,np.newaxis]
+        # jet5_boosted_pt = jet5_p4.boost_p4(jet6_p4).pt.to_numpy()[:,np.newaxis]
+
+        return jet0_boost, jet1_boost, jet2_boost, jet3_boost, jet4_boost, jet5_boost, jet6_p4
 
     def get_p4s(self, tree, ind_array):
 
@@ -378,24 +385,60 @@ class TrainSix():
         excess_btag = tree.jet_btag[mixed_ind].to_numpy()
 
 
-        s_jet0_boosted_pt, s_jet1_boosted_pt, s_jet2_boosted_pt, s_jet3_boosted_pt, s_jet4_boosted_pt, s_jet5_boosted_pt, s_jet6_p4 = self.get_boosted(tree, signal_jet_mask)
-        e_jet0_boosted_pt, e_jet1_boosted_pt, e_jet2_boosted_pt, e_jet3_boosted_pt, e_jet4_boosted_pt, e_jet5_boosted_pt, e_jet6_p4 = self.get_boosted(tree, mixed_ind)
+        s_jet0_boost, s_jet1_boost, s_jet2_boost, s_jet3_boost, s_jet4_boost, s_jet5_boost, s_jet6_p4 = self.get_boosted(tree, signal_jet_mask)
+        e_jet0_boost, e_jet1_boost, e_jet2_boost, e_jet3_boost, e_jet4_boost, e_jet5_boost, e_jet6_p4 = self.get_boosted(tree, mixed_ind)
 
         xtra_signal_features = np.column_stack((
-            s_jet0_boosted_pt, 
-            s_jet1_boosted_pt, 
-            s_jet2_boosted_pt, 
-            s_jet3_boosted_pt, 
-            s_jet4_boosted_pt, 
-            s_jet5_boosted_pt))
+            s_jet0_boost.pt.to_numpy()[:,np.newaxis], 
+            s_jet1_boost.pt.to_numpy()[:,np.newaxis], 
+            s_jet2_boost.pt.to_numpy()[:,np.newaxis], 
+            s_jet3_boost.pt.to_numpy()[:,np.newaxis], 
+            s_jet4_boost.pt.to_numpy()[:,np.newaxis], 
+            s_jet5_boost.pt.to_numpy()[:,np.newaxis],
+            s_jet0_boost.eta.to_numpy()[:,np.newaxis], 
+            s_jet1_boost.eta.to_numpy()[:,np.newaxis], 
+            s_jet2_boost.eta.to_numpy()[:,np.newaxis], 
+            s_jet3_boost.eta.to_numpy()[:,np.newaxis], 
+            s_jet4_boost.eta.to_numpy()[:,np.newaxis], 
+            s_jet5_boost.eta.to_numpy()[:,np.newaxis],
+            s_jet0_boost.phi.to_numpy()[:,np.newaxis], 
+            s_jet1_boost.phi.to_numpy()[:,np.newaxis], 
+            s_jet2_boost.phi.to_numpy()[:,np.newaxis], 
+            s_jet3_boost.phi.to_numpy()[:,np.newaxis], 
+            s_jet4_boost.phi.to_numpy()[:,np.newaxis], 
+            s_jet5_boost.mi.to_numpy()[:,np.newaxis],
+            s_jet0_boost.m.to_numpy()[:,np.newaxis], 
+            s_jet1_boost.m.to_numpy()[:,np.newaxis], 
+            s_jet2_boost.m.to_numpy()[:,np.newaxis], 
+            s_jet3_boost.m.to_numpy()[:,np.newaxis], 
+            s_jet4_boost.m.to_numpy()[:,np.newaxis], 
+            s_jet5_boost.m.to_numpy()[:,np.newaxis]))
 
         xtra_excess_features = np.column_stack((
-            e_jet0_boosted_pt, 
-            e_jet1_boosted_pt, 
-            e_jet2_boosted_pt, 
-            e_jet3_boosted_pt, 
-            e_jet4_boosted_pt, 
-            e_jet5_boosted_pt))
+            e_jet0_boost.pt.to_numpy()[:,np.newaxis], 
+            e_jet1_boost.pt.to_numpy()[:,np.newaxis], 
+            e_jet2_boost.pt.to_numpy()[:,np.newaxis], 
+            e_jet3_boost.pt.to_numpy()[:,np.newaxis], 
+            e_jet4_boost.pt.to_numpy()[:,np.newaxis], 
+            e_jet5_boost.pt.to_numpy()[:,np.newaxis],
+            e_jet0_boost.eta.to_numpy()[:,np.newaxis], 
+            e_jet1_boost.eta.to_numpy()[:,np.newaxis], 
+            e_jet2_boost.eta.to_numpy()[:,np.newaxis], 
+            e_jet3_boost.eta.to_numpy()[:,np.newaxis], 
+            e_jet4_boost.eta.to_numpy()[:,np.newaxis], 
+            e_jet5_boost.eta.to_numpy()[:,np.newaxis],
+            e_jet0_boost.phi.to_numpy()[:,np.newaxis], 
+            e_jet1_boost.phi.to_numpy()[:,np.newaxis], 
+            e_jet2_boost.phi.to_numpy()[:,np.newaxis], 
+            e_jet3_boost.phi.to_numpy()[:,np.newaxis], 
+            e_jet4_boost.phi.to_numpy()[:,np.newaxis], 
+            e_jet5_boost.mi.to_numpy()[:,np.newaxis],
+            e_jet0_boost.m.to_numpy()[:,np.newaxis], 
+            e_jet1_boost.m.to_numpy()[:,np.newaxis], 
+            e_jet2_boost.m.to_numpy()[:,np.newaxis], 
+            e_jet3_boost.m.to_numpy()[:,np.newaxis], 
+            e_jet4_boost.m.to_numpy()[:,np.newaxis], 
+            e_jet5_boost.m.to_numpy()[:,np.newaxis]))))
 
         n_signal = len(xtra_signal_features)
         n_excess = len(xtra_excess_features)
