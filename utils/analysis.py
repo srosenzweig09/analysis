@@ -15,7 +15,7 @@ from .plotter import easy_bins
 
 # Standard library imports
 from math import comb
-import sys  # JAKE DELETE
+import sys 
 import uproot
 
 vector.register_awkward()
@@ -187,15 +187,10 @@ class Tree():
             # centers = (b[1:] + b[:-1])/2
         return n*self.scale, b, centers
 
-    def get_min_dR(self):
-        jet1, jet2 = self.get_pair_p4()
-        all_dR = jet1.deltaR(jet2)
-        min_dR = ak.min(all_dR, axis=1)
-
     def get_pair_p4(self, mask=None):
         # if signal: mask = self.jet_idx > -1
         # else: mask = self.jet_idx == -1
-        jet1_pt, jet2_pt = ak.unzip(ak.combinations(self.jet_pt[mask], 2))
+        jet1_pt, jet2_pt = ak.unzip(ak.combinations(getattr(self, 'jet_pt')[mask], 2))
         jet1_eta, jet2_eta = ak.unzip(ak.combinations(self.jet_eta[mask], 2))
         jet1_phi, jet2_phi = ak.unzip(ak.combinations(self.jet_phi[mask], 2))
         jet1_m, jet2_m = ak.unzip(ak.combinations(self.jet_m[mask], 2))
@@ -213,6 +208,31 @@ class Tree():
             m   = jet2_m)
 
         return jet1_p4, jet2_p4
+
+    def get_t6_pair_p4(self):
+        # if signal: mask = self.jet_idx > -1
+        # else: mask = self.jet_idx == -1
+        jet1_pt, jet2_pt = ak.unzip(ak.combinations(self.jet_pt[:,:6], 2))
+        jet1_eta, jet2_eta = ak.unzip(ak.combinations(self.jet_eta[:,:6], 2))
+        jet1_phi, jet2_phi = ak.unzip(ak.combinations(self.jet_phi[:,:6], 2))
+        jet1_m, jet2_m = ak.unzip(ak.combinations(self.jet_m[:,:6], 2))
+        jet1_idx, jet2_idx = ak.unzip(ak.combinations(self.jet_signalId[:,:6], 2))
+        jet12_ind = ak.combinations(ak.local_index(self.jet_pt[:,:6]),2)
+        jet1_ind, jet2_ind = ak.unzip(jet12_ind)
+
+        jet1_p4 = vector.obj(
+            pt  = jet1_pt,
+            eta = jet1_eta,
+            phi = jet1_phi,
+            m   = jet1_m)
+
+        jet2_p4 = vector.obj(
+            pt  = jet2_pt,
+            eta = jet2_eta,
+            phi = jet2_phi,
+            m   = jet2_m)
+
+        return jet1_p4, jet2_p4, jet1_ind, jet2_ind, jet12_ind, jet1_idx, jet2_idx
     
     def p4(self, pt, eta, phi, m):
         return vector.obj(pt=pt, eta=eta, phi=phi, m=m)
@@ -220,11 +240,11 @@ class Tree():
     def get_all_p4(self, pts, etas, phis, ms):
         return [self.p4(pt, eta, phi, m) for pt,eta,phi,m in zip(pts,etas,phis,ms)]
 
-    def get_six_p4(self):
-        jet_pt = ak.unzip(ak.combinations(self.jet_pt, 6))
-        jet_eta = ak.unzip(ak.combinations(self.jet_eta, 6))
-        jet_phi = ak.unzip(ak.combinations(self.jet_phi, 6))
-        jet_m = ak.unzip(ak.combinations(self.jet_m, 6))
+    def get_six_p4(self, mask=None):
+        jet_pt = ak.unzip(ak.combinations(self.jet_pt[mask], 6))
+        jet_eta = ak.unzip(ak.combinations(self.jet_eta[mask], 6))
+        jet_phi = ak.unzip(ak.combinations(self.jet_phi[mask], 6))
+        jet_m = ak.unzip(ak.combinations(self.jet_m[mask], 6))
 
         return self.get_all_p4(jet_pt, jet_eta, jet_phi, jet_m)
 
@@ -237,7 +257,7 @@ class Tree():
         print(self.tree.keys())
 
     def get(self, key):
-        return tree[key]
+        return self.tree[key]
 
     def get_combos(self, n, signal=False):
         """
@@ -389,9 +409,6 @@ class TrainSix():
             m   = tree.jet_m[mixed_ind]
         )
 
-        signal_min_dR = self.get_min_dR(signal_jet_ind)
-        excess_min_dR = self.get_min_dR(mixed_ind)
-
         signal_btag = tree.jet_btag[signal_jet_ind].to_numpy()
         excess_btag = tree.jet_btag[mixed_ind].to_numpy()
 
@@ -496,8 +513,7 @@ class TrainSix():
                 s_jet2_boosted_pt, 
                 s_jet3_boosted_pt, 
                 s_jet4_boosted_pt, 
-                s_jet5_boosted_pt,
-                signal_min_dR))
+                s_jet5_boosted_pt))
 
             xtra_excess_features = np.column_stack((
                 e_jet0_boosted_pt, 
@@ -505,8 +521,7 @@ class TrainSix():
                 e_jet2_boosted_pt, 
                 e_jet3_boosted_pt, 
                 e_jet4_boosted_pt, 
-                e_jet5_boosted_pt,
-                excess_min_dR))
+                e_jet5_boosted_pt))
 
             n_signal = len(xtra_signal_features)
             n_excess = len(xtra_excess_features)
@@ -552,14 +567,6 @@ class TrainSix():
 
         assert len(self.features) == len(self.targets)
         assert np.isnan(self.features).sum() == 0
-
-
-    def get_min_dR(self, mask=None):
-        jet1, jet2 = self.get_pair_p4(mask)
-        all_dR = jet1.deltaR(jet2)
-        min_dR = ak.min(all_dR, axis=1)
-        print(min_dR)
-        return min_dR.to_numpy()
 
     def get_pair_p4(self, mask=None):
         # if signal: mask = self.jet_idx > -1
