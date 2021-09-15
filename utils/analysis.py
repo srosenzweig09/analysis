@@ -349,9 +349,6 @@ class TrainSix():
 
         tree = Tree(filename, 'sixBtree', training=True)
         self.tree = tree
-        if dijet:
-            sort_mask = ak.argsort(tree.jet_idx, axis=1)
-            tree.sort(sort_mask)
         nevents = len(tree.jet_pt)
 
         n_sixb = tree.n_sixb
@@ -359,41 +356,9 @@ class TrainSix():
         signal_jet_mask = tree.jet_idx > -1
         signal_jet_ind  = local_ind[signal_jet_mask]
         excess_jet_ind  = local_ind[~signal_jet_mask]
-
-        if dijet:
-            HX_b1_mask = tree.jet_idx == 0
-            HX_b2_mask = tree.jet_idx == 1
-            HX_mask = HX_b1_mask | HX_b2_mask
-            H1_b1_mask = tree.jet_idx == 2
-            H1_b2_mask = tree.jet_idx == 3
-            H1_mask = H1_b1_mask | H1_b2_mask
-            H2_b1_mask = tree.jet_idx == 4
-            H2_b2_mask = tree.jet_idx == 5
-            H2_mask = H2_b1_mask | H2_b2_mask
-
-            sorted_HX_mask = ak.argsort(tree.jet_pt[HX_mask])[:,::-1]
-            sorted_H1_mask = ak.argsort(tree.jet_pt[H1_mask])[:,::-1] + 2
-            sorted_H2_mask = ak.argsort(tree.jet_pt[H2_mask])[:,::-1] + 4
-
-            sorted_HX_ind = signal_jet_ind[sorted_HX_mask]
-            sorted_H1_ind = signal_jet_ind[sorted_H1_mask]
-            sorted_H2_ind = signal_jet_ind[sorted_H2_mask]
-
-            signal_jet_ind = ak.concatenate((sorted_HX_ind, sorted_H1_ind, sorted_H2_ind), axis=1)
-
-            # A note about the following few lines of code
-            # In order to randomize the rows, I had to convert to NumPy objects, shuffle, then convert back to Awkward Arrays
-            # But since NumPy arrays must be regularly shaped (no jaggedness), the result is a RegularArray
-            # APPARENTLY the behavior of tree.branch[RegularArray] is different than tree.branch[IrregularArray]
-            # And this caused me MUCH strife. I figured it out though. Good. God.
-            random_ak_ind = np.asarray([np.random.choice(each_row, 6, replace=False) for each_row in signal_jet_ind.to_numpy()])
-            random_ak_ind = ak.from_regular(ak.from_numpy(random_ak_ind, regulararray=True))
-            mixed_ind = tree.jet_idx[random_ak_ind]
-            mixed_ind_np = mixed_ind.to_numpy()
-        else:
-            mixed_ind = ak.sort(ak.concatenate((excess_jet_ind, signal_jet_ind), axis=1)[:, :6], axis=1)
-            mixed_ind_np = mixed_ind.to_numpy()
-            excess_signal_mask = tree.jet_idx[mixed_ind] > -1
+        mixed_ind = ak.sort(ak.concatenate((excess_jet_ind, signal_jet_ind), axis=1)[:, :6], axis=1)
+        mixed_ind_np = mixed_ind.to_numpy()
+        excess_signal_mask = tree.jet_idx[mixed_ind] > -1
 
         signal_p4 = vector.obj(
             pt  = tree.jet_pt[signal_jet_ind],
@@ -412,134 +377,43 @@ class TrainSix():
         signal_btag = tree.jet_btag[signal_jet_ind].to_numpy()
         excess_btag = tree.jet_btag[mixed_ind].to_numpy()
 
-        
-        if dijet:
-            s_jet0_p4, s_jet1_p4, s_jet2_p4, s_jet3_p4, s_jet4_p4, s_jet5_p4 = self.get_p4s(tree, signal_jet_mask)
-            e_jet0_p4, e_jet1_p4, e_jet2_p4, e_jet3_p4, e_jet4_p4, e_jet5_p4 = self.get_p4s(tree, mixed_ind)
 
-            s_dijet1 = s_jet0_p4 + s_jet1_p4
-            s_dijet2 = s_jet2_p4 + s_jet3_p4
-            s_dijet3 = s_jet4_p4 + s_jet5_p4
+        s_jet0_boosted_pt, s_jet1_boosted_pt, s_jet2_boosted_pt, s_jet3_boosted_pt, s_jet4_boosted_pt, s_jet5_boosted_pt, s_jet6_p4 = self.get_boosted(tree, signal_jet_mask)
+        e_jet0_boosted_pt, e_jet1_boosted_pt, e_jet2_boosted_pt, e_jet3_boosted_pt, e_jet4_boosted_pt, e_jet5_boosted_pt, e_jet6_p4 = self.get_boosted(tree, mixed_ind)
 
-            e_dijet1 = e_jet0_p4 + e_jet1_p4
-            e_dijet2 = e_jet2_p4 + e_jet3_p4
-            e_dijet3 = e_jet4_p4 + e_jet5_p4
+        xtra_signal_features = np.column_stack((
+            s_jet0_boosted_pt, 
+            s_jet1_boosted_pt, 
+            s_jet2_boosted_pt, 
+            s_jet3_boosted_pt, 
+            s_jet4_boosted_pt, 
+            s_jet5_boosted_pt))
 
-            H_pt_order = np.argsort(np.column_stack((
-                s_dijet1.pt.to_numpy(), 
-                s_dijet2.pt.to_numpy(), 
-                s_dijet3.pt.to_numpy())), axis=1)[:,::-1]
+        xtra_excess_features = np.column_stack((
+            e_jet0_boosted_pt, 
+            e_jet1_boosted_pt, 
+            e_jet2_boosted_pt, 
+            e_jet3_boosted_pt, 
+            e_jet4_boosted_pt, 
+            e_jet5_boosted_pt))
 
-            s_dijet1_dR = s_jet0_p4.deltaR(s_jet1_p4).to_numpy()
-            s_dijet2_dR = s_jet2_p4.deltaR(s_jet3_p4).to_numpy()
-            s_dijet3_dR = s_jet4_p4.deltaR(s_jet5_p4).to_numpy()
-            s_dR_features = ak.from_regular(ak.from_numpy(np.column_stack((s_dijet1_dR, s_dijet2_dR, s_dijet3_dR))))
-            s_dR_features = s_dR_features[ak.from_regular(ak.from_numpy(H_pt_order))].to_numpy()
+        n_signal = len(xtra_signal_features)
+        n_excess = len(xtra_excess_features)
 
-            H_pt_order = np.argsort(np.column_stack((
-                s_dijet1.pt.to_numpy(), 
-                s_dijet2.pt.to_numpy(), 
-                s_dijet3.pt.to_numpy())), axis=1)[:,::-1]
+        signal_targets = np.tile([1,0], (n_signal, 1))
+        excess_targets = np.tile([0,1], (n_excess, 1))
 
-            excess_pt_order = np.argsort(np.column_stack((
-                e_dijet1.pt.to_numpy(), 
-                e_dijet2.pt.to_numpy(), 
-                e_dijet3.pt.to_numpy())), axis=1)[:,::-1]
+        # n_signal = ak.count(tree.jet_idx[mixed_ind][excess_signal_mask], axis=1)
+        # excess_targets = np.zeros((nevents, 7), dtype=int)
+        # excess_targets[np.arange(nevents), n_signal] += 1
 
-            fig, ax = plt.subplots(nrows=1, ncols=2)
-            s_dijet1.mass, s_dijet2.mass, s_dijet3.mass
-            e_dijet1.mass, e_dijet2.mass, e_dijet3.mass
-            
-            e_dijet1_dR = e_jet0_p4.deltaR(e_jet1_p4).to_numpy()
-            e_dijet2_dR = e_jet2_p4.deltaR(e_jet3_p4).to_numpy()
-            e_dijet3_dR = e_jet4_p4.deltaR(e_jet5_p4).to_numpy()
-            e_dR_features = ak.from_regular(ak.from_numpy(np.column_stack((e_dijet1_dR, e_dijet2_dR, e_dijet3_dR))))
-            e_dR_features = e_dR_features[ak.from_regular(ak.from_numpy(excess_pt_order))].to_numpy()
+        # signal_targets = np.zeros_like(excess_targets)
+        # signal_targets[:,-1] += 1
 
-            H_pt_order = np.where(H_pt_order == 2, 4, H_pt_order)
-            H_pt_order = np.where(H_pt_order == 1, 2, H_pt_order)
-            excess_pt_order = np.where(excess_pt_order == 2, 4, excess_pt_order)
-            excess_pt_order = np.where(excess_pt_order == 1, 2, excess_pt_order)
-
-            H_pt_order = np.column_stack((H_pt_order[:,0], H_pt_order[:,0] + 1, H_pt_order[:,1], H_pt_order[:,1] + 1, H_pt_order[:,2], H_pt_order[:,2] + 1))
-            H_pt_order = ak.from_regular(ak.from_numpy(H_pt_order))
-            excess_pt_order = np.column_stack((excess_pt_order[:,0], excess_pt_order[:,0] + 1, excess_pt_order[:,1], excess_pt_order[:,1] + 1, excess_pt_order[:,2], excess_pt_order[:,2] + 1))
-            excess_pt_order = ak.from_regular(ak.from_numpy(excess_pt_order))
-
-            signal_jet_ind = signal_jet_ind[H_pt_order]
-            mixed_ind = mixed_ind[excess_pt_order]
-
-            signal_p4 = vector.obj(
-                pt  = tree.jet_pt[signal_jet_ind],
-                eta = tree.jet_eta[signal_jet_ind],
-                phi = tree.jet_phi[signal_jet_ind],
-                m   = tree.jet_m[signal_jet_ind]
-            )
-
-            excess_p4 = vector.obj(
-                pt  = tree.jet_pt[mixed_ind],
-                eta = tree.jet_eta[mixed_ind],
-                phi = tree.jet_phi[mixed_ind],
-                m   = tree.jet_m[mixed_ind]
-            )
-
-            signal_btag = tree.jet_btag[signal_jet_ind].to_numpy()
-            excess_btag = tree.jet_btag[mixed_ind].to_numpy()
-
-            xtra_signal_features = np.sort(np.column_stack((
-                s_dijet1.pt.to_numpy(), 
-                s_dijet2.pt.to_numpy(), 
-                s_dijet3.pt.to_numpy())), axis=1)[:,::-1]
-
-            xtra_signal_features = np.column_stack((xtra_signal_features, s_dR_features))
-
-            xtra_excess_features = np.sort(np.column_stack((
-                e_dijet1.pt.to_numpy(), 
-                e_dijet2.pt.to_numpy(), 
-                e_dijet3.pt.to_numpy())), axis=1)[:,::-1]
-
-            xtra_excess_features = np.column_stack((xtra_excess_features, e_dR_features))
-            
-            signal_targets = np.tile([1,0], (nevents, 1))
-            excess_targets = np.tile([0,1], (nevents, 1))
-
-        else:
-            s_jet0_boosted_pt, s_jet1_boosted_pt, s_jet2_boosted_pt, s_jet3_boosted_pt, s_jet4_boosted_pt, s_jet5_boosted_pt, s_jet6_p4 = self.get_boosted(tree, signal_jet_mask)
-            e_jet0_boosted_pt, e_jet1_boosted_pt, e_jet2_boosted_pt, e_jet3_boosted_pt, e_jet4_boosted_pt, e_jet5_boosted_pt, e_jet6_p4 = self.get_boosted(tree, mixed_ind)
-
-            xtra_signal_features = np.column_stack((
-                s_jet0_boosted_pt, 
-                s_jet1_boosted_pt, 
-                s_jet2_boosted_pt, 
-                s_jet3_boosted_pt, 
-                s_jet4_boosted_pt, 
-                s_jet5_boosted_pt))
-
-            xtra_excess_features = np.column_stack((
-                e_jet0_boosted_pt, 
-                e_jet1_boosted_pt, 
-                e_jet2_boosted_pt, 
-                e_jet3_boosted_pt, 
-                e_jet4_boosted_pt, 
-                e_jet5_boosted_pt))
-
-            n_signal = len(xtra_signal_features)
-            n_excess = len(xtra_excess_features)
-
-            signal_targets = np.tile([1,0], (n_signal, 1))
-            excess_targets = np.tile([0,1], (n_excess, 1))
-
-            # n_signal = ak.count(tree.jet_idx[mixed_ind][excess_signal_mask], axis=1)
-            # excess_targets = np.zeros((nevents, 7), dtype=int)
-            # excess_targets[np.arange(nevents), n_signal] += 1
-
-            # signal_targets = np.zeros_like(excess_targets)
-            # signal_targets[:,-1] += 1
-
-            assert (np.any(~signal_targets[:,1]))
-            assert (np.all(signal_targets[:,0]))
-            assert (np.all(excess_targets[:,1]))
-            assert (~np.any(excess_targets[:,0]))
+        assert (np.any(~signal_targets[:,1]))
+        assert (np.all(signal_targets[:,0]))
+        assert (np.all(excess_targets[:,1]))
+        assert (~np.any(excess_targets[:,0]))
 
         # Concatenate pT, eta, phi, and btag score
         signal_features = np.concatenate((
