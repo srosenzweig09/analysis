@@ -105,7 +105,8 @@ class Tree():
         self.xsec = xsec
         self.lumi = lumiMap[year][0]
         self.scale = self.lumi*xsec/total
-        self.weight = self.scale*nevents
+        # self.weight = self.scale*nevents
+        self.cutflow = cutflow.to_numpy()[0]*self.scale
 
         for k, v in tree.items():
             try: setattr(self, 'signal_' + k, v.array()[self.signal_evt_mask][self.signal_jet_mask])
@@ -120,6 +121,7 @@ class Tree():
         nevent = []
         sample = []
         total = []
+        cutflow = np.zeros(11)
         for filename in filelist:
             # Open tree
             tree = uproot.open(f"{filename}:{treename}")
@@ -406,7 +408,7 @@ class TrainSix():
             s_jet2_boost.phi.to_numpy()[:,np.newaxis], 
             s_jet3_boost.phi.to_numpy()[:,np.newaxis], 
             s_jet4_boost.phi.to_numpy()[:,np.newaxis], 
-            s_jet5_boost.mi.to_numpy()[:,np.newaxis],
+            s_jet5_boost.m.to_numpy()[:,np.newaxis],
             s_jet0_boost.m.to_numpy()[:,np.newaxis], 
             s_jet1_boost.m.to_numpy()[:,np.newaxis], 
             s_jet2_boost.m.to_numpy()[:,np.newaxis], 
@@ -432,13 +434,13 @@ class TrainSix():
             e_jet2_boost.phi.to_numpy()[:,np.newaxis], 
             e_jet3_boost.phi.to_numpy()[:,np.newaxis], 
             e_jet4_boost.phi.to_numpy()[:,np.newaxis], 
-            e_jet5_boost.mi.to_numpy()[:,np.newaxis],
+            e_jet5_boost.m.to_numpy()[:,np.newaxis],
             e_jet0_boost.m.to_numpy()[:,np.newaxis], 
             e_jet1_boost.m.to_numpy()[:,np.newaxis], 
             e_jet2_boost.m.to_numpy()[:,np.newaxis], 
             e_jet3_boost.m.to_numpy()[:,np.newaxis], 
             e_jet4_boost.m.to_numpy()[:,np.newaxis], 
-            e_jet5_boost.m.to_numpy()[:,np.newaxis]))))
+            e_jet5_boost.m.to_numpy()[:,np.newaxis]))
 
         n_signal = len(xtra_signal_features)
         n_excess = len(xtra_excess_features)
@@ -461,14 +463,20 @@ class TrainSix():
         # Concatenate pT, eta, phi, and btag score
         signal_features = np.concatenate((
             signal_p4.pt.to_numpy(), 
+            signal_p4.pt.to_numpy()**2, 
             signal_p4.eta.to_numpy(), 
+            signal_p4.eta.to_numpy()**2, 
             signal_p4.phi.to_numpy(), 
+            signal_p4.phi.to_numpy()**2, 
             signal_btag, 
             xtra_signal_features), axis=1)
         excess_features = np.concatenate((
             excess_p4.pt.to_numpy(), 
+            excess_p4.pt.to_numpy()**2, 
             excess_p4.eta.to_numpy(), 
+            excess_p4.eta.to_numpy()**2, 
             excess_p4.phi.to_numpy(), 
+            excess_p4.phi.to_numpy()**2, 
             excess_btag, 
             xtra_excess_features), axis=1)
 
@@ -849,20 +857,31 @@ class combos():
 
     def evaluate_6b(self, filename, njets, tag):
 
-        tree = Tree(filename, 'sixBtree', as_ak=True)
+        print("Initializing...")
+
+        tree = Tree(filename, 'sixBtree', training=True)
         nevents = len(tree.jet_pt)
+
+        print("Indexing...")
+
+        jet1pt, jet2pt, jet3pt, jet4pt, jet5pt, jet6pt = ak.unzip(ak.combinations(tree.jet_pt, njets))
+        sys.exit()
+
+
+
 
         # Arrays of indices representing the pt-ordered event
         # jet_ptordered = ak.argsort(tree.jet_pt, ascending=False)
         # Arrays containing indices representing all 6-jet combinations in each event
         jet_index = ak.local_index(tree.jet_pt)
-        jet_comb = ak.combinations(jet_index, 6)
+        jet_comb = ak.combinations(jet_index, njets)
         # Unzip the combinations into their constituent jets
         jet0, jet1, jet2, jet3, jet4, jet5 = ak.unzip(jet_comb)
         # Zip the constituents back together
         combos = ak.concatenate([jeti[:,:,np.newaxis] for jeti in (jet0, jet1, jet2, jet3, jet4, jet5)], axis=-1)
 
         pt = broadcast(tree.jet_pt, njets)[combos].to_numpy()
+
         eta = broadcast(tree.jet_eta, njets)[combos].to_numpy()
         phi = broadcast(tree.jet_phi, njets)[combos].to_numpy()
         m = broadcast(tree.jet_m, njets)[combos].to_numpy()

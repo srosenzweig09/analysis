@@ -38,7 +38,7 @@ def hist(x, bins=100, label=None, weights=None, color=None, density=False, stack
     # try: bins = np.linspace(x.min(), x.max(), bins)
     # except: pass
     if ax is None: fig, ax = plt.subplots()
-    if weights is not None: x = (bins[1:] + bins[:-1])/2
+    if not (weights is None): x = (bins[1:] + bins[:-1])/2
     # try: bins = np.linspace(x.min(), x.max(), bins)
     # except: pass
     if xlim is not None: ax.set_xlim(xlim)
@@ -192,7 +192,7 @@ plot_dict = {
     'histtype' : 'step',
     'align' : 'mid'
     }
-def plot(**kwargs):
+def plot(x, **kwargs):
     if 'ax' not in kwargs: fig, ax = plt.subplots(figsize=(10,6))
     else: 
         fig, ax = kwargs['fig'], kwargs['ax']
@@ -200,8 +200,9 @@ def plot(**kwargs):
         kwargs.pop('ax')
     for k,v in plot_dict.items():
         if k not in kwargs: kwargs[k] = v
-    n, edges, im = ax.hist(**kwargs)
+    n, edges, im = ax.hist(x, **kwargs)
     if 'label' in kwargs: ax.legend()
-    print(n)
-    print(edges)
-    return fig, ax
+    return fig, ax, n, edges
+
+def plot2d(x, y, **kwargs):
+    return plt.hist2d(x, y, **kwargs)

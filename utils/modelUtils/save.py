@@ -1,9 +1,7 @@
-from pandas import DataFrame
 from pickle import dump
 import tensorflow.compat.v1 as tf
 tf.disable_v2_behavior()
 import tensorflow.python.keras.backend as K
-sess = K.get_session()
 
 class ModelSaver():
 
@@ -35,25 +33,21 @@ class ModelSaver():
             return frozen_graph
 
     def __init__(self, out_dir, model, history, scaler, is_2b=False):
-
         # Save to json:  
         hist_json_file = out_dir + f'history.json' 
         json_save = out_dir + f"model.json"
-        h5_save   = json_save.replace(".json", ".h5")
 
         with open(hist_json_file, mode='w') as f:
             history.to_json(f)
 
-        # Save model to json and weights to h5
-        model_json = model.to_json()
-        with open(json_save, "w") as json_file:
-            json_file.write(model_json)
-
-        # serialize weights to HDF5
-        model.save_weights(h5_save)
+        # # Save model to json and weights to h5
+        # model_json = model.to_json()
+        # with open(json_save, "w") as json_file:
+        #     json_file.write(model_json)
 
         # save scaler
-        dump(scaler, open(out_dir + f'scaler.pkl', 'wb'))
+        # try: dump(scaler, open(out_dir + f'scaler.pkl', 'wb'))
+        # except: pass
 
         frozen_graph = self.freeze_session(K.get_session(),
                               output_names=[out.op.name for out in model.outputs])
