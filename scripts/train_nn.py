@@ -33,7 +33,6 @@ from colors import CYAN, W
 from logger import info, error
 
 from utils.analysis import TrainSix, TrainTwo
-from utils.models.save import ModelSaver
 
 print("Libraries loaded.")
 print()
@@ -93,7 +92,7 @@ nn_type            = config['TYPE']['Type']
 
 #####
 if int(args.njet) == 6:
-    training = TrainSix(inputs_filename, dijet=bool(args.dijet))
+    training = TrainSix(inputs_filename)
     inputs = training.features
     targets = training.targets
 elif int(args.njet) == 2:
@@ -216,8 +215,13 @@ out_dir = f"{args.njet}jet_{args.task}/models/{args.tag}/"
 if not os.path.exists(out_dir):
     os.makedirs(out_dir)
 
+# serialize weights to HDF5
+h5_save   = out_dir + "model.h5"
+model.save_weights(h5_save)
+
 info(f"Training sessions will be saved in {out_dir}")
 
+from utils.modelUtils.save import ModelSaver
 saver = ModelSaver(out_dir, model, hist_df, scaler)
 
 ### ------------------------------------------------------------------------------------
@@ -232,8 +236,11 @@ cfg_out["model"] = {
     "param2_n6" : "jet_eta",
     "param3_n6" : "jet_phi",
     "param4_n6" : "jet_btag",
-    "param5_n3" : "boosted_pt",
-    "param5_n3" : "delta_R",
+    "param5_n6" : "boosted_pt",
+    "param5_n6" : "boosted_eta",
+    "param5_n6" : "boosted_phi",
+    "param5_n6" : "boosted_m",
+    # "param5_n3" : "delta_R",
     "num_hidden_layers" : nlayers,
     "input_activation_function" : hidden_activations,
     "hidden_layer_nodes" : ",".join(nodes),
