@@ -7,6 +7,7 @@ from . import *
 # from matplotlib.colors import LogNorm
 import matplotlib.cm as cm
 from matplotlib.ticker import FormatStrFormatter
+import numpy as np
 
 file_location = '/uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_2_18/src/sixb/plots/'
 
@@ -17,6 +18,21 @@ easy_bins = {
 easy_labels = {
     'pt' : r'jet $p_T$ [GeV]'
 }
+
+legend_loc = {
+    'best' : 0,
+    'upper right' : 1,
+    'upper left' : 2,
+    'lower left' : 3,
+    'lower right' : 4,
+    'right' : 5,
+    'center left' : 6,
+    'center right' : 7,
+    'lower center' : 8,
+    'upper center' : 9,
+    'center' : 10 }
+
+
 
 def change_cmap_bkg_to_white(colormap, n=256):
     """The lowest value of colormaps is not often white by default, which can help idenfity empty bins.
@@ -190,9 +206,14 @@ def plot_highest_score_v_mass(combos):
 
 plot_dict = {
     'histtype' : 'step',
-    'align' : 'mid'
+    'align' : 'mid',
+    'linewidth' : 2
     }
-def plot(x, **kwargs):
+def plot(x, scale=False, **kwargs):
+    """
+    This function is a wrapper for matplotlib.pyplot.hist that allows me to generate histograms quickly and consistently.
+    It also helps deal with background trees, which are typically given as lists of samples.
+    """
     if 'ax' not in kwargs: fig, ax = plt.subplots(figsize=(10,6))
     else: 
         fig, ax = kwargs['fig'], kwargs['ax']
@@ -200,7 +221,25 @@ def plot(x, **kwargs):
         kwargs.pop('ax')
     for k,v in plot_dict.items():
         if k not in kwargs: kwargs[k] = v
-    n, edges, im = ax.hist(x, **kwargs)
+    if type(x) == list:
+        bins = kwargs['bins']
+        n = np.zeros_like()
+        for bkg_kin, scale in zip(x, scale):
+            n_temp, e = np.histogram(bkg_kin.to_numpy(), bins=bins)
+            n += n_temp*scale
+        n, edges, im = ax.hist(x=(bins[1:] + bins[:-1])/2, weights=n, **kwargs)
+    else:
+        if 'density' in kwargs.keys():
+            if kwargs['density'] == 1:
+                kwargs.pop('density')
+                bins = kwargs['bins']
+                try:
+                    n, e = np.histogram(x, bins)
+                except:
+                    n, e = np.histogram(x.to_numpy(), bins)
+                n, edges, im = ax.hist(x=(bins[1:] + bins[:-1])/2, weights=n/n.sum(), **kwargs)
+        else:
+            n, edges, im = ax.hist(x, **kwargs)
     if 'label' in kwargs: ax.legend()
     return fig, ax, n, edges
 
