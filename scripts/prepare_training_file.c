@@ -17,7 +17,7 @@
 
 int prepare_training_file(){
 
-  TFile *fout = new TFile("inputs/NMSSM_XYH_YToHH_6b_MX_700_MY_400_training_set.root","RECREATE");
+  TFile *fout = new TFile("inputs/NMSSM_XYH_YToHH_6b_MX_700_MY_400_training_set_small_batch.root","RECREATE");
   TTree *t1   = new TTree("sixBtree","sixBtree");
 
   TString tree = "sixBtree";
@@ -26,7 +26,8 @@ int prepare_training_file(){
   int numFiles = 90;
   for (int fileNum=0;fileNum < numFiles;fileNum++) {
     // cc->AddFile(Form("root://cmseos.fnal.gov//store/user/srosenzw/sixb_ntuples/preselections/NMSSM_XYH_YToHH_6b_MX_700_MY_400/output/ntuple_%d.root", fileNum));
-    cc->AddFile(Form("root://cmseos.fnal.gov//store/user/ekoenig/6BAnalysis/NTuples/2018/SR/NMSSM/NMSSM_XYH_YToHH_6b_MX_700_MY_400_10M/training/ntuple_%d.root", fileNum));
+    // cc->AddFile(Form("root://cmseos.fnal.gov//store/user/ekoenig/6BAnalysis/NTuples/2018/SR/NMSSM/NMSSM_XYH_YToHH_6b_MX_700_MY_400_10M/training/ntuple_%d.root", fileNum));
+    cc->AddFile(Form("root://cmseos.fnal.gov//store/user/ekoenig/6BAnalysis/NTuples/2018/SR/NN/NMSSM/NMSSM_XYH_YToHH_6b_MX_700_MY_400_10M/training/ntuple_%d.root", fileNum));
   }
 
   TTreeReader reader(cc);
@@ -145,6 +146,7 @@ int prepare_training_file(){
     if (eventCount % 10000 == 0) {
       std::cout << eventCount << " events read!" << std::endl;
     }
+    if (eventCount > 100000) {continue;} 
 
     // if (*n_sixb != 6) continue;
     // if (*n_jet < 7) continue;

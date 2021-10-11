@@ -26,7 +26,8 @@ int prepare_testing_file(){
   int numFiles = 100;
   for (int fileNum=90;fileNum < numFiles;fileNum++) {
     // cc->AddFile(Form("root://cmseos.fnal.gov//store/user/srosenzw/sixb_ntuples/preselections/NMSSM_XYH_YToHH_6b_MX_700_MY_400/output2/ntuple_%d.root", fileNum));
-    cc->AddFile(Form("root://cmseos.fnal.gov//store/user/ekoenig/6BAnalysis/NTuples/2018/SR/NMSSM/NMSSM_XYH_YToHH_6b_MX_700_MY_400_10M/testing/ntuple_%d.root", fileNum));
+    // cc->AddFile(Form("root://cmseos.fnal.gov//store/user/ekoenig/6BAnalysis/NTuples/2018/SR/NMSSM/NMSSM_XYH_YToHH_6b_MX_700_MY_400_10M/testing/ntuple_%d.root", fileNum));
+    cc->AddFile(Form("root://cmseos.fnal.gov//store/user/ekoenig/6BAnalysis/NTuples/2018/SR/NN/NMSSM/NMSSM_XYH_YToHH_6b_MX_700_MY_400_10M/testing/ntuple_%d.root", fileNum));
   }
   // cc->AddFile("/eos/uscms/store/user/ekoenig/6BAnalysis/NTuples/2018/SR/NMSSM/NMSSM_XYH_YToHH_6b_MX_700_MY_400/ntuple.root");
 
