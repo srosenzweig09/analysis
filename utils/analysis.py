@@ -12,6 +12,7 @@ Training samples are prepared such that these requirements are already imposed:
 
 from . import *
 from .plotter import easy_bins
+from .modelUtils.load import load_model
 
 # Standard library imports
 from math import comb
@@ -192,7 +193,7 @@ class Tree():
     def get_pair_p4(self, mask=None):
         # if signal: mask = self.jet_idx > -1
         # else: mask = self.jet_idx == -1
-        jet1_pt, jet2_pt = ak.unzip(ak.combinations(getattr(self, 'jet_pt')[mask], 2))
+        jet1_pt, jet2_pt = ak.unzip(ak.combinations(self.jet_pt[mask], 2))
         jet1_eta, jet2_eta = ak.unzip(ak.combinations(self.jet_eta[mask], 2))
         jet1_phi, jet2_phi = ak.unzip(ak.combinations(self.jet_phi[mask], 2))
         jet1_m, jet2_m = ak.unzip(ak.combinations(self.jet_m[mask], 2))
@@ -275,6 +276,56 @@ class Tree():
         jets = ak.unzip(jet_comb)
         # Zip the constituents back together
         self.combos = ak.concatenate([jeti[:,:,np.newaxis] for jeti in jets], axis=-1)
+
+    def get_2j_input(self):
+        pt1, pt2 = ak.unzip(ak.combinations(self.jet_pt, 2))
+        eta1, eta2 = ak.unzip(ak.combinations(self.jet_eta, 2))
+        phi1, phi2 = ak.unzip(ak.combinations(self.jet_phi, 2))
+        m1, m2 = ak.unzip(ak.combinations(self.jet_m, 2))
+        btag1, btag2 = ak.unzip(ak.combinations(self.jet_btag, 2))
+        sid1, sid2 = ak.unzip(ak.combinations(self.jet_signalId, 2))
+
+        jet1 = vector.obj(pt=pt1, eta=eta1, phi=phi1, m=m1)
+        jet2 = vector.obj(pt=pt2, eta=eta2, phi=phi2, m=m2)
+
+        dijet_pt = (jet1 + jet2).pt
+        deltaR = jet1.deltaR(jet2)
+
+        dijet_mass = (jet1 + jet2).m
+
+        n_evt = ak.count(pt1, axis=1)
+
+
+        pt1 = ak.flatten(pt1).to_numpy()
+        pt2 = ak.flatten(pt2).to_numpy()
+        eta1 = ak.flatten(eta1).to_numpy()
+        eta2 = ak.flatten(eta2).to_numpy()
+        phi1 = ak.flatten(phi1).to_numpy()
+        phi2 = ak.flatten(phi2).to_numpy()
+        btag1 = ak.flatten(btag1).to_numpy()
+        btag2 = ak.flatten(btag2).to_numpy()
+        sid1 = ak.flatten(sid1).to_numpy()
+        sid2 = ak.flatten(sid2).to_numpy()
+        HX_mask = ((sid1 == 0) & (sid2 == 1)) | ((sid2 == 0) & (sid1 == 1))
+        H1_mask = ((sid1 == 2) & (sid2 == 3)) | ((sid2 == 2) & (sid1 == 3))
+        H2_mask = ((sid1 == 4) & (sid2 == 5)) | ((sid2 == 4) & (sid1 == 5))
+        dijet_pt = ak.flatten(dijet_pt).to_numpy()
+        deltaR = ak.flatten(deltaR).to_numpy()
+
+
+        signal_mask = HX_mask | H1_mask | H2_mask
+
+        inputs = np.column_stack((pt1, pt2, eta1, eta2, phi1, phi2, btag1, btag2, dijet_pt, deltaR))
+
+        scaler, model = load_model(location='../2jet_classifier/', tag='20210817_4btag_req')
+        # scaled_inputs = scaler.transform(inputs[:,:-1])
+        # print(scaled_inputs[:,-1])
+        scaled_inputs = scaler.transform(np.column_stack((inputs[:,:-2], inputs[:,-1])))
+        # print(scaled_inputs[:,-1])
+        scores = model.predict(scaled_inputs)
+
+        return scores, dijet_mass, signal_mask, n_evt
+
 
 class TrainSix():
     
