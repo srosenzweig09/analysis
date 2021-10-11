@@ -2,7 +2,10 @@
 Project: 6b Final States - 
 Author: Suzanne Rosenzweig
 
-This class sorts MC-generated events into an array of input features for use in training a neural network and in evaluating the performance of the model using a test set of examples.
+Classes:
+Tree - Extracts information from ROOT TTrees.
+TrainSix - Produces inputs to train the 6-jet classifier.
+
 
 Notes:
 Training samples are prepared such that these requirements are already imposed:
@@ -40,13 +43,6 @@ def get_boosted_p4(tree, jets):
         jet_pt.append(ak.flatten(p4(tree, jet).boost_p4(jet_p4).pt).to_numpy()[:, np.newaxis])
 
     return jet_pt
-
-def broadcast(jet_arr, njets=7):
-    # In order to use the combos array as a mask, the jet arrays must be broadcast into the same shape, or vice versa
-    # Awkward arrays don't broadcast the same way NumPy arrays do
-    # See this discussion: https://github.com/scikit-hep/awkward-0.x/issues/253
-    # Jim Pivarski recommends converting to NumPy arrays to broadcast
-    return ak.from_numpy(np.repeat(jet_arr[:,np.newaxis].to_numpy(), njets, axis=1))
 
 def get_6jet_p4(p4):
     combos = ak.combinations(p4, 6)
@@ -326,7 +322,6 @@ class Tree():
 
         return scores, dijet_mass, signal_mask, n_evt
 
-
 class TrainSix():
     
     def get_boosted(self, tree, ind_array):
@@ -566,197 +561,6 @@ class TrainSix():
 
         return jet1_p4, jet2_p4
 
-class dijet():
-
-    def get_boosted(self, tree, ind_array):
-
-        jet0_p4 = build_p4(tree.jet_pt[ind_array][:,0], 
-                           tree.jet_eta[ind_array][:,0], 
-                           tree.jet_phi[ind_array][:,0], 
-                           tree.jet_m[ind_array][:,0])
-        jet1_p4 = build_p4(tree.jet_pt[ind_array][:,1], 
-                           tree.jet_eta[ind_array][:,1], 
-                           tree.jet_phi[ind_array][:,1], 
-                           tree.jet_m[ind_array][:,1])
-        jet2_p4 = build_p4(tree.jet_pt[ind_array][:,2], 
-                           tree.jet_eta[ind_array][:,2], 
-                           tree.jet_phi[ind_array][:,2], 
-                           tree.jet_m[ind_array][:,2])
-        jet3_p4 = build_p4(tree.jet_pt[ind_array][:,3], 
-                           tree.jet_eta[ind_array][:,3], 
-                           tree.jet_phi[ind_array][:,3], 
-                           tree.jet_m[ind_array][:,3])
-        jet4_p4 = build_p4(tree.jet_pt[ind_array][:,4], 
-                           tree.jet_eta[ind_array][:,4], 
-                           tree.jet_phi[ind_array][:,4], 
-                           tree.jet_m[ind_array][:,4])
-        jet5_p4 = build_p4(tree.jet_pt[ind_array][:,5], 
-                           tree.jet_eta[ind_array][:,5], 
-                           tree.jet_phi[ind_array][:,5], 
-                           tree.jet_m[ind_array][:,5])
-
-        jet6_p4 = jet0_p4 + jet1_p4 + jet2_p4 + jet3_p4 + jet4_p4 + jet5_p4
-
-        jet0_boosted_pt = jet0_p4.boost_p4(jet6_p4).pt.to_numpy()[:,np.newaxis]
-        jet1_boosted_pt = jet1_p4.boost_p4(jet6_p4).pt.to_numpy()[:,np.newaxis]
-        jet2_boosted_pt = jet2_p4.boost_p4(jet6_p4).pt.to_numpy()[:,np.newaxis]
-        jet3_boosted_pt = jet3_p4.boost_p4(jet6_p4).pt.to_numpy()[:,np.newaxis]
-        jet4_boosted_pt = jet4_p4.boost_p4(jet6_p4).pt.to_numpy()[:,np.newaxis]
-        jet5_boosted_pt = jet5_p4.boost_p4(jet6_p4).pt.to_numpy()[:,np.newaxis]
-
-        return jet0_boosted_pt, jet1_boosted_pt, jet2_boosted_pt, jet3_boosted_pt, jet4_boosted_pt, jet5_boosted_pt, jet6_p4
-
-    def get_p4s(self, tree, ind_array):
-
-        jet0_p4 = build_p4(tree.jet_pt[ind_array][:,0], 
-                           tree.jet_eta[ind_array][:,0], 
-                           tree.jet_phi[ind_array][:,0], 
-                           tree.jet_m[ind_array][:,0])
-        jet1_p4 = build_p4(tree.jet_pt[ind_array][:,1], 
-                           tree.jet_eta[ind_array][:,1], 
-                           tree.jet_phi[ind_array][:,1], 
-                           tree.jet_m[ind_array][:,1])
-        jet2_p4 = build_p4(tree.jet_pt[ind_array][:,2], 
-                           tree.jet_eta[ind_array][:,2], 
-                           tree.jet_phi[ind_array][:,2], 
-                           tree.jet_m[ind_array][:,2])
-        jet3_p4 = build_p4(tree.jet_pt[ind_array][:,3], 
-                           tree.jet_eta[ind_array][:,3], 
-                           tree.jet_phi[ind_array][:,3], 
-                           tree.jet_m[ind_array][:,3])
-        jet4_p4 = build_p4(tree.jet_pt[ind_array][:,4], 
-                           tree.jet_eta[ind_array][:,4], 
-                           tree.jet_phi[ind_array][:,4], 
-                           tree.jet_m[ind_array][:,4])
-        jet5_p4 = build_p4(tree.jet_pt[ind_array][:,5], 
-                           tree.jet_eta[ind_array][:,5], 
-                           tree.jet_phi[ind_array][:,5], 
-                           tree.jet_m[ind_array][:,5])
-
-        jet6_p4 = jet0_p4 + jet1_p4 + jet2_p4 + jet3_p4 + jet4_p4 + jet5_p4
-
-        return jet0_p4, jet1_p4, jet2_p4, jet3_p4, jet4_p4, jet5_p4
-
-    #### BROKEN
-    def __init__():
-
-        tree = Tree(filename, 'sixBtree', as_ak=True)
-        sort_mask = ak.argsort(tree.jet_idx, axis=1)
-        tree.sort(sort_mask)
-        nevents = len(tree.jet_pt)
-
-        n_sixb = tree.n_sixb
-        local_ind = ak.local_index(tree.jet_idx)
-        signal_jet_mask = tree.jet_idx > -1
-        signal_jet_ind  = local_ind[signal_jet_mask]
-
-        HX_b1_mask = tree.jet_idx == 0
-        HX_b2_mask = tree.jet_idx == 1
-        HX_mask = HX_b1_mask | HX_b2_mask
-        H1_b1_mask = tree.jet_idx == 2
-        H1_b2_mask = tree.jet_idx == 3
-        H1_mask = H1_b1_mask | H1_b2_mask
-        H2_b1_mask = tree.jet_idx == 4
-        H2_b2_mask = tree.jet_idx == 5
-        H2_mask = H2_b1_mask | H2_b2_mask
-
-        sorted_HX_mask = ak.argsort(tree.jet_pt[HX_mask])[:,::-1]
-        sorted_H1_mask = ak.argsort(tree.jet_pt[H1_mask])[:,::-1] + 2
-        sorted_H2_mask = ak.argsort(tree.jet_pt[H2_mask])[:,::-1] + 4
-
-        sorted_HX_ind = signal_jet_ind[sorted_HX_mask]
-        sorted_H1_ind = signal_jet_ind[sorted_H1_mask]
-        sorted_H2_ind = signal_jet_ind[sorted_H2_mask]
-
-        signal_jet_ind = ak.concatenate((sorted_HX_ind, sorted_H1_ind, sorted_H2_ind), axis=1)
-        jet_comb = ak.combinations(jet_ptordered, 2)
-        # Unzip the combinations into their constituent jets
-        jet0, jet1, jet2, jet3, jet4, jet5 = ak.unzip(jet_comb)
-
-        #### WORKING HERE
-        # Zip the constituents back together
-        combos = ak.concatenate([jeti[:,:,np.newaxis] for jeti in (jet0, jet1)], axis=-1)
-
-        signal_p4 = vector.obj(
-            pt  = tree.jet_pt[signal_jet_ind],
-            eta = tree.jet_eta[signal_jet_ind],
-            phi = tree.jet_phi[signal_jet_ind],
-            m   = tree.jet_m[signal_jet_ind]
-        )
-
-        signal_btag = tree.jet_btag[signal_jet_ind].to_numpy()
-
-        jet0_p4, jet1_p4, jet2_p4, jet3_p4, jet4_p4, jet5_p4 = self.get_p4s(tree, signal_jet_mask)
-
-        dijet1 = jet0_p4 + jet1_p4
-        dijet2 = jet2_p4 + jet3_p4
-        dijet3 = jet4_p4 + jet5_p4
-
-        H_pt_order = np.argsort(np.column_stack((
-            dijet1.pt.to_numpy(), 
-            dijet2.pt.to_numpy(), 
-            dijet3.pt.to_numpy())), axis=1)[:,::-1]
-
-        dijet1_dR = jet0_p4.deltaR(jet1_p4).to_numpy()
-        dijet2_dR = jet2_p4.deltaR(jet3_p4).to_numpy()
-        dijet3_dR = jet4_p4.deltaR(jet5_p4).to_numpy()
-        dR_features = ak.from_regular(ak.from_numpy(np.column_stack((dijet1_dR, dijet2_dR, dijet3_dR))))
-        dR_features = dR_features[ak.from_regular(ak.from_numpy(H_pt_order))].to_numpy()
-
-        H_pt_order = np.argsort(np.column_stack((
-            dijet1.pt.to_numpy(), 
-            dijet2.pt.to_numpy(), 
-            dijet3.pt.to_numpy())), axis=1)[:,::-1]
-
-        fig, ax = plt.subplots(nrows=1, ncols=2)
-        dijet1.mass, dijet2.mass, dijet3.mass
-
-        H_pt_order = np.where(H_pt_order == 2, 4, H_pt_order)
-        H_pt_order = np.where(H_pt_order == 1, 2, H_pt_order)
-
-        H_pt_order = np.column_stack((H_pt_order[:,0], H_pt_order[:,0] + 1, H_pt_order[:,1], H_pt_order[:,1] + 1, H_pt_order[:,2], H_pt_order[:,2] + 1))
-        H_pt_order = ak.from_regular(ak.from_numpy(H_pt_order))
-
-        signal_jet_ind = signal_jet_ind[H_pt_order]
-
-        signal_p4 = vector.obj(
-            pt  = tree.jet_pt[signal_jet_ind],
-            eta = tree.jet_eta[signal_jet_ind],
-            phi = tree.jet_phi[signal_jet_ind],
-            m   = tree.jet_m[signal_jet_ind]
-        )
-
-        signal_btag = tree.jet_btag[signal_jet_ind].to_numpy()
-        excesbtag = tree.jet_btag[mixed_ind].to_numpy()
-
-        xtra_signal_features = np.sort(np.column_stack((
-            dijet1.pt.to_numpy(), 
-            dijet2.pt.to_numpy(), 
-            dijet3.pt.to_numpy())), axis=1)[:,::-1]
-
-        xtra_signal_features = np.column_stack((xtra_signal_features, dR_features))
-
-        # Concatenate pT, eta, phi, and btag score
-        signal_features = np.concatenate((
-            signal_p4.pt.to_numpy(), 
-            signal_p4.eta.to_numpy(), 
-            signal_p4.phi.to_numpy(), 
-            signal_btag, 
-            xtra_signal_features), axis=1)
-
-        assert (signal_features.shape == excess_features.shape)
-
-        nan_mask = np.isnan(signal_features).any(axis=1)
-
-        features = np.row_stack((signal_features, excess_features))
-        good_mask = ~np.isnan(features).any(axis=1)
-        self.features = features[good_mask, :]
-        targets = np.row_stack((signal_targets, excess_targets))
-        self.targets = targets[good_mask, :]
-
-        assert len(self.features) == len(self.targets)
-        assert np.isnan(self.features).sum() == 0
-
 class TrainTwo():
 
     def __init__(self, filename):
@@ -825,13 +629,12 @@ class combos():
     def __init__(self, filename, njets=7, tag6b=None, tag2b=None):
 
         self.evaluate_6b(filename, njets, tag6b)
-        # self.evaluate_2b(filename, njets, tag2b)
+        # self.evaluate_2b(filename, njets, tag2b)``
 
     def evaluate_2b(self, filename, njets, tag):
         print("Loading...")
         tree = Tree(filename, 'sixBtree', as_ak=True)
         nevents = len(tree.jet_pt)
-        ncombos = comb(njets, 2)
 
         # Arrays of indices representing the pt-ordered event
         jet_ptordered = ak.argsort(tree.jet_pt, ascending=False)
@@ -843,12 +646,12 @@ class combos():
         combos = ak.concatenate([jeti[:,:,np.newaxis] for jeti in (jet0, jet1)], axis=-1)
 
         print("Broadcasting...")
-        pt = broadcast(tree.jet_pt, ncombos)[combos].to_numpy()
-        eta = broadcast(tree.jet_eta, ncombos)[combos].to_numpy()
-        phi = broadcast(tree.jet_phi, ncombos)[combos].to_numpy()
-        m = broadcast(tree.jet_m, ncombos)[combos].to_numpy()
-        btag = broadcast(tree.jet_btag, ncombos)[combos].to_numpy()
-        idx = broadcast(tree.jet_idx, ncombos)[combos].to_numpy()
+        pt1, pt2 = ak.unzip(ak.combinations(tree.jet_pt, njets))
+        eta1, eta2 = ak.unzip(ak.combinations(tree.jet_eta, njets))
+        phi1, phi2 = ak.unzip(ak.combinations(tree.jet_phi, njets))
+        m1, m2 = ak.unzip(ak.combinations(tree.jet_m, njets))
+        btag1, btag2 = ak.unzip(ak.combinations(tree.jet_btag, njets))
+        idx1, idx2 = ak.unzip(ak.combinations(tree.jet_idx, njets))
 
         # jets = [jet0, jet1]
         # [jet0_boosted_pt, jet1_boosted_pt] = self.get_boosted_p4(tree, jets)
@@ -931,13 +734,13 @@ class combos():
         # Zip the constituents back together
         combos = ak.concatenate([jeti[:,:,np.newaxis] for jeti in (jet0, jet1, jet2, jet3, jet4, jet5)], axis=-1)
 
-        pt = broadcast(tree.jet_pt, njets)[combos].to_numpy()
+        pt1, pt2 = ak.unzip(ak.combinations(tree.jet_pt, njets))
+        eta1, eta2 = ak.unzip(ak.combinations(tree.jet_eta, njets))
+        phi1, phi2 = ak.unzip(ak.combinations(tree.jet_phi, njets))
+        m1, m2 = ak.unzip(ak.combinations(tree.jet_m, njets))
+        btag1, btag2 = ak.unzip(ak.combinations(tree.jet_btag, njets))
+        idx1, idx2 = ak.unzip(ak.combinations(tree.jet_idx, njets))
 
-        eta = broadcast(tree.jet_eta, njets)[combos].to_numpy()
-        phi = broadcast(tree.jet_phi, njets)[combos].to_numpy()
-        m = broadcast(tree.jet_m, njets)[combos].to_numpy()
-        btag = broadcast(tree.jet_btag, njets)[combos].to_numpy()
-        idx = broadcast(tree.jet_idx, njets)[combos]
         signal_mask = idx > -1
         n_signal = ak.count(idx[signal_mask], axis=2)
         n_signal = n_signal.to_numpy()
