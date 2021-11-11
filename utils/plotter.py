@@ -24,6 +24,12 @@ legend_loc = {
     'upper center' : 9,
     'center' : 10 }
 
+def makeTitle(descriptor):
+    mass_point = descriptor.split("/")[-2]
+    mX = mass_point.split('_')[-3]
+    mY = mass_point.split('_')[-1]
+    return r"$m_X=$ " + mX + r" GeV, $m_Y=$ " + mY + " GeV"
+
 def x_from_bins(bins):
     return (bins[:-1] + bins[1:])/2
 
