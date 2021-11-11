@@ -33,7 +33,7 @@ xsecMap = {
     "JetHT_Run2018C":'N/A',
     "JetHT_Run2018D":'N/A',
     
-    "NMSSM":0.3,
+    "NMSSM":0.3, # pb
     
     "QCD_Pt_15to30"    :1246000000.0,
     "QCD_Pt_30to50"    :106500000.0,
@@ -69,5 +69,5 @@ xsecMap = {
     "QCD_HT1500to2000_BGenFilter":13.61,
     "QCD_HT2000toInf_BGenFilter" :2.92,
 
-    "TTJets":831.76,
+    "TTJets":831.76, # pb
 }
