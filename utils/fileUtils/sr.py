@@ -1,15 +1,20 @@
-base = "/eos/uscms/store/user/srosenzw/analysis/SR"
+# base = "/eos/uscms/store/user/srosenzw/analysis/SR"
+# base = "/eos/uscms/store/user/srosenzw/studies"
+base = "/eos/uscms/store/user/srosenzw/DataMC/SR"
 
-NMSSM_MX_450_MY_300 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_450_MY_300_accstudies.root"
-NMSSM_MX_500_MY_300 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_500_MY_300_accstudies.root"
-NMSSM_MX_600_MY_300 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_600_MY_300_accstudies.root"
-NMSSM_MX_600_MY_400 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_600_MY_400_accstudies.root"
-NMSSM_MX_700_MY_300 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_700_MY_300_accstudies.root"
+NMSSM_MX_450_MY_300 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_450_MY_300/ntuple.root"
+NMSSM_MX_500_MY_300 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_500_MY_300/ntuple.root"
+NMSSM_MX_600_MY_300 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_600_MY_300/ntuple.root"
+NMSSM_MX_600_MY_400 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_600_MY_400/ntuple.root"
+NMSSM_MX_700_MY_300 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_700_MY_300/ntuple.root"
 NMSSM_MX_700_MY_400 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_700_MY_400/ntuple.root"
-NMSSM_MX_700_MY_400_v2 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_700_MY_400-v2/ntuple.root"
-NMSSM_MX_700_MY_500 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_700_MY_500_accstudies.root"
+NMSSM_MX_700_MY_500 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_700_MY_500/ntuple.root"
 
 NMSSM_List = [NMSSM_MX_450_MY_300,NMSSM_MX_500_MY_300,NMSSM_MX_600_MY_300,NMSSM_MX_600_MY_400,NMSSM_MX_700_MY_300,NMSSM_MX_700_MY_400,NMSSM_MX_700_MY_500]
+
+JetHT_Data_UL = f"{base}/JetHT_Data_UL/ntuple.root"
+
+# base = "/eos/uscms/store/user/srosenzw/analysis/SR"
 
 QCD_bEn_Ht_100to200   = f"{base}/QCD/QCD_bEnriched_HT100to200_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
 QCD_bEn_Ht_200to300   = f"{base}/QCD/QCD_bEnriched_HT200to300_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
