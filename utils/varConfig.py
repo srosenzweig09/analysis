@@ -1,3 +1,7 @@
+"""
+Author: Evan Koenig
+"""
+
 from . import *
 
 from attrdict import AttrDict
