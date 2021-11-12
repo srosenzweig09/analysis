@@ -16,6 +16,7 @@ Training samples are prepared such that these requirements are already imposed:
 from . import *
 from .modelUtils.load import load_model
 from .varUtils import *
+from .plotter import latexTitle
 
 # Standard library imports
 from math import comb
@@ -154,8 +155,9 @@ class Tree():
         cutflow = uproot.open(f"{filename}:h_cutflow")
         # save total number of events for scaling purposes
         total = cutflow.to_numpy()[0][0]
-        samp, xsec = next( ((key,value) for key,value in xsecMap.items() if key in filename),("unk",1) )
-        self.sample = makeTitle(filename)
+        _, xsec = next( ((key,value) for key,value in xsecMap.items() if key in filename),("unk",1) )
+        self.sample = latexTitle(filename)
+        self.mXmY = self.sample.replace('$','').replace('_','').replace('= ','_').replace(', ','_').replace(' GeV','')
         self.xsec = xsec
         self.lumi = lumiMap[year][0]
         self.scale = self.lumi*xsec/total
