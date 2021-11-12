@@ -5,7 +5,7 @@ Author: Suzanne Rosenzweig
 Classes:
 Tree - Extracts information from ROOT TTrees.
 TrainSix - Produces inputs to train the 6-jet classifier.
-
+TrainTwo - A work in progress. Produces inputs to train the 2-jet classifier.
 
 Notes:
 Training samples are prepared such that these requirements are already imposed:
@@ -14,8 +14,8 @@ Training samples are prepared such that these requirements are already imposed:
 """
 
 from . import *
-from .plotter import easy_bins
 from .modelUtils.load import load_model
+from .varUtils import *
 
 # Standard library imports
 from math import comb
@@ -23,6 +23,20 @@ import sys
 import uproot
 
 vector.register_awkward()
+
+def get_scaled_weights(list_of_arrs, bins, scale):
+    """This function is used to get weights for background events."""
+    n = np.zeros_like(bins[:-1])
+    for i,(sample, scale) in enumerate(zip(list_of_arrs, scale)):
+        try: branch = sample.to_numpy()
+        except: branch = ak.flatten(sample).to_numpy()
+        n_i, b = np.histogram(branch, bins)
+        centers = (b[1:] + b[:-1])/2
+        # print(n_i)
+        # print(scale)
+        try: n += n_i*scale
+        except: n += n_i
+    return n, b, centers
 
 def build_p4(pt, eta, phi, m):
     return vector.obj(pt=pt, eta=eta, phi=phi, m=m)
@@ -55,6 +69,49 @@ def get_6jet_p4(p4):
     boost_4 = part4.boost_p4(evt_p4)
     boost_5 = part5.boost_p4(evt_p4)
     return evt_p4, [boost_0, boost_1, boost_2, boost_3, boost_4, boost_5]
+
+class Signal():
+    def __init__(self, filename, treename='sixBtree', year=2018, training=False):
+        """
+        A class for handling TTrees.
+
+        args:
+            filename: string containing name of a single file OR a list of several files to open
+            treename: default is 'sixBtree,' which is the named TTree output from the analysis code
+
+        returns:
+            Nothing. Initializes attributes of Tree class.
+        """
+        
+        tree = uproot.open(f"{filename}:{treename}")
+        self.tree = tree
+        for k, v in tree.items():
+            setattr(self, k, v.array())
+        nevents = len(tree[k].array())
+
+        self.local_ind = ak.local_index(self.jet_pt)
+
+        try:
+            self.signal_evt_mask = ak.sum(self.jet_signalId > -1, axis=1) == 6
+            self.signal_jet_mask = self.jet_signalId[self.signal_evt_mask] > -1
+        except:
+            self.signal_evt_mask = ak.sum(self.jet_idx > -1, axis=1) == 6
+            self.signal_jet_mask = self.jet_idx[self.signal_evt_mask] > -1
+
+        if training: return
+        cutflow = uproot.open(f"{filename}:h_cutflow")
+        # save total number of events for scaling purposes
+        total = cutflow.to_numpy()[0][0]
+        samp, xsec = next( ((key,value) for key,value in xsecMap.items() if key in filename),("unk",1) )
+        self.sample = latexTitle(filename)
+        self.xsec = xsec
+        self.lumi = lumiMap[year][0]
+        self.scale = self.lumi*xsec/total
+        self.cutflow = cutflow.to_numpy()[0]*self.scale
+
+        for k, v in tree.items():
+            try: setattr(self, 'signal_' + k, v.array()[self.signal_evt_mask][self.signal_jet_mask])
+            except: continue
 
 class Tree():
     def __init__(self, filename, treename='sixBtree', year=2018, training=False):
@@ -98,16 +155,18 @@ class Tree():
         # save total number of events for scaling purposes
         total = cutflow.to_numpy()[0][0]
         samp, xsec = next( ((key,value) for key,value in xsecMap.items() if key in filename),("unk",1) )
-        self.sample = samp
+        self.sample = makeTitle(filename)
         self.xsec = xsec
         self.lumi = lumiMap[year][0]
         self.scale = self.lumi*xsec/total
-        # self.weight = self.scale*nevents
         self.cutflow = cutflow.to_numpy()[0]*self.scale
 
         for k, v in tree.items():
             try: setattr(self, 'signal_' + k, v.array()[self.signal_evt_mask][self.signal_jet_mask])
             except: continue
+
+    def get_sr_cr(self):
+        """Triple mass veto."""
 
     def multi_init(self, filelist, treename, year=2018):
         """Opens a list of files into several TTrees. Typically used for bkgd events."""
@@ -118,22 +177,26 @@ class Tree():
         nevent = []
         sample = []
         total = []
-        cutflow = np.zeros(11)
+        self.cutflow = np.zeros(11)
         for filename in filelist:
             # Open tree
             tree = uproot.open(f"{filename}:{treename}")
             # How many events in the tree?
             n = len(tree['n_jet'].array())
-            if n == 0: continue # Skip if no events
             cutflow = uproot.open(f"{filename}:h_cutflow")
             # save total number of events for scaling purposes
-            total.append(cutflow.to_numpy()[0][0])
+            samp_tot = cutflow.to_numpy()[0][0]
+            cf = cutflow.to_numpy()[0]
+            if len(cf) < 11: cf = np.append(cf, np.zeros(11-len(cf)))
+            if n == 0: continue # Skip if no events
+            total.append(samp_tot)
             nevent.append(n)
-            trees.append(tree)
             # Bkgd events must be scaled to the appropriate xs in order to compare fairly with signal yield
             samp, xsec = next( ((key,value) for key,value in xsecMap.items() if key in filename),("unk",1) )
-            sample.append(samp)
+            self.cutflow += cf[:11] * lumiMap[year][0] * xsec / samp_tot
+            trees.append(tree)
             xsecs.append(xsec)
+            sample.append(samp)
             setattr(self, samp, tree)
             for k, v in tree.items():
                 setattr(getattr(self, samp), k, v.array())
@@ -155,34 +218,27 @@ class Tree():
                 leaves.append(arr)
             setattr(self, k, leaves)
 
-    def get_branches(self, key):
-        for sample in self.sample:
-            
-            n, b = np.histogram()
-        return branches
-
-    def get_hist_weights(self, key, **kwargs):
-        for k,v in easy_bins.items():
-            if k in key: bins = v
+    def get_hist_weights(self, key, bins):
         if self.is_bkgd: 
-            n = []
-            for sample, scale in zip(self.sample, self.scale):
-                branch = ak.flatten(getattr(getattr(self, sample), key)).to_numpy()
-                n_i, b = np.histogram(branch, bins, **kwargs)
+            n = np.zeros_like(bins[:-1])
+            for i,(sample, scale) in enumerate(zip(self.sample, self.scale)):
+                try:
+                    branch = ak.flatten(getattr(getattr(self, sample), key)).to_numpy()
+                except:
+                    branch = getattr(getattr(self, sample), key).to_numpy()
+                n_i, b = np.histogram(branch, bins)
                 centers = (b[1:] + b[:-1])/2
-                n.append(n_i*scale)
-            n = np.asarray(n)
-            n = np.sum(n, axis=0)
+                n += n_i*scale
             return n, b, centers
         else: 
             branch = ak.flatten(getattr(self, key)).to_numpy()
-            n, b = np.histogram(branch, bins, **kwargs)
+            n, b = np.histogram(branch, bins)
             centers = (b[1:] + b[:-1])/2
             # n_tot = sum(n)
             # epsilon = 5e-3
             # max_bin = sum(n > epsilon*n_tot) + 1
             # new_bins = np.linspace(branch.min(), bins[max_bin], 100)
-            # n, b = np.histogram(branch, new_bins, **kwargs)
+            # n, b = np.histogram(branch, new_bins)
             # centers = (b[1:] + b[:-1])/2
         return n*self.scale, b, centers
 
@@ -256,71 +312,7 @@ class Tree():
         print(self.tree.keys())
 
     def get(self, key):
-        return self.tree[key]
-
-    def get_combos(self, n, signal=False):
-        """
-        Return a tree mask that produces all possible combinations of n jets from each event.
-        """
-        if signal: mask = self.local_ind[self.signal_evt_mask][self.signal_jet_mask]
-        else: mask = ak.local_index(self.jet_pt)
-        # Arrays of indices representing the pt-ordered event
-        local_index = ak.local_index(self.jet_pt[mask])
-        # Arrays containing indices representing all 6-jet combinations in each event
-        jet_comb = ak.combinations(local_index, n)
-        # Unzip the combinations into their constituent jets
-        jets = ak.unzip(jet_comb)
-        # Zip the constituents back together
-        self.combos = ak.concatenate([jeti[:,:,np.newaxis] for jeti in jets], axis=-1)
-
-    def get_2j_input(self):
-        pt1, pt2 = ak.unzip(ak.combinations(self.jet_pt, 2))
-        eta1, eta2 = ak.unzip(ak.combinations(self.jet_eta, 2))
-        phi1, phi2 = ak.unzip(ak.combinations(self.jet_phi, 2))
-        m1, m2 = ak.unzip(ak.combinations(self.jet_m, 2))
-        btag1, btag2 = ak.unzip(ak.combinations(self.jet_btag, 2))
-        sid1, sid2 = ak.unzip(ak.combinations(self.jet_signalId, 2))
-
-        jet1 = vector.obj(pt=pt1, eta=eta1, phi=phi1, m=m1)
-        jet2 = vector.obj(pt=pt2, eta=eta2, phi=phi2, m=m2)
-
-        dijet_pt = (jet1 + jet2).pt
-        deltaR = jet1.deltaR(jet2)
-
-        dijet_mass = (jet1 + jet2).m
-
-        n_evt = ak.count(pt1, axis=1)
-
-
-        pt1 = ak.flatten(pt1).to_numpy()
-        pt2 = ak.flatten(pt2).to_numpy()
-        eta1 = ak.flatten(eta1).to_numpy()
-        eta2 = ak.flatten(eta2).to_numpy()
-        phi1 = ak.flatten(phi1).to_numpy()
-        phi2 = ak.flatten(phi2).to_numpy()
-        btag1 = ak.flatten(btag1).to_numpy()
-        btag2 = ak.flatten(btag2).to_numpy()
-        sid1 = ak.flatten(sid1).to_numpy()
-        sid2 = ak.flatten(sid2).to_numpy()
-        HX_mask = ((sid1 == 0) & (sid2 == 1)) | ((sid2 == 0) & (sid1 == 1))
-        H1_mask = ((sid1 == 2) & (sid2 == 3)) | ((sid2 == 2) & (sid1 == 3))
-        H2_mask = ((sid1 == 4) & (sid2 == 5)) | ((sid2 == 4) & (sid1 == 5))
-        dijet_pt = ak.flatten(dijet_pt).to_numpy()
-        deltaR = ak.flatten(deltaR).to_numpy()
-
-
-        signal_mask = HX_mask | H1_mask | H2_mask
-
-        inputs = np.column_stack((pt1, pt2, eta1, eta2, phi1, phi2, btag1, btag2, dijet_pt, deltaR))
-
-        scaler, model = load_model(location='../2jet_classifier/', tag='20210817_4btag_req')
-        # scaled_inputs = scaler.transform(inputs[:,:-1])
-        # print(scaled_inputs[:,-1])
-        scaled_inputs = scaler.transform(np.column_stack((inputs[:,:-2], inputs[:,-1])))
-        # print(scaled_inputs[:,-1])
-        scores = model.predict(scaled_inputs)
-
-        return scores, dijet_mass, signal_mask, n_evt
+        return self.tree[key].array()
 
 class TrainSix():
     
