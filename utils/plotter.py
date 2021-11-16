@@ -5,7 +5,8 @@ This script works as a wrapper for 1D and 2D histograms.
 """
 
 from . import *
-from utils.useCMSstyle import *
+from .useCMSstyle import *
+from .varUtils import *
 
 import matplotlib.colors as colors
 import matplotlib.cm as cm
