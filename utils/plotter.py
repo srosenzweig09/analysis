@@ -12,6 +12,23 @@ import matplotlib.colors as colors
 import matplotlib.cm as cm
 import numpy as np
 
+import matplotlib as mpl
+mpl.rcParams['axes.formatter.limits'] = (-1,4)
+
+from matplotlib.ticker import ScalarFormatter
+
+class OOMFormatter(ScalarFormatter):
+    def __init__(self, order=0, fformat="%1.1f", offset=True, mathText=True):
+        self.oom = order
+        self.fformat = fformat
+        ScalarFormatter.__init__(self,useOffset=offset,useMathText=mathText)
+    def _set_order_of_magnitude(self):
+        self.orderOfMagnitude = self.oom
+    def _set_format(self, vmin=None, vmax=None):
+        self.format = self.fformat
+        if self._useMathText:
+            self.format = r'$\mathdefault{%s}$' % self.format
+
 file_location = '/uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_2_18/src/sixb/plots/'
 
 legend_loc = {
