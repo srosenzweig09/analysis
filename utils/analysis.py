@@ -87,17 +87,9 @@ class Signal():
         tree = uproot.open(f"{filename}:{treename}")
         self.tree = tree
         for k, v in tree.items():
-            setattr(self, k, v.array())
-        nevents = len(tree[k].array())
-
-        self.local_ind = ak.local_index(self.jet_pt)
-
-        try:
-            self.signal_evt_mask = ak.sum(self.jet_signalId > -1, axis=1) == 6
-            self.signal_jet_mask = self.jet_signalId[self.signal_evt_mask] > -1
-        except:
-            self.signal_evt_mask = ak.sum(self.jet_idx > -1, axis=1) == 6
-            self.signal_jet_mask = self.jet_idx[self.signal_evt_mask] > -1
+            if ('t6' in k) or ('score' in k): 
+                setattr(self, k, v.array())
+        self.nevents = len(tree['t6_jet_pt'].array())
 
         if training: return
         cutflow = uproot.open(f"{filename}:h_cutflow")
@@ -109,13 +101,16 @@ class Signal():
         self.lumi = lumiMap[year][0]
         self.scale = self.lumi*xsec/total
         self.cutflow = cutflow.to_numpy()[0]*self.scale
+        self.mXmY = self.sample.replace('$','').replace('_','').replace('= ','_').replace(', ','_').replace(' GeV','')
 
-        for k, v in tree.items():
-            try: setattr(self, 'signal_' + k, v.array()[self.signal_evt_mask][self.signal_jet_mask])
-            except: continue
+    def keys(self):
+        print(self.tree.keys())
+
+    def get(self, key):
+        return self.tree[key].array()
 
 class Tree():
-    def __init__(self, filename, treename='sixBtree', year=2018, training=False):
+    def __init__(self, filename, treename='sixBtree', year=2018, training=False, exploration=False):
         """
         A class for handling TTrees.
 
@@ -128,28 +123,36 @@ class Tree():
         """
 
         if type(filename) != list:
-            self.single_init(filename, treename, year, training=training)
+            self.single_init(filename, treename, year, training=training, exploration=exploration)
         else:
             self.multi_init(filename, treename, year)
 
-    def single_init(self, filename, treename, year=2018, training=False):
+    def single_init(self, filename, treename, year, training, exploration):
         """Opens a single file into a TTree"""
-        self.is_signal = True
-        self.is_bkgd = False
         tree = uproot.open(f"{filename}:{treename}")
         self.tree = tree
         for k, v in tree.items():
-            setattr(self, k, v.array())
-        nevents = len(tree[k].array())
+            if ('t6' in k) or ('score' in k): 
+                setattr(self, k, v.array())
+                used_key = k
+            if exploration and (k.startswith('jet_') or (k.startswith('gen_'))):
+                setattr(self, k, v.array())
+                used_key = k
 
-        self.local_ind = ak.local_index(self.jet_pt)
+        self.nevents = len(tree[used_key].array())
 
-        try:
-            self.signal_evt_mask = ak.sum(self.jet_signalId > -1, axis=1) == 6
-            self.signal_jet_mask = self.jet_signalId[self.signal_evt_mask] > -1
-        except:
-            self.signal_evt_mask = ak.sum(self.jet_idx > -1, axis=1) == 6
-            self.signal_jet_mask = self.jet_idx[self.signal_evt_mask] > -1
+        # for k, v in tree.items():
+        #     setattr(self, k, v.array())
+        # nevents = len(tree[k].array())
+
+        # self.local_ind = ak.local_index(self.jet_pt)
+
+        # try:
+        #     self.signal_evt_mask = ak.sum(self.jet_signalId > -1, axis=1) == 6
+        #     self.signal_jet_mask = self.jet_signalId[self.signal_evt_mask] > -1
+        # except:
+        #     self.signal_evt_mask = ak.sum(self.jet_idx > -1, axis=1) == 6
+        #     self.signal_jet_mask = self.jet_idx[self.signal_evt_mask] > -1
 
         if training: return
         cutflow = uproot.open(f"{filename}:h_cutflow")
@@ -163,9 +166,9 @@ class Tree():
         self.scale = self.lumi*xsec/total
         self.cutflow = cutflow.to_numpy()[0]*self.scale
 
-        for k, v in tree.items():
-            try: setattr(self, 'signal_' + k, v.array()[self.signal_evt_mask][self.signal_jet_mask])
-            except: continue
+        # for k, v in tree.items():
+        #     try: setattr(self, 'signal_' + k, v.array()[self.signal_evt_mask][self.signal_jet_mask])
+        #     except: continue
 
     def get_sr_cr(self):
         """Triple mass veto."""
@@ -244,71 +247,71 @@ class Tree():
             # centers = (b[1:] + b[:-1])/2
         return n*self.scale, b, centers
 
-    def get_pair_p4(self, mask=None):
-        # if signal: mask = self.jet_idx > -1
-        # else: mask = self.jet_idx == -1
-        jet1_pt, jet2_pt = ak.unzip(ak.combinations(self.jet_pt[mask], 2))
-        jet1_eta, jet2_eta = ak.unzip(ak.combinations(self.jet_eta[mask], 2))
-        jet1_phi, jet2_phi = ak.unzip(ak.combinations(self.jet_phi[mask], 2))
-        jet1_m, jet2_m = ak.unzip(ak.combinations(self.jet_m[mask], 2))
+    # def get_pair_p4(self, mask=None):
+    #     # if signal: mask = self.jet_idx > -1
+    #     # else: mask = self.jet_idx == -1
+    #     jet1_pt, jet2_pt = ak.unzip(ak.combinations(self.jet_pt[mask], 2))
+    #     jet1_eta, jet2_eta = ak.unzip(ak.combinations(self.jet_eta[mask], 2))
+    #     jet1_phi, jet2_phi = ak.unzip(ak.combinations(self.jet_phi[mask], 2))
+    #     jet1_m, jet2_m = ak.unzip(ak.combinations(self.jet_m[mask], 2))
 
-        jet1_p4 = vector.obj(
-            pt  = jet1_pt,
-            eta = jet1_eta,
-            phi = jet1_phi,
-            m   = jet1_m)
+    #     jet1_p4 = vector.obj(
+    #         pt  = jet1_pt,
+    #         eta = jet1_eta,
+    #         phi = jet1_phi,
+    #         m   = jet1_m)
 
-        jet2_p4 = vector.obj(
-            pt  = jet2_pt,
-            eta = jet2_eta,
-            phi = jet2_phi,
-            m   = jet2_m)
+    #     jet2_p4 = vector.obj(
+    #         pt  = jet2_pt,
+    #         eta = jet2_eta,
+    #         phi = jet2_phi,
+    #         m   = jet2_m)
 
-        return jet1_p4, jet2_p4
+    #     return jet1_p4, jet2_p4
 
-    def get_t6_pair_p4(self):
-        # if signal: mask = self.jet_idx > -1
-        # else: mask = self.jet_idx == -1
-        jet1_pt, jet2_pt = ak.unzip(ak.combinations(self.jet_pt[:,:6], 2))
-        jet1_eta, jet2_eta = ak.unzip(ak.combinations(self.jet_eta[:,:6], 2))
-        jet1_phi, jet2_phi = ak.unzip(ak.combinations(self.jet_phi[:,:6], 2))
-        jet1_m, jet2_m = ak.unzip(ak.combinations(self.jet_m[:,:6], 2))
-        jet1_idx, jet2_idx = ak.unzip(ak.combinations(self.jet_signalId[:,:6], 2))
-        jet12_ind = ak.combinations(ak.local_index(self.jet_pt[:,:6]),2)
-        jet1_ind, jet2_ind = ak.unzip(jet12_ind)
+    # def get_t6_pair_p4(self):
+    #     # if signal: mask = self.jet_idx > -1
+    #     # else: mask = self.jet_idx == -1
+    #     jet1_pt, jet2_pt = ak.unzip(ak.combinations(self.jet_pt[:,:6], 2))
+    #     jet1_eta, jet2_eta = ak.unzip(ak.combinations(self.jet_eta[:,:6], 2))
+    #     jet1_phi, jet2_phi = ak.unzip(ak.combinations(self.jet_phi[:,:6], 2))
+    #     jet1_m, jet2_m = ak.unzip(ak.combinations(self.jet_m[:,:6], 2))
+    #     jet1_idx, jet2_idx = ak.unzip(ak.combinations(self.jet_signalId[:,:6], 2))
+    #     jet12_ind = ak.combinations(ak.local_index(self.jet_pt[:,:6]),2)
+    #     jet1_ind, jet2_ind = ak.unzip(jet12_ind)
 
-        jet1_p4 = vector.obj(
-            pt  = jet1_pt,
-            eta = jet1_eta,
-            phi = jet1_phi,
-            m   = jet1_m)
+    #     jet1_p4 = vector.obj(
+    #         pt  = jet1_pt,
+    #         eta = jet1_eta,
+    #         phi = jet1_phi,
+    #         m   = jet1_m)
 
-        jet2_p4 = vector.obj(
-            pt  = jet2_pt,
-            eta = jet2_eta,
-            phi = jet2_phi,
-            m   = jet2_m)
+    #     jet2_p4 = vector.obj(
+    #         pt  = jet2_pt,
+    #         eta = jet2_eta,
+    #         phi = jet2_phi,
+    #         m   = jet2_m)
 
-        return jet1_p4, jet2_p4, jet1_ind, jet2_ind, jet12_ind, jet1_idx, jet2_idx
+    #     return jet1_p4, jet2_p4, jet1_ind, jet2_ind, jet12_ind, jet1_idx, jet2_idx
     
-    def p4(self, pt, eta, phi, m):
-        return vector.obj(pt=pt, eta=eta, phi=phi, m=m)
+    # def p4(self, pt, eta, phi, m):
+    #     return vector.obj(pt=pt, eta=eta, phi=phi, m=m)
 
-    def get_all_p4(self, pts, etas, phis, ms):
-        return [self.p4(pt, eta, phi, m) for pt,eta,phi,m in zip(pts,etas,phis,ms)]
+    # def get_all_p4(self, pts, etas, phis, ms):
+    #     return [self.p4(pt, eta, phi, m) for pt,eta,phi,m in zip(pts,etas,phis,ms)]
 
-    def get_six_p4(self, mask=None):
-        jet_pt = ak.unzip(ak.combinations(self.jet_pt[mask], 6))
-        jet_eta = ak.unzip(ak.combinations(self.jet_eta[mask], 6))
-        jet_phi = ak.unzip(ak.combinations(self.jet_phi[mask], 6))
-        jet_m = ak.unzip(ak.combinations(self.jet_m[mask], 6))
+    # def get_six_p4(self, mask=None):
+    #     jet_pt = ak.unzip(ak.combinations(self.jet_pt[mask], 6))
+    #     jet_eta = ak.unzip(ak.combinations(self.jet_eta[mask], 6))
+    #     jet_phi = ak.unzip(ak.combinations(self.jet_phi[mask], 6))
+    #     jet_m = ak.unzip(ak.combinations(self.jet_m[mask], 6))
 
-        return self.get_all_p4(jet_pt, jet_eta, jet_phi, jet_m)
+    #     return self.get_all_p4(jet_pt, jet_eta, jet_phi, jet_m)
 
-    def sort(self, mask):
-        for k, v in self.tree.items():
-            try: setattr(self, k, v.array()[mask])
-            except: continue
+    # def sort(self, mask):
+    #     for k, v in self.tree.items():
+    #         try: setattr(self, k, v.array()[mask])
+    #         except: continue
 
     def keys(self):
         print(self.tree.keys())
