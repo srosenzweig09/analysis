@@ -158,8 +158,25 @@ if ~args.is_signal:
         if var in tree.keys(): features[var] = tree[var].array()
         else: features[var] = vars[var]
 
+df = DataFrame(features)
 
+TF = sum(CR_hs_mask)/sum(CR_ls_mask)
+print("TF",TF)
 
+sys.exit()
+
+ls_weights = np.ones(len(df[CR_ls_mask]))*TF
+hs_weights = np.ones(len(df[CR_hs_mask]))
+
+np.random.seed(randomState) #Fix any random seed using numpy arrays
+reweighter_base = reweight.GBReweighter(
+    n_estimators=nEstimators, 
+    learning_rate=learningRate, 
+    max_depth=maxDepth, 
+    min_samples_leaf=minLeaves,
+    gb_args={'subsample': GBsubsample})
+reweighter = reweight.FoldingReweighter(reweighter_base, random_state=randomState, n_folds=2, verbose=False)
+reweighter.fit(df[CR_ls_mask],df[CR_hs_mask],ls_weights,hs_weights)
 
 sys.exit()
 
