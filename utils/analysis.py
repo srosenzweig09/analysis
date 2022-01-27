@@ -27,7 +27,7 @@ vector.register_awkward()
 
 def get_scaled_weights(list_of_arrs, bins, scale):
     """This function is used to get weights for background events."""
-    n = np.zeros_like(bins[:-1])
+    n = np.zeros_like(bins[:-1])``
     for i,(sample, scale) in enumerate(zip(list_of_arrs, scale)):
         try: branch = sample.to_numpy()
         except: branch = ak.flatten(sample).to_numpy()
@@ -110,7 +110,7 @@ class Signal():
         return self.tree[key].array()
 
 class Tree():
-    def __init__(self, filename, treename='sixBtree', year=2018, training=False, exploration=False):
+    def __init__(self, filename, treename='sixBtree', year=2018, training=False, exploration=False, signal=True):
         """
         A class for handling TTrees.
 
@@ -123,21 +123,25 @@ class Tree():
         """
 
         if type(filename) != list:
-            self.single_init(filename, treename, year, training=training, exploration=exploration)
+            self.single_init(filename, treename, year, training=training, exploration=exploration, signal=signal)
         else:
             self.multi_init(filename, treename, year)
 
-    def single_init(self, filename, treename, year, training, exploration):
+    def single_init(self, filename, treename, year, training, exploration, signal):
         """Opens a single file into a TTree"""
         tree = uproot.open(f"{filename}:{treename}")
         self.tree = tree
-        for k, v in tree.items():
-            if ('t6' in k) or ('score' in k): 
-                setattr(self, k, v.array())
-                used_key = k
-            if exploration and (k.startswith('jet_') or (k.startswith('gen_'))):
-                setattr(self, k, v.array())
-                used_key = k
+
+        if not exploration:
+            for k, v in tree.items():
+                if ('t6' in k) or ('score' in k) or ('nn' in k): 
+                    setattr(self, k, v.array())
+                    used_key = k
+        else:            
+            for k, v in tree.items():
+                if (k.startswith('jet_') or (k.startswith('gen_'))):
+                    setattr(self, k, v.array())
+                    used_key = k
 
         self.nevents = len(tree[used_key].array())
 
@@ -159,8 +163,9 @@ class Tree():
         # save total number of events for scaling purposes
         total = cutflow.to_numpy()[0][0]
         _, xsec = next( ((key,value) for key,value in xsecMap.items() if key in filename),("unk",1) )
-        self.sample = latexTitle(filename)
-        self.mXmY = self.sample.replace('$','').replace('_','').replace('= ','_').replace(', ','_').replace(' GeV','')
+        if signal: 
+            self.sample = latexTitle(filename)
+            self.mXmY = self.sample.replace('$','').replace('_','').replace('= ','_').replace(', ','_').replace(' GeV','')
         self.xsec = xsec
         self.lumi = lumiMap[year][0]
         self.scale = self.lumi*xsec/total
@@ -170,8 +175,8 @@ class Tree():
         #     try: setattr(self, 'signal_' + k, v.array()[self.signal_evt_mask][self.signal_jet_mask])
         #     except: continue
 
-    def get_sr_cr(self):
-        """Triple mass veto."""
+    # def get_sr_cr(self):
+        # """Triple mass veto."""
 
     def multi_init(self, filelist, treename, year=2018):
         """Opens a list of files into several TTrees. Typically used for bkgd events."""
@@ -247,27 +252,135 @@ class Tree():
             # centers = (b[1:] + b[:-1])/2
         return n*self.scale, b, centers
 
-    # def get_pair_p4(self, mask=None):
-    #     # if signal: mask = self.jet_idx > -1
-    #     # else: mask = self.jet_idx == -1
-    #     jet1_pt, jet2_pt = ak.unzip(ak.combinations(self.jet_pt[mask], 2))
-    #     jet1_eta, jet2_eta = ak.unzip(ak.combinations(self.jet_eta[mask], 2))
-    #     jet1_phi, jet2_phi = ak.unzip(ak.combinations(self.jet_phi[mask], 2))
-    #     jet1_m, jet2_m = ak.unzip(ak.combinations(self.jet_m[mask], 2))
+    def initialize_reco_p4(self):
+        # particles = ['gen_HX_b1','gen_HX_b2','gen_HY1_b1','gen_HY1_b2','gen_HY2_b1','gen_HY2_b2']
 
-    #     jet1_p4 = vector.obj(
-    #         pt  = jet1_pt,
-    #         eta = jet1_eta,
-    #         phi = jet1_phi,
-    #         m   = jet1_m)
+        self.HX_b1_p4 = vector.obj(
+            pt  = self.get('gen_HX_b1_recojet_pt'),
+            eta = self.get('gen_HX_b1_recojet_eta'),
+            phi = self.get('gen_HX_b1_recojet_phi'),
+            m   = self.get('gen_HX_b1_recojet_m'))
 
-    #     jet2_p4 = vector.obj(
-    #         pt  = jet2_pt,
-    #         eta = jet2_eta,
-    #         phi = jet2_phi,
-    #         m   = jet2_m)
+        self.HX_b2_p4 = vector.obj(
+            pt  = self.get('gen_HX_b2_recojet_pt'),
+            eta = self.get('gen_HX_b2_recojet_eta'),
+            phi = self.get('gen_HX_b2_recojet_phi'),
+            m   = self.get('gen_HX_b2_recojet_m'))
 
-    #     return jet1_p4, jet2_p4
+        self.HY1_b1_p4 = vector.obj(
+            pt  = self.get('gen_HY1_b1_recojet_pt'),
+            eta = self.get('gen_HY1_b1_recojet_eta'),
+            phi = self.get('gen_HY1_b1_recojet_phi'),
+            m   = self.get('gen_HY1_b1_recojet_m'))
+
+        self.HY1_b2_p4 = vector.obj(
+            pt  = self.get('gen_HY1_b2_recojet_pt'),
+            eta = self.get('gen_HY1_b2_recojet_eta'),
+            phi = self.get('gen_HY1_b2_recojet_phi'),
+            m   = self.get('gen_HY1_b2_recojet_m'))
+
+        self.HY2_b1_p4 = vector.obj(
+            pt  = self.get('gen_HY2_b1_recojet_pt'),
+            eta = self.get('gen_HY2_b1_recojet_eta'),
+            phi = self.get('gen_HY2_b1_recojet_phi'),
+            m   = self.get('gen_HY2_b1_recojet_m'))
+
+        self.HY2_b2_p4 = vector.obj(
+            pt  = self.get('gen_HY2_b2_recojet_pt'),
+            eta = self.get('gen_HY2_b2_recojet_eta'),
+            phi = self.get('gen_HY2_b2_recojet_phi'),
+            m   = self.get('gen_HY2_b2_recojet_m'))
+
+    def initialize_t6_X(self):
+        self.t6_H1 = vector.obj(
+            pt  = self.t6_higgs_pt[:,0],
+            eta = self.t6_higgs_eta[:,0],
+            phi = self.t6_higgs_phi[:,0],
+            m   = self.t6_higgs_m[:,0])
+
+        self.t6_H2 = vector.obj(
+            pt  = self.t6_higgs_pt[:,1],
+            eta = self.t6_higgs_eta[:,1],
+            phi = self.t6_higgs_phi[:,1],
+            m   = self.t6_higgs_m[:,1])
+
+        self.t6_H3 = vector.obj(
+            pt  = self.t6_higgs_pt[:,2],
+            eta = self.t6_higgs_eta[:,2],
+            phi = self.t6_higgs_phi[:,2],
+            m   = self.t6_higgs_m[:,2])
+
+        self.t6_X = self.t6_H1 + self.t6_H2 + self.t6_H3
+
+
+    def initialize_t6_X_multi(self):
+        self.t6_H1 = vector.obj(
+            pt  = self.t6_higgs_pt[:,0],
+            eta = self.t6_higgs_eta[:,0],
+            phi = self.t6_higgs_phi[:,0],
+            m   = self.t6_higgs_m[:,0])
+
+        self.t6_H2 = vector.obj(
+            pt  = self.t6_higgs_pt[:,1],
+            eta = self.t6_higgs_eta[:,1],
+            phi = self.t6_higgs_phi[:,1],
+            m   = self.t6_higgs_m[:,1])
+
+        self.t6_H3 = vector.obj(
+            pt  = self.t6_higgs_pt[:,2],
+            eta = self.t6_higgs_eta[:,2],
+            phi = self.t6_higgs_phi[:,2],
+            m   = self.t6_higgs_m[:,2])
+
+        self.t6_X = self.t6_H1 + self.t6_H2 + self.t6_H3
+
+    def initialize_t6_p4(self):
+        # particles = ['gen_HX_b1','gen_HX_b2','gen_HY1_b1','gen_HY1_b2','gen_HY2_b1','gen_HY2_b2']
+
+        higgs1_mask = self.t6_jet_higgsIdx == 0
+        Hb1_mask = ak.argsort(self.t6_jet_pt[higgs1_mask], axis=1)
+        higgs2_mask = self.t6_jet_higgsIdx == 1
+        Hb2_mask = ak.argsort(self.t6_jet_pt[higgs2_mask], axis=1)
+        higgs3_mask = self.t6_jet_higgsIdx == 2
+        Hb3_mask = ak.argsort(self.t6_jet_pt[higgs3_mask], axis=1)
+
+        self.t6_H1_b1 = vector.obj(
+            pt  = self.t6_jet_pt[higgs1_mask][Hb1_mask[:,0]],
+            eta = self.t6_jet_eta[higgs1_mask][Hb1_mask[:,0]],
+            phi = self.t6_jet_phi[higgs1_mask][Hb1_mask[:,0]],
+            m   = self.t6_jet_m[higgs1_mask][Hb1_mask[:,0]])
+
+        self.t6_H1_b2 = vector.obj(
+            pt  = self.t6_jet_pt[higgs1_mask][Hb1_mask[:,1]],
+            eta = self.t6_jet_eta[higgs1_mask][Hb1_mask[:,1]],
+            phi = self.t6_jet_phi[higgs1_mask][Hb1_mask[:,1]],
+            m   = self.t6_jet_m[higgs1_mask][Hb1_mask[:,1]])
+
+        self.t6_H2_b1 = vector.obj(
+            pt  = self.t6_jet_pt[higgs2_mask][Hb2_mask[:,0]],
+            eta = self.t6_jet_eta[higgs2_mask][Hb2_mask[:,0]],
+            phi = self.t6_jet_phi[higgs2_mask][Hb2_mask[:,0]],
+            m   = self.t6_jet_m[higgs2_mask][Hb2_mask[:,0]])
+
+        self.t6_H2_b2 = vector.obj(
+            pt  = self.t6_jet_pt[higgs2_mask][Hb2_mask[:,1]],
+            eta = self.t6_jet_eta[higgs2_mask][Hb2_mask[:,1]],
+            phi = self.t6_jet_phi[higgs2_mask][Hb2_mask[:,1]],
+            m   = self.t6_jet_m[higgs2_mask][Hb2_mask[:,1]])
+
+        self.t6_H3_b1 = vector.obj(
+            pt  = self.t6_jet_pt[higgs3_mask][Hb3_mask[:,0]],
+            eta = self.t6_jet_eta[higgs3_mask][Hb3_mask[:,0]],
+            phi = self.t6_jet_phi[higgs3_mask][Hb3_mask[:,0]],
+            m   = self.t6_jet_m[higgs3_mask][Hb3_mask[:,0]])
+
+        self.t6_H3_b2 = vector.obj(
+            pt  = self.t6_jet_pt[higgs3_mask][Hb3_mask[:,1]],
+            eta = self.t6_jet_eta[higgs3_mask][Hb3_mask[:,1]],
+            phi = self.t6_jet_phi[higgs3_mask][Hb3_mask[:,1]],
+            m   = self.t6_jet_m[higgs3_mask][Hb3_mask[:,1]])
+
+        self.t6_X = self.t6_H1_b1 + self.t6_H1_b2 + self.t6_H2_b1 + self.t6_H2_b2 + self.t6_H3_b1 + self.t6_H3_b2
 
     # def get_t6_pair_p4(self):
     #     # if signal: mask = self.jet_idx > -1
