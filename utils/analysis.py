@@ -27,7 +27,7 @@ vector.register_awkward()
 
 def get_scaled_weights(list_of_arrs, bins, scale):
     """This function is used to get weights for background events."""
-    n = np.zeros_like(bins[:-1])``
+    n = np.zeros_like(bins[:-1])
     for i,(sample, scale) in enumerate(zip(list_of_arrs, scale)):
         try: branch = sample.to_numpy()
         except: branch = ak.flatten(sample).to_numpy()
