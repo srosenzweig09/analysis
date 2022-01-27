@@ -129,7 +129,6 @@ def Hist(x, scale=1, centers=False, **kwargs):
 
     bins = kwargs['bins']
 
-    print(scale)
     if scale == 0: x_arr = x_bins(bins)
     else: 
         x_arr = x
@@ -161,7 +160,7 @@ def Hist(x, scale=1, centers=False, **kwargs):
             if 'weights' in kwargs.keys() and 'evt_weights' not in kwargs.keys():
                 weights = kwargs['weights']
                 kwargs.pop('weights')
-                n, edges, im = ax.hist(x_arr, weights=weights*scale, **kwargs)
+                n, edges, im = ax.hist(x, weights=weights*scale, **kwargs)
             elif 'weights' not in kwargs.keys() and 'evt_weights' not in kwargs.keys():
                 # try:
                     # n, e = np.histogram(x, bins)
