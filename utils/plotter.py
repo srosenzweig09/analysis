@@ -31,6 +31,7 @@ class OOMFormatter(ScalarFormatter):
 
 file_location = '/uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_2_18/src/sixb/plots/'
 
+# for informational purposes because I find myself looking this up often lol
 legend_loc = {
     'best': 0,
     'upper right': 1,
@@ -63,22 +64,32 @@ def change_cmap_bkg_to_white(colormap, n=256):
     return newcmp
 
 
-def Hist2d(x, y, bins, **kwargs):
+def Hist2d(x, y, bins, log=False, density=False, **kwargs):
     if 'ax' in kwargs.keys():
         ax = kwargs['ax']
     else:
         fig, ax = plt.subplots(figsize=(10, 6))
-    cmap = change_cmap_bkg_to_white('rainbow')
+        
+    if 'cmap' in kwargs.keys():
+        cmap = kwargs['cmap']
+        kwargs.pop('cmap')
+    else: cmap = change_cmap_bkg_to_white('rainbow')
+
     if not isinstance(x, np.ndarray):
         x = x.to_numpy()
     if not isinstance(y, np.ndarray):
         y = y.to_numpy()
-    try:
+
+    if log:
         n, xe, ye, im = ax.hist2d(
             x, y, bins=bins, norm=colors.LogNorm(), cmap=cmap)
-    except:
-        n, xe, ye, im = ax.hist2d(x.to_numpy(), y.to_numpy(
-        ), bins=bins, norm=colors.LogNorm(), cmap=cmap)
+    elif density:
+        n, xe, ye, im = ax.hist2d(
+            x, y, bins=bins, norm=colors.Normalize(), cmap=cmap, vmin=0, vmax=1)
+    else:
+        n, xe, ye, im = ax.hist2d(
+            x, y, bins=bins, cmap=cmap)
+
     return n, xe, ye, im
 
 
@@ -117,7 +128,12 @@ def Hist(x, scale=1, centers=False, **kwargs):
             kwargs[k] = v
 
     bins = kwargs['bins']
-    x_arr = x_bins(bins)
+
+    print(scale)
+    if scale == 0: x_arr = x_bins(bins)
+    else: 
+        x_arr = x
+        scale = 1
 
     if isinstance(x, list):
         # this handles background events, which are provided as a list of arrays
@@ -139,17 +155,25 @@ def Hist(x, scale=1, centers=False, **kwargs):
                     if 'weights' in kwargs.keys():
                         kwargs.pop('weights')
                 n, edges, im = ax.hist(x=x_arr, weights=n/n.sum(), **kwargs)
+                ax.yaxis.set_major_formatter(OOMFormatter(-2, "%2.0f"))
+                ax.ticklabel_format(axis='y', style='sci', scilimits=(-2,4))
         else:
-            if 'weights' in kwargs.keys():
+            if 'weights' in kwargs.keys() and 'evt_weights' not in kwargs.keys():
                 weights = kwargs['weights']
                 kwargs.pop('weights')
                 n, edges, im = ax.hist(x_arr, weights=weights*scale, **kwargs)
+            elif 'weights' not in kwargs.keys() and 'evt_weights' not in kwargs.keys():
+                # try:
+                    # n, e = np.histogram(x, bins)
+                # except:
+                    # n, e = np.histogram(x.to_numpy(), bins)
+                n, edges, im = ax.hist(x_arr, **kwargs)
             else:
-                try:
-                    n, e = np.histogram(x, bins)
-                except:
-                    n, e = np.histogram(x.to_numpy(), bins)
-                n, edges, im = ax.hist(x_arr, weights=n*scale, **kwargs)
+                weights = kwargs['evt_weights']
+                kwargs.pop('evt_weights')
+                print(weights)
+                n, edges, im = ax.hist(x, weights=weights, **kwargs)
+                print(n)
     if 'label' in kwargs:
         ax.legend()
     if return_ax:
