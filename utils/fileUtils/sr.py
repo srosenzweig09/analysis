@@ -1,24 +1,31 @@
 studies = "/eos/uscms/store/user/srosenzw/studies"
-NMSSM_MX_450_MY_300_studies = f"{studies}/NMSSM/NMSSM_XYH_YToHH_6b_MX_450_MY_300/ntuple.root"
-NMSSM_MX_500_MY_300_studies = f"{studies}/NMSSM/NMSSM_XYH_YToHH_6b_MX_500_MY_300/ntuple.root"
-NMSSM_MX_600_MY_300_studies = f"{studies}/NMSSM/NMSSM_XYH_YToHH_6b_MX_600_MY_300/ntuple.root"
-NMSSM_MX_600_MY_400_studies = f"{studies}/NMSSM/NMSSM_XYH_YToHH_6b_MX_600_MY_400/ntuple.root"
-NMSSM_MX_700_MY_300_studies = f"{studies}/NMSSM/NMSSM_XYH_YToHH_6b_MX_700_MY_300/ntuple.root"
-NMSSM_MX_700_MY_400_studies = f"{studies}/NMSSM/NMSSM_XYH_YToHH_6b_MX_700_MY_400/ntuple.root"
-NMSSM_MX_700_MY_500_studies = f"{studies}/NMSSM/NMSSM_XYH_YToHH_6b_MX_700_MY_500/ntuple.root"
+# tag = ""
+tag = "_nocuts"
+NMSSM_MX_450_MY_300_studies = f"{studies}/NMSSM{tag}/NMSSM_XYH_YToHH_6b_MX_450_MY_300/ntuple.root"
+NMSSM_MX_500_MY_300_studies = f"{studies}/NMSSM{tag}/NMSSM_XYH_YToHH_6b_MX_500_MY_300/ntuple.root"
+NMSSM_MX_600_MY_300_studies = f"{studies}/NMSSM{tag}/NMSSM_XYH_YToHH_6b_MX_600_MY_300/ntuple.root"
+NMSSM_MX_600_MY_400_studies = f"{studies}/NMSSM{tag}/NMSSM_XYH_YToHH_6b_MX_600_MY_400/ntuple.root"
+NMSSM_MX_700_MY_300_studies = f"{studies}/NMSSM{tag}/NMSSM_XYH_YToHH_6b_MX_700_MY_300/ntuple.root"
+NMSSM_MX_700_MY_400_studies = f"{studies}/NMSSM{tag}/NMSSM_XYH_YToHH_6b_MX_700_MY_400/ntuple.root"
+# NMSSM_MX_700_MY_400_studies = f"{studies}/NMSSM{tag}/NMSSM_XYH_YToHH_6b_MX_700_MY_400_10M/ntuple.root"
+NMSSM_MX_700_MY_500_studies = f"{studies}/NMSSM{tag}/NMSSM_XYH_YToHH_6b_MX_700_MY_500/ntuple.root"
 NMSSM_List_studies = [NMSSM_MX_450_MY_300_studies,NMSSM_MX_500_MY_300_studies,NMSSM_MX_600_MY_300_studies,NMSSM_MX_600_MY_400_studies,NMSSM_MX_700_MY_300_studies,NMSSM_MX_700_MY_400_studies,NMSSM_MX_700_MY_500_studies]
 
 # base = "/eos/uscms/store/user/srosenzw/analysis/SR"
-base = "/eos/uscms/store/user/srosenzw/DataMC/SR"
+base = "/eos/uscms/store/user/srosenzw/analysis"
+# base = "/eos/uscms/store/user/srosenzw/DataMC/SR"
 NMSSM_MX_450_MY_300 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_450_MY_300/ntuple.root"
 NMSSM_MX_500_MY_300 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_500_MY_300/ntuple.root"
 NMSSM_MX_600_MY_300 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_600_MY_300/ntuple.root"
 NMSSM_MX_600_MY_400 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_600_MY_400/ntuple.root"
 NMSSM_MX_700_MY_300 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_700_MY_300/ntuple.root"
 NMSSM_MX_700_MY_400 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_700_MY_400/ntuple.root"
+# NMSSM_MX_700_MY_400 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_700_MY_400_10M/ntuple.root"
 NMSSM_MX_700_MY_500 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_700_MY_500/ntuple.root"
 
 NMSSM_List = [NMSSM_MX_450_MY_300,NMSSM_MX_500_MY_300,NMSSM_MX_600_MY_300,NMSSM_MX_600_MY_400,NMSSM_MX_700_MY_300,NMSSM_MX_700_MY_400,NMSSM_MX_700_MY_500]
+
+btag_sorted = f"{base}/NMSSM_btag_sort/NMSSM_XYH_YToHH_6b_MX_700_MY_400/ntuple.root"
 
 JetHT_Data_UL = f"{base}/JetHT_Data_UL/ntuple.root"
 
