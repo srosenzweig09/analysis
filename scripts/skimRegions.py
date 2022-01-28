@@ -1,6 +1,7 @@
 print("[INFO] .. starting program")
 
 from argparse import ArgumentParser
+from array import array
 import ast
 import awkward as ak
 from configparser import ConfigParser
@@ -9,6 +10,7 @@ import itertools
 import matplotlib.pyplot as plt
 import numpy as np
 from pandas import DataFrame
+import ROOT
 import sys
 import uproot
 # https://pypi.org/project/uproot-tree-utils/
@@ -166,6 +168,8 @@ df_cr_hs = DataFrame(create_dict(CR_hs_mask))
 df_vr_ls = DataFrame(create_dict(VR_ls_mask))
 df_vr_hs = DataFrame(create_dict(VR_hs_mask))
 
+df_sr_ls = DataFrame(create_dict(SR_ls_mask))
+
 TF = sum(CR_hs_mask)/sum(CR_ls_mask)
 print("TF",TF)
 
@@ -196,18 +200,26 @@ nbins = 60
 mBins = np.linspace(0,2000,nbins)
 
 fig, ax = plt.subplots()
-n_dat_SRls = np.histogram(tree['X_m'].array(library='np')[VR_ls_mask], bins=mBins)
+n_dat_VRls, _ = np.histogram(tree['X_m'].array(library='np')[VR_ls_mask], bins=mBins)
 print(len(tree['X_m'].array(library='np')[VR_ls_mask]))
 print(len(weights_pred))
-n_dat_SRls_transformed, e = Hist(tree['X_m'].array(library='np')[VR_ls_mask], weights=weights_pred, bins=mBins, ax=ax)
-n_dat_SRls_transformed, e = Hist(tree['X_m'].array(library='np')[VR_hs_mask], bins=mBins, ax=ax)
-plt.show()
-sys.exit()
+n_dat_VRls_transformed, e = Hist(tree['X_m'].array(library='np')[VR_ls_mask], weights=weights_pred, bins=mBins, ax=ax, label='Estimation')
+n_dat_VRhs, e = Hist(tree['X_m'].array(library='np')[VR_hs_mask], bins=mBins, ax=ax, label='Target')
+ax.set_xlabel(r"$m_X$ [GeV]")
+ax.set_ylabel("Events")
+ax.set_title("BDT Estimation of Data Yield in Validation Region")
+fig.savefig("combine/data_BDT_VR.pdf", bbox_inches='tight')
 
-n_sig_SRhs = np.histogram(sigtree['X_m'].array(library='np')[SR_hs_mask], bins=mBins)
+n_sig_SRhs, _ = np.histogram(sigtree['X_m'].array(library='np')[sig_SR_mask], bins=mBins)
 
 ### ------------------------------------------------------------------------------------
 ## add branches and prepare to save
+
+weights_pred = reweighter.predict_weights(df_sr_ls,np.ones(ak.sum(SR_ls_mask))*TF,lambda x: np.mean(x, axis=0))
+n_dat_SRls, _ = np.histogram(tree['X_m'].array(library='np')[SR_ls_mask], bins=mBins)
+print(len(tree['X_m'].array(library='np')[SR_ls_mask]))
+print(len(weights_pred))
+n_dat_SRls_transformed, e = Hist(tree['X_m'].array(library='np')[SR_ls_mask], weights=weights_pred, bins=mBins, ax=ax, label='Estimation')
 
 canvas = ROOT.TCanvas('c1','c1', 600, 600)
 canvas.SetFrameLineWidth(3)
@@ -219,8 +231,12 @@ for i,(bin_sig,bin_dat) in enumerate(zip(n_sig_SRhs, n_dat_SRls_transformed)):
     h_dat.SetBinContent(i+1, bin_dat)
     h_sig.SetBinContent(i+1, bin_sig)
 
-h_dat.Draw("hist")
-h_sig.Draw("hist same")
+h_sig.Draw("hist")
+h_dat.Draw("hist same")
+
+h_dat.SetLineColor(1)
+h_sig.SetLineColor(ROOT.kBlue + 1)
+
 canvas.Draw()
 
 ROOT.gStyle.SetOptStat(0)
@@ -233,10 +249,10 @@ leg.AddEntry(h_sig, "Signal", "l")
 leg.Draw()
 
 # canvas.Print(f"plots/{sigTree.mXmY}_SR.pdf)","Title:Signal Region");
-canvas.Print(f"../combine/root_hist.pdf)","Title:Signal Region");
+canvas.Print(f"combine/root_hist.pdf)","Title:Signal Region");
 
 # fout = ROOT.TFile("mass_info/{sigTree.mXmY}_mX.root","recreate")
-fout = ROOT.TFile("../combine/shapes.root","recreate")
+fout = ROOT.TFile("combine/shapes.root","recreate")
 fout.cd()
 h_dat.Write()
 h_sig.Write()
