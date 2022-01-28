@@ -4,10 +4,12 @@ Author: Suzanne Rosenzweig
 This script works as a wrapper for 1D and 2D histograms.
 """
 
+from tkinter import Y
 from . import *
 from .useCMSstyle import *
 from .varUtils import *
 
+from awkward.highlevel import Array
 import matplotlib.colors as colors
 import matplotlib.cm as cm
 import numpy as np
@@ -75,10 +77,8 @@ def Hist2d(x, y, bins, log=False, density=False, **kwargs):
         kwargs.pop('cmap')
     else: cmap = change_cmap_bkg_to_white('rainbow')
 
-    if not isinstance(x, np.ndarray):
-        x = x.to_numpy()
-    if not isinstance(y, np.ndarray):
-        y = y.to_numpy()
+    if isinstance(x, Array): x = x.to_numpy()
+    if isinstance(y, Array): y = y.to_numpy()
 
     if log:
         n, xe, ye, im = ax.hist2d(
@@ -106,21 +106,16 @@ plot_dict = {
 }
 
 
-def Hist(x, scale=1, centers=False, **kwargs):
+def Hist(x, scale=1, legend_loc='best', weights=None, density=False, ax=None, **kwargs):
     """
     This function is a wrapper for matplotlib.pyplot.hist that allows me to generate histograms quickly and consistently.
     It also helps deal with background trees, which are typically given as lists of samples.
     """
-    # if (scale == 1) & scale_warn: print("Setting scale=1. Was this intentional?")
 
-    # make fig, ax if not provided as arguments
-    if 'ax' not in kwargs:
-        fig, ax = plt.subplots()
-        return_ax = True
-    else:
-        ax = kwargs['ax']
-        kwargs.pop('ax')
-        return_ax = False
+    # convert array to numpy if it is an awkward array
+    if isinstance(x, Array): x = x.to_numpy()
+    if ax is None: fig, ax = plt.subplots()
+    if weights is None: weights = np.ones_like(x)
 
     # set default values for histogramming
     for k, v in plot_dict.items():
@@ -128,60 +123,38 @@ def Hist(x, scale=1, centers=False, **kwargs):
             kwargs[k] = v
 
     bins = kwargs['bins']
-
-    if scale == 0: x_arr = x_bins(bins)
+    if len(weights) == len(bins)-1: 
+        use_weights = True
+        x_arr = x_bins(bins)
     else: 
+        use_weights = True
         x_arr = x
-        scale = 1
 
     if isinstance(x, list):
         # this handles background events, which are provided as a list of arrays
-        n = np.zeros_like(bins[:-1])
+        n = np.zeros_like(x_arr)
         for bkg_kin, scale in zip(x, scale):
             n_temp, e = np.histogram(bkg_kin.to_numpy(), bins=bins)
             n += n_temp*scale
+            if density: n = n/n.sum()
         n, edges, im = ax.hist(x=x_bins(bins), weights=n, **kwargs)
+        return n, edges
+    
+    if density:
+        n, edges = np.histogram(x, bins=bins)
+        n, edges, im = ax.hist(x_arr, weights=n/n.sum(), **kwargs)
+        ax.yaxis.set_major_formatter(OOMFormatter(-2, "%2.0f"))
+        ax.ticklabel_format(axis='y', style='sci', scilimits=(-2,4))
+        return n, edges
+
+    if use_weights:
+        n, edges, im = ax.hist(x_arr, weights=weights*scale, **kwargs)
     else:
-        if 'density' in kwargs.keys():
-            if kwargs['density'] == 1:
-                kwargs.pop('density')
-                try:
-                    n, e = np.histogram(x, bins)
-                    n = n * scale
-                except:
-                    n, e = np.histogram(x.to_numpy(), bins)
-                    n = n * scale
-                    if 'weights' in kwargs.keys():
-                        kwargs.pop('weights')
-                n, edges, im = ax.hist(x=x_arr, weights=n/n.sum(), **kwargs)
-                ax.yaxis.set_major_formatter(OOMFormatter(-2, "%2.0f"))
-                ax.ticklabel_format(axis='y', style='sci', scilimits=(-2,4))
-        else:
-            if 'weights' in kwargs.keys() and 'evt_weights' not in kwargs.keys():
-                weights = kwargs['weights']
-                kwargs.pop('weights')
-                n, edges, im = ax.hist(x, weights=weights*scale, **kwargs)
-            elif 'weights' not in kwargs.keys() and 'evt_weights' not in kwargs.keys():
-                # try:
-                    # n, e = np.histogram(x, bins)
-                # except:
-                    # n, e = np.histogram(x.to_numpy(), bins)
-                n, edges, im = ax.hist(x_arr, **kwargs)
-            else:
-                weights = kwargs['evt_weights']
-                kwargs.pop('evt_weights')
-                print(weights)
-                n, edges, im = ax.hist(x, weights=weights, **kwargs)
-                print(n)
-    if 'label' in kwargs:
+        n, edges, im = ax.hist(x_arr, **kwargs)
+
+    if 'label' in kwargs.keys():
         ax.legend()
-    if return_ax:
-        if centers:
-            return ax, n, edges, x_arr
-        else:
-            return ax, n, edges
-    else:
-        if centers:
-            return n, edges, x_arr
-        else:
-            return n, edges
+        # handles, labels = ax.get_legend_handles_labels()
+        # ax.legend(bbox_to_anchor= (1.02, 0.6))
+    
+    return n, edges
