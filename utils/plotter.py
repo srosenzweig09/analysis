@@ -111,24 +111,18 @@ def Hist(x, scale=1, legend_loc='best', weights=None, density=False, ax=None, **
     This function is a wrapper for matplotlib.pyplot.hist that allows me to generate histograms quickly and consistently.
     It also helps deal with background trees, which are typically given as lists of samples.
     """
+    bins = kwargs['bins']
+    x_arr = x_bins(bins)
 
     # convert array to numpy if it is an awkward array
     if isinstance(x, Array): x = x.to_numpy()
     if ax is None: fig, ax = plt.subplots()
-    if weights is None: weights = np.ones_like(x)
+    if weights is None: weights = np.ones_like(x_arr)
 
     # set default values for histogramming
     for k, v in plot_dict.items():
         if k not in kwargs:
             kwargs[k] = v
-
-    bins = kwargs['bins']
-    if len(weights) == len(bins)-1: 
-        use_weights = True
-        x_arr = x_bins(bins)
-    else: 
-        use_weights = True
-        x_arr = x
 
     if isinstance(x, list):
         # this handles background events, which are provided as a list of arrays
@@ -147,10 +141,12 @@ def Hist(x, scale=1, legend_loc='best', weights=None, density=False, ax=None, **
         ax.ticklabel_format(axis='y', style='sci', scilimits=(-2,4))
         return n, edges
 
-    if use_weights:
+    if scale != 1:
         n, edges, im = ax.hist(x_arr, weights=weights*scale, **kwargs)
+    if np.array_equal(weights, np.ones_like(x_arr)):
+        n, edges, im = ax.hist(x, **kwargs)
     else:
-        n, edges, im = ax.hist(x_arr, **kwargs)
+        n, edges, im = ax.hist(x, weights=weights, **kwargs)
 
     if 'label' in kwargs.keys():
         ax.legend()
