@@ -26,8 +26,8 @@ print(".. parsing command line arguments")
 parser = ArgumentParser(description='Command line parser of model options and tags')
 
 parser.add_argument('--cfg',    dest='cfg',    help='config file', required=True)
-parser.add_argument('--signal', dest='signal', help='signal file', required=True)
-parser.add_argument('--data' ,  dest='data',   help='data file',   required=True)
+parser.add_argument('--signal', dest='signal', help='signal file')
+parser.add_argument('--data' ,  dest='data',   help='data file')
 # parser.add_argument('--output', dest='output', help='output file', required=True)
 
 args = parser.parse_args()
@@ -41,6 +41,8 @@ config = ConfigParser()
 config.optionxform = str
 config.read(args.cfg)
 
+signal = config['file']['signal']
+data = config['file']['data']
 treename = config['file']['tree']
 
 maxSR = float(config['mass']['maxSR'])
@@ -102,8 +104,10 @@ def get_regions(filename, treename, is_signal):
 
     return tree, CR_ls_mask, CR_hs_mask, VR_ls_mask, VR_hs_mask, SR_ls_mask
 
-sigtree, sig_SR_mask = get_regions(args.signal, treename, is_signal=True)
-tree, CR_ls_mask, CR_hs_mask, VR_ls_mask, VR_hs_mask, SR_ls_mask = get_regions(args.data, treename, is_signal=False)
+base = 'root://cmseos.fnal.gov/'
+
+sigtree, sig_SR_mask = get_regions(base + args.signal, treename, is_signal=True)
+tree, CR_ls_mask, CR_hs_mask, VR_ls_mask, VR_hs_mask, SR_ls_mask = get_regions(base + args.data, treename, is_signal=False)
 
 ### ------------------------------------------------------------------------------------
 ## train BDT
@@ -201,8 +205,7 @@ mBins = np.linspace(0,2000,nbins)
 
 fig, ax = plt.subplots()
 n_dat_VRls, _ = np.histogram(tree['X_m'].array(library='np')[VR_ls_mask], bins=mBins)
-print(len(tree['X_m'].array(library='np')[VR_ls_mask]))
-print(len(weights_pred))
+
 n_dat_VRls_transformed, e = Hist(tree['X_m'].array(library='np')[VR_ls_mask], weights=weights_pred, bins=mBins, ax=ax, label='Estimation')
 n_dat_VRhs, e = Hist(tree['X_m'].array(library='np')[VR_hs_mask], bins=mBins, ax=ax, label='Target')
 ax.set_xlabel(r"$m_X$ [GeV]")
@@ -217,8 +220,7 @@ n_sig_SRhs, _ = np.histogram(sigtree['X_m'].array(library='np')[sig_SR_mask], bi
 
 weights_pred = reweighter.predict_weights(df_sr_ls,np.ones(ak.sum(SR_ls_mask))*TF,lambda x: np.mean(x, axis=0))
 n_dat_SRls, _ = np.histogram(tree['X_m'].array(library='np')[SR_ls_mask], bins=mBins)
-print(len(tree['X_m'].array(library='np')[SR_ls_mask]))
-print(len(weights_pred))
+
 n_dat_SRls_transformed, e = Hist(tree['X_m'].array(library='np')[SR_ls_mask], weights=weights_pred, bins=mBins, ax=ax, label='Estimation')
 
 canvas = ROOT.TCanvas('c1','c1', 600, 600)
