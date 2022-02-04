@@ -1,7 +1,7 @@
 import matplotlib as mpl
 
 Mine = {
-    "font.sans-serif": ["Helvetica", "Arial"],
+    "font.sans-serif": ["DejaVu Sans"],
     "font.family": "sans-serif",
     "font.family": "serif",
     "font.size": 22,
@@ -60,15 +60,15 @@ Mine = {
 }
 
 CMS = {
-    "font.sans-serif": ["Helvetica", "Arial"],
+    "font.sans-serif": ["DejaVu Sans"],
     "font.family": "sans-serif",
     "mathtext.fontset": "custom",
-    "mathtext.rm": "Helvetica",
-    "mathtext.bf": "Helvetica:bold",
-    "mathtext.sf": "Helvetica",
-    "mathtext.it": "Helvetica:italic",
-    "mathtext.tt": "Helvetica",
-    "mathtext.cal": "Helvetica",
+    # "mathtext.rm": "Helvetica",
+    # "mathtext.bf": "Helvetica:bold",
+    # "mathtext.sf": "Helvetica",
+    # "mathtext.it": "Helvetica:italic",
+    # "mathtext.tt": "Helvetica",
+    # "mathtext.cal": "Helvetica",
     "mathtext.default": "regular",
     "figure.figsize": (10.0, 10.0),
     "font.size": 26,
