@@ -10,12 +10,14 @@ import itertools
 import matplotlib.pyplot as plt
 import numpy as np
 from pandas import DataFrame
+import re
 import ROOT
 import sys
 import uproot
 # https://pypi.org/project/uproot-tree-utils/
 from uproot_tree_utils import clone_tree
 from utils.plotter import Hist
+from utils.xsecUtils import lumiMap, xsecMap
 import vector
 
 ### ------------------------------------------------------------------------------------
@@ -26,8 +28,8 @@ print(".. parsing command line arguments")
 parser = ArgumentParser(description='Command line parser of model options and tags')
 
 parser.add_argument('--cfg',    dest='cfg',    help='config file', required=True)
-parser.add_argument('--signal', dest='signal', help='signal file')
-parser.add_argument('--data' ,  dest='data',   help='data file')
+# parser.add_argument('--signal', dest='signal', help='signal file')
+# parser.add_argument('--data' ,  dest='data',   help='data file')
 # parser.add_argument('--output', dest='output', help='output file', required=True)
 
 args = parser.parse_args()
@@ -44,6 +46,15 @@ config.read(args.cfg)
 signal = config['file']['signal']
 data = config['file']['data']
 treename = config['file']['tree']
+year = int(config['file']['year'])
+
+# Assumptions here:
+# Signal file is saved in an NMSSM folder with the following format:
+# /NMSSM/NMSSM_XYH_YToHH_6b_MX_700_MY_400
+# Most importantly, we are looking for the NMSSM_XYH string and the /ntuple.root string
+start = re.search('NMSSM_XYH',signal).start()
+end = re.search('/ntuple.root',signal).start()
+outputFile = f"{signal[start:end]}"
 
 maxSR = float(config['mass']['maxSR'])
 maxVR = float(config['mass']['maxVR'])
@@ -89,7 +100,13 @@ def get_regions(filename, treename, is_signal):
     SR_mask = (abs(HX_m - mH) <= maxSR) & (abs(HY1_m - mH) <= maxSR) & (abs(HY2_m - mH) <= maxSR)
 
     SR_hs_mask = SR_mask & high_btag_mask
-    if is_signal: return tree, SR_hs_mask
+    if is_signal: 
+        cutflow = uproot.open(f"{filename}:h_cutflow")
+        total = cutflow.to_numpy()[0][0]
+        lumi = lumiMap[year][0]
+        xsec = xsecMap['NMSSM']
+        scale = lumi * xsec / total
+        return tree, SR_hs_mask, scale
 
     VR_mask = (abs(HX_m - mH) <= maxVR) & (abs(HY1_m - mH) <= maxVR) & (abs(HY2_m - mH) <= maxVR) & (abs(HX_m - mH) > maxSR) & (abs(HY1_m - mH) > maxSR) & (abs(HY2_m - mH) > maxSR)
     CR_mask = (abs(HX_m - mH) <= maxCR) & (abs(HY1_m - mH) <= maxCR) & (abs(HY2_m - mH) <= maxCR) & (abs(HX_m - mH) > maxVR) & (abs(HY1_m - mH) > maxVR) & (abs(HY2_m - mH) > maxVR)
@@ -102,12 +119,14 @@ def get_regions(filename, treename, is_signal):
 
     SR_ls_mask = SR_mask & low_btag_mask
 
-    return tree, CR_ls_mask, CR_hs_mask, VR_ls_mask, VR_hs_mask, SR_ls_mask
+    return tree, CR_ls_mask, CR_hs_mask, VR_ls_mask, VR_hs_mask, SR_ls_mask, SR_hs_mask
 
 base = 'root://cmseos.fnal.gov/'
 
-sigtree, sig_SR_mask = get_regions(base + args.signal, treename, is_signal=True)
-tree, CR_ls_mask, CR_hs_mask, VR_ls_mask, VR_hs_mask, SR_ls_mask = get_regions(base + args.data, treename, is_signal=False)
+sigtree, sig_SR_mask, scale = get_regions(base + signal, treename, is_signal=True)
+tree, CR_ls_mask, CR_hs_mask, VR_ls_mask, VR_hs_mask, SR_ls_mask, SR_hs_mask = get_regions(base + data, treename, is_signal=False)
+
+print("N(data,SR) =",sum(SR_hs_mask))
 
 ### ------------------------------------------------------------------------------------
 ## train BDT
@@ -153,11 +172,22 @@ HY2_b2 = build_p4(
     tree['HY2_b2_m'].array()
 )
 
+HX = HX_b1 + HX_b2
+HY1 = HY1_b1 + HY1_b2
+HY2 = HY2_b1 + HY2_b2
+
 HX_dr = HX_b1.deltaR(HX_b2)
 HY1_dr = HY1_b1.deltaR(HY1_b2)
 HY2_dr = HY2_b1.deltaR(HY2_b2)
 
-vars = {'HX_dr':HX_dr, 'HY1_dr':HY1_dr, 'HY2_dr':HY2_dr}
+HX_HY1_dEta = HX.deltaeta(HY1)
+HY1_HY2_dEta = HY1.deltaeta(HY2)
+HY2_HX_dEta = HY2.deltaeta(HX)
+
+vars = {
+    'HX_dr':HX_dr, 'HY1_dr':HY1_dr, 'HY2_dr':HY2_dr, 
+    'HX_HY1_dEta':HX_HY1_dEta, 'HY1_HY2_dEta':HY1_HY2_dEta, 'HY2_HX_dEta':HY2_HX_dEta
+    }
 
 def create_dict(mask):
     features = {}
@@ -211,9 +241,10 @@ n_dat_VRhs, e = Hist(tree['X_m'].array(library='np')[VR_hs_mask], bins=mBins, ax
 ax.set_xlabel(r"$m_X$ [GeV]")
 ax.set_ylabel("Events")
 ax.set_title("BDT Estimation of Data Yield in Validation Region")
-fig.savefig("combine/data_BDT_VR.pdf", bbox_inches='tight')
+fig.savefig(f"combine/{outputFile}.pdf", bbox_inches='tight')
 
 n_sig_SRhs, _ = np.histogram(sigtree['X_m'].array(library='np')[sig_SR_mask], bins=mBins)
+n_sig_SRhs = n_sig_SRhs * scale
 
 ### ------------------------------------------------------------------------------------
 ## add branches and prepare to save
@@ -222,6 +253,8 @@ weights_pred = reweighter.predict_weights(df_sr_ls,np.ones(ak.sum(SR_ls_mask))*T
 n_dat_SRls, _ = np.histogram(tree['X_m'].array(library='np')[SR_ls_mask], bins=mBins)
 
 n_dat_SRls_transformed, e = Hist(tree['X_m'].array(library='np')[SR_ls_mask], weights=weights_pred, bins=mBins, ax=ax, label='Estimation')
+
+print("N(data,SR,est) =",n_dat_SRls_transformed.sum())
 
 canvas = ROOT.TCanvas('c1','c1', 600, 600)
 canvas.SetFrameLineWidth(3)
@@ -251,10 +284,10 @@ leg.AddEntry(h_sig, "Signal", "l")
 leg.Draw()
 
 # canvas.Print(f"plots/{sigTree.mXmY}_SR.pdf)","Title:Signal Region");
-canvas.Print(f"combine/root_hist.pdf)","Title:Signal Region");
+canvas.Print(f"combine/{outputFile}.pdf)","Title:Signal Region");
 
 # fout = ROOT.TFile("mass_info/{sigTree.mXmY}_mX.root","recreate")
-fout = ROOT.TFile("combine/shapes.root","recreate")
+fout = ROOT.TFile(f"combine/{outputFile}.root","recreate")
 fout.cd()
 h_dat.Write()
 h_sig.Write()
