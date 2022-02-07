@@ -1,32 +1,22 @@
-studies = "/eos/uscms/store/user/srosenzw/sixb/studies"
-tag = "_nocuts"
-NMSSM_MX_450_MY_300_studies = f"{studies}/NMSSM{tag}/NMSSM_XYH_YToHH_6b_MX_450_MY_300/ntuple.root"
-NMSSM_MX_500_MY_300_studies = f"{studies}/NMSSM{tag}/NMSSM_XYH_YToHH_6b_MX_500_MY_300/ntuple.root"
-NMSSM_MX_600_MY_300_studies = f"{studies}/NMSSM{tag}/NMSSM_XYH_YToHH_6b_MX_600_MY_300/ntuple.root"
-NMSSM_MX_600_MY_400_studies = f"{studies}/NMSSM{tag}/NMSSM_XYH_YToHH_6b_MX_600_MY_400/ntuple.root"
-NMSSM_MX_700_MY_300_studies = f"{studies}/NMSSM{tag}/NMSSM_XYH_YToHH_6b_MX_700_MY_300/ntuple.root"
-NMSSM_MX_700_MY_400_studies = f"{studies}/NMSSM{tag}/NMSSM_XYH_YToHH_6b_MX_700_MY_400/ntuple.root"
-# NMSSM_MX_700_MY_400_studies = f"{studies}/NMSSM{tag}/NMSSM_XYH_YToHH_6b_MX_700_MY_400_10M/ntuple.root"
-NMSSM_MX_700_MY_500_studies = f"{studies}/NMSSM{tag}/NMSSM_XYH_YToHH_6b_MX_700_MY_500/ntuple.root"
-NMSSM_List_studies = [NMSSM_MX_450_MY_300_studies,NMSSM_MX_500_MY_300_studies,NMSSM_MX_600_MY_300_studies,NMSSM_MX_600_MY_400_studies,NMSSM_MX_700_MY_300_studies,NMSSM_MX_700_MY_400_studies,NMSSM_MX_700_MY_500_studies]
-
 base = "/eos/uscms/store/user/srosenzw/sixb/sixb_ntuples"
 # base = "/eos/uscms/store/user/srosenzw/DataMC/SR"
-# NMSSM_MX_450_MY_300 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_450_MY_300/ntuple.root"
-# NMSSM_MX_500_MY_300 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_500_MY_300/ntuple.root"
-# NMSSM_MX_600_MY_300 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_600_MY_300/ntuple.root"
-# NMSSM_MX_600_MY_400 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_600_MY_400/ntuple.root"
-# NMSSM_MX_700_MY_300 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_700_MY_300/ntuple.root"
-NMSSM_MX_700_MY_400 = f"{base}/old_skims/NMSSM/NMSSM_XYH_YToHH_6b_MX_700_MY_400/ntuple.root"
-# NMSSM_MX_700_MY_400 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_700_MY_400_10M/ntuple.root"
-# NMSSM_MX_700_MY_500 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_700_MY_500/ntuple.root"
+NMSSM_MX_450_MY_300 = f"{base}/NMSSM/Summer2018UL/NMSSM_XYH_YToHH_6b_MX_450_MY_300/ntuple.root"
+NMSSM_MX_500_MY_300 = f"{base}/NMSSM/Summer2018UL/NMSSM_XYH_YToHH_6b_MX_500_MY_300/ntuple.root"
+NMSSM_MX_600_MY_300 = f"{base}/NMSSM/Summer2018UL/NMSSM_XYH_YToHH_6b_MX_600_MY_300/ntuple.root"
+NMSSM_MX_600_MY_400 = f"{base}/NMSSM/Summer2018UL/NMSSM_XYH_YToHH_6b_MX_600_MY_400/ntuple.root"
+NMSSM_MX_700_MY_300 = f"{base}/NMSSM/Summer2018UL/NMSSM_XYH_YToHH_6b_MX_700_MY_300/ntuple.root"
+NMSSM_MX_700_MY_400 = f"{base}/NMSSM/Summer2018UL/NMSSM_XYH_YToHH_6b_MX_700_MY_400/ntuple.root"
+# NMSSM_MX_700_MY_400 = f"{base}/NMSSM/Summer2018UL/NMSSM_XYH_YToHH_6b_MX_700_MY_400_10M/ntuple.root"
+NMSSM_MX_700_MY_500 = f"{base}/NMSSM/Summer2018UL/NMSSM_XYH_YToHH_6b_MX_700_MY_500/ntuple.root"
+NMSSM_MX_1000_MY_300 = f"{base}/NMSSM/Summer2018UL/NMSSM_XYH_YToHH_6b_MX_700_MY_500/ntuple.root"
+NMSSM_MX_1000_MY_700 = f"{base}/NMSSM/Summer2018UL/NMSSM_XYH_YToHH_6b_MX_700_MY_500/ntuple.root"
 
-# NMSSM_List = [NMSSM_MX_450_MY_300,NMSSM_MX_500_MY_300,NMSSM_MX_600_MY_300,NMSSM_MX_600_MY_400,NMSSM_MX_700_MY_300,NMSSM_MX_700_MY_400,NMSSM_MX_700_MY_500]
+NMSSM_List = [NMSSM_MX_450_MY_300,NMSSM_MX_500_MY_300,NMSSM_MX_600_MY_300,NMSSM_MX_600_MY_400,NMSSM_MX_700_MY_300,NMSSM_MX_700_MY_400,NMSSM_MX_700_MY_500,NMSSM_MX_1000_MY_300,NMSSM_MX_1000_MY_700]
 
 # btag_sorted = f"{base}/NMSSM_btag_sort/NMSSM_XYH_YToHH_6b_MX_700_MY_400/ntuple.root"
 
-JetHT_Data_UL = f"{base}/old_skims/JetHT_Data_UL/ntuple.root"
-# JetHT_Data_UL = f"{base}/JetHT_Data_UL/JetHT_Run2018_full/ntuple.root"
+# JetHT_Data_UL = f"{base}/JetHT_Data_UL/ntuple.root"
+JetHT_Data_UL = f"{base}/JetHT_Data_UL/JetHT_Run2018_full/ntuple.root"
 
 
 # QCD_bEn_Ht_100to200   = f"{base}/QCD/QCD_bEnriched_HT100to200_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
@@ -54,3 +44,16 @@ JetHT_Data_UL = f"{base}/old_skims/JetHT_Data_UL/ntuple.root"
 # QCD_B_List = QCD_bEn_List + QCD_bGf_List
 
 # TTJets = f"{base}/TTJets/TTJets/ntuple.root"
+
+
+# studies = "/eos/uscms/store/user/srosenzw/sixb/studies"
+# tag = "_nocuts"
+# NMSSM_MX_450_MY_300_studies = f"{studies}/NMSSM{tag}/NMSSM_XYH_YToHH_6b_MX_450_MY_300/ntuple.root"
+# NMSSM_MX_500_MY_300_studies = f"{studies}/NMSSM{tag}/NMSSM_XYH_YToHH_6b_MX_500_MY_300/ntuple.root"
+# NMSSM_MX_600_MY_300_studies = f"{studies}/NMSSM{tag}/NMSSM_XYH_YToHH_6b_MX_600_MY_300/ntuple.root"
+# NMSSM_MX_600_MY_400_studies = f"{studies}/NMSSM{tag}/NMSSM_XYH_YToHH_6b_MX_600_MY_400/ntuple.root"
+# NMSSM_MX_700_MY_300_studies = f"{studies}/NMSSM{tag}/NMSSM_XYH_YToHH_6b_MX_700_MY_300/ntuple.root"
+# NMSSM_MX_700_MY_400_studies = f"{studies}/NMSSM{tag}/NMSSM_XYH_YToHH_6b_MX_700_MY_400/ntuple.root"
+# # NMSSM_MX_700_MY_400_studies = f"{studies}/NMSSM{tag}/NMSSM_XYH_YToHH_6b_MX_700_MY_400_10M/ntuple.root"
+# NMSSM_MX_700_MY_500_studies = f"{studies}/NMSSM{tag}/NMSSM_XYH_YToHH_6b_MX_700_MY_500/ntuple.root"
+# NMSSM_List_studies = [NMSSM_MX_450_MY_300_studies,NMSSM_MX_500_MY_300_studies,NMSSM_MX_600_MY_300_studies,NMSSM_MX_600_MY_400_studies,NMSSM_MX_700_MY_300_studies,NMSSM_MX_700_MY_400_studies,NMSSM_MX_700_MY_500_studies]
