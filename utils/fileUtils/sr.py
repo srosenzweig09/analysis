@@ -1,22 +1,81 @@
-base = "/eos/uscms/store/user/srosenzw/sixb/sixb_ntuples"
-# base = "/eos/uscms/store/user/srosenzw/DataMC/SR"
-NMSSM_MX_450_MY_300 = f"{base}/NMSSM/Summer2018UL/NMSSM_XYH_YToHH_6b_MX_450_MY_300/ntuple.root"
-NMSSM_MX_500_MY_300 = f"{base}/NMSSM/Summer2018UL/NMSSM_XYH_YToHH_6b_MX_500_MY_300/ntuple.root"
-NMSSM_MX_600_MY_300 = f"{base}/NMSSM/Summer2018UL/NMSSM_XYH_YToHH_6b_MX_600_MY_300/ntuple.root"
-NMSSM_MX_600_MY_400 = f"{base}/NMSSM/Summer2018UL/NMSSM_XYH_YToHH_6b_MX_600_MY_400/ntuple.root"
-NMSSM_MX_700_MY_300 = f"{base}/NMSSM/Summer2018UL/NMSSM_XYH_YToHH_6b_MX_700_MY_300/ntuple.root"
-NMSSM_MX_700_MY_400 = f"{base}/NMSSM/Summer2018UL/NMSSM_XYH_YToHH_6b_MX_700_MY_400/ntuple.root"
-# NMSSM_MX_700_MY_400 = f"{base}/NMSSM/Summer2018UL/NMSSM_XYH_YToHH_6b_MX_700_MY_400_10M/ntuple.root"
-NMSSM_MX_700_MY_500 = f"{base}/NMSSM/Summer2018UL/NMSSM_XYH_YToHH_6b_MX_700_MY_500/ntuple.root"
-NMSSM_MX_1000_MY_300 = f"{base}/NMSSM/Summer2018UL/NMSSM_XYH_YToHH_6b_MX_1000_MY_300/ntuple.root"
-NMSSM_MX_1000_MY_700 = f"{base}/NMSSM/Summer2018UL/NMSSM_XYH_YToHH_6b_MX_1000_MY_700/ntuple.root"
+import os
 
-NMSSM_List = [NMSSM_MX_450_MY_300,NMSSM_MX_500_MY_300,NMSSM_MX_600_MY_300,NMSSM_MX_600_MY_400,NMSSM_MX_700_MY_300,NMSSM_MX_700_MY_400,NMSSM_MX_700_MY_500,NMSSM_MX_1000_MY_300,NMSSM_MX_1000_MY_700]
+run_conditions  = ['Summer2018UL']
+pairing_schemes = ['dHHH_pairs','mH_pairs']
 
-# btag_sorted = f"{base}/NMSSM_btag_sort/NMSSM_XYH_YToHH_6b_MX_700_MY_400/ntuple.root"
+default_run = run_conditions[0]
+default_pair = pairing_schemes[0]
 
-# JetHT_Data_UL = f"{base}/JetHT_Data_UL/ntuple.root"
-JetHT_Data_UL = f"{base}/JetHT_Data_UL/JetHT_Run2018_full/ntuple.root"
+class FileLocations:
+    mx_my_masses = [
+        [ 450,300],
+        [ 500,300],
+        [ 600,300],
+        [ 600,400],
+        [ 700,300],
+        [ 700,400],
+        [ 700,500],
+        [1000,300],
+        [1000,700],
+        ]
+
+    run_conditions  = run_conditions
+    pairing_schemes = pairing_schemes
+
+    def __init__(self, run='default', pair='default', warn=True):
+
+        self.check_initializations(run, pair)
+        
+        self.base = f"/eos/uscms/store/user/srosenzw/sixb/sixb_ntuples/{run}/{pair}"
+
+        self.data = f"{self.base}/JetHT_Data_UL/JetHT_Run2018_full/ntuple.root"
+        if not os.path.isfile(self.data):
+            raise FileNotFoundError(f'File not found: {self.data}')
+
+        self.NMSSM = []
+        for mx,my in self.mx_my_masses:
+            mxmy_name = f'NMSSM_XYH_YToHH_6b_MX_{mx}_MY_{my}'
+            mxmy_loc  = f'{self.base}/NMSSM/{mxmy_name}/ntuple.root'
+            if not os.path.isfile(mxmy_loc) and warn:
+                # raise FileNotFoundError(f'File not found: {mxmy_loc}')
+                print(f"Skipping missing file: {mxmy_loc}")
+                continue
+            setattr(self, mxmy_name, mxmy_loc)
+            self.NMSSM.append(mxmy_loc)
+
+    def get_NMSSM(self, mx, my):
+        mxmy_name = f'NMSSM_XYH_YToHH_6b_MX_{mx}_MY_{my}'
+        mxmy_loc  = f'{self.base}/NMSSM/{mxmy_name}/ntuple.root'
+        return getattr(self, mxmy_name)
+
+    def check_initializations(self, run, pair):
+        if run == 'default' and warn:
+            print(f"Using default run: {run}")
+        if pair == 'default' and warn:
+            print(f"Using default pair: {pair}")
+        if run not in self.run_conditions:
+            raise KeyError(f'Run "{run}" is not a valid  option. Please use one of the following keys:\n{run_conditions.keys()}')
+        if pair not in self.pairing_schemes:
+            raise KeyError(f'Run "{pair}" is not a valid  option. Please use one of the following keys:\n{pairing_schemes.keys()}')
+        
+        self.run = run
+        self.pair = pair
+
+
+# NMSSM_MX_450_MY_300 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_450_MY_300/ntuple.root"
+# NMSSM_MX_500_MY_300 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_500_MY_300/ntuple.root"
+# NMSSM_MX_600_MY_300 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_600_MY_300/ntuple.root"
+# NMSSM_MX_600_MY_400 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_600_MY_400/ntuple.root"
+# NMSSM_MX_700_MY_300 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_700_MY_300/ntuple.root"
+# NMSSM_MX_700_MY_400 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_700_MY_400/ntuple.root"
+# # NMSSM_MX_700_MY_400 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_700_MY_400_10M/ntuple.root"
+# NMSSM_MX_700_MY_500 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_700_MY_500/ntuple.root"
+# NMSSM_MX_1000_MY_300 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_1000_MY_300/ntuple.root"
+# NMSSM_MX_1000_MY_700 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_1000_MY_700/ntuple.root"
+
+# NMSSM_List = [NMSSM_MX_450_MY_300,NMSSM_MX_500_MY_300,NMSSM_MX_600_MY_300,NMSSM_MX_600_MY_400,NMSSM_MX_700_MY_300,NMSSM_MX_700_MY_400,NMSSM_MX_700_MY_500,NMSSM_MX_1000_MY_300,NMSSM_MX_1000_MY_700]
+
+# JetHT_Data_UL = f"{base}/JetHT_Data_UL/JetHT_Run2018_full/ntuple.root"
 
 
 # QCD_bEn_Ht_100to200   = f"{base}/QCD/QCD_bEnriched_HT100to200_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
