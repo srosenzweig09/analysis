@@ -70,7 +70,7 @@ def Hist2d(x, y, bins, log=False, density=False, **kwargs):
     if 'ax' in kwargs.keys():
         ax = kwargs['ax']
     else:
-        fig, ax = plt.subplots(figsize=(10, 6))
+        fig, ax = plt.subplots(figsize=(10, 8))
         
     if 'cmap' in kwargs.keys():
         cmap = kwargs['cmap']
@@ -85,7 +85,8 @@ def Hist2d(x, y, bins, log=False, density=False, **kwargs):
             x, y, bins=bins, norm=colors.LogNorm(), cmap=cmap)
     elif density:
         n, xe, ye, im = ax.hist2d(
-            x, y, bins=bins, norm=colors.Normalize(), cmap=cmap, vmin=0, vmax=1)
+            x, y, bins=bins, cmap=cmap)
+            # x, y, bins=bins, density=True, cmap=cmap)
     else:
         n, xe, ye, im = ax.hist2d(
             x, y, bins=bins, cmap=cmap)
