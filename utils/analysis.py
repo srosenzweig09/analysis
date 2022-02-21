@@ -88,7 +88,8 @@ class Signal():
             Nothing. Initializes attributes of Tree class.
         """
         
-        self.filename = re.search('NMSSM_.+/', filename).group()[:-1]
+        if 'NMSSM' in filename:
+            self.filename = re.search('NMSSM_.+/', filename).group()[:-1]
         tree = uproot.open(f"{filename}:{treename}")
         self.tree = tree
 
@@ -117,6 +118,12 @@ class Signal():
             self.cutflow = cutflow.to_numpy()[0]*self.scale
             self.mXmY = self.sample.replace('$','').replace('_','').replace('= ','_').replace(', ','_').replace(' GeV','')
         # elif 'Data' in filename:
+
+        higgs = ['HX_m', 'HY1_m', 'HY2_m']
+        self.DeltaM = np.column_stack(([abs(self.get(mH,'np') - 125) for mH in higgs]))
+        self.mCand = np.column_stack(([abs(self.get(mH,'np')) for mH in higgs]))
+        
+        self.DeltaM_V = np.column_stack(([abs(self.get(mH,'np') - 185) for mH in higgs]))
 
     def keys(self):
         print(self.tree.keys())
@@ -203,27 +210,40 @@ class Signal():
         hs_mask = self.btag_avg >= score_cut # hs
 
         if normalized:
-            A_CRls_yield = ak.sum(A_CR & ls_mask)*self.scale
-            A_CRhs_yield = ak.sum(A_CR & hs_mask)*self.scale
-            A_SRls_yield = ak.sum(A_SR & ls_mask)*self.scale
-            A_SRhs_yield = ak.sum(A_SR & hs_mask)*self.scale
+            A_CRls_yield = ak.sum(A_CR & ls_mask)
+            A_CRhs_yield = ak.sum(A_CR & hs_mask)
+            A_SRls_yield = ak.sum(A_SR & ls_mask)
+            A_SRhs_yield = ak.sum(A_SR & hs_mask)
 
             A_total = A_CRls_yield + A_CRhs_yield + A_SRls_yield + A_SRhs_yield
 
-            V_CRls_yield = ak.sum(V_CR & ls_mask)*self.scale
-            V_CRhs_yield = ak.sum(V_CR & hs_mask)*self.scale
-            V_SRls_yield = ak.sum(V_SR & ls_mask)*self.scale
-            V_SRhs_yield = ak.sum(V_SR & hs_mask)*self.scale
+            V_CRls_yield = ak.sum(V_CR & ls_mask)
+            V_CRhs_yield = ak.sum(V_CR & hs_mask)
+            V_SRls_yield = ak.sum(V_SR & ls_mask)
+            V_SRhs_yield = ak.sum(V_SR & hs_mask)
 
             V_total = V_CRls_yield + V_CRhs_yield + V_SRls_yield + V_SRhs_yield
 
+            A_CRls_yield = A_CRls_yield / A_total
+            A_CRhs_yield = A_CRhs_yield / A_total
+            A_SRls_yield = A_SRls_yield / A_total
+            A_SRhs_yield = A_SRhs_yield / A_total
+            
+            V_CRls_yield = V_CRls_yield / V_total
+            V_CRhs_yield = V_CRhs_yield / V_total
+            V_SRls_yield = V_SRls_yield / V_total
+            V_SRhs_yield = V_SRhs_yield / V_total
+
         else:
-            CRls_yield = int(ak.sum(CR & ls_mask)*self.scale)
-            CRhs_yield = int(ak.sum(CR & hs_mask)*self.scale)
-            VRls_yield = int(ak.sum(VR & ls_mask)*self.scale)
-            VRhs_yield = int(ak.sum(VR & hs_mask)*self.scale)
-            SRls_yield = int(ak.sum(SR & ls_mask)*self.scale)
-            SRhs_yield = int(ak.sum(SR & hs_mask)*self.scale)
+            A_CRls_yield = int(ak.sum(A_CR & ls_mask)*self.scale)
+            A_CRhs_yield = int(ak.sum(A_CR & hs_mask)*self.scale)
+            A_SRls_yield = int(ak.sum(A_SR & ls_mask)*self.scale)
+            A_SRhs_yield = int(ak.sum(A_SR & hs_mask)*self.scale)
+
+            V_CRls_yield = int(ak.sum(V_CR & ls_mask)*self.scale)
+            V_CRhs_yield = int(ak.sum(V_CR & hs_mask)*self.scale)
+            V_SRls_yield = int(ak.sum(V_SR & ls_mask)*self.scale)
+            V_SRhs_yield = int(ak.sum(V_SR & hs_mask)*self.scale)
 
         print('|Signal Region | Validation Region | Control Region|')
         print('|Low   | High  | Low     |    High | Low    |  High|')
