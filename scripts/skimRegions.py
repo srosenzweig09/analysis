@@ -16,6 +16,8 @@ import sys
 import uproot
 # https://pypi.org/project/uproot-tree-utils/
 from uproot_tree_utils import clone_tree
+# from utils.analysis import Signal, Particle
+from utils.analysis import Signal, Particle
 from utils.plotter import Hist
 from utils.xsecUtils import lumiMap, xsecMap
 import vector
@@ -52,13 +54,19 @@ treename = config['file']['tree']
 year = int(config['file']['year'])
 pairing = config['pairing']['scheme']
 
+if args.rectangular: region_type = 'rect'
+elif args.spherical: region_type = 'sphere'
+
+if 'dHHH' in pairing: pairing_type = 'dHHH'
+elif 'mH' in pairing: pairing_type = 'mH'
+
 # Assumptions here:
 # Signal file is saved in an NMSSM folder with the following format:
 # /NMSSM/NMSSM_XYH_YToHH_6b_MX_700_MY_400
 # Most importantly, we are looking for the NMSSM_XYH string and the /ntuple.root string
 start = re.search('NMSSM_XYH',signal).start()
 end = re.search('/ntuple.root',signal).start()
-outputFile = f"{signal[start:end]}"
+outputFile = f"{signal[start:end]}_{pairing_type}_{region_type}"
 
 if args.rectangular:
     maxSR = float(config['rectangular']['maxSR'])
@@ -90,143 +98,45 @@ variables    = config['BDT']['variables'].split(", ")
 
 mH = 125 # GeV
 
-def get_regions(filename, treename, is_signal):
-    tree = uproot.open(f"{filename}:{treename}")
-
-    HX_m = tree['HX_m'].array()
-    HY1_m = tree['HY1_m'].array()
-    HY2_m = tree['HY2_m'].array()
-
-    HX_b1_btag  = tree['HX_b1_DeepJet'].array()
-    HX_b2_btag  = tree['HX_b2_DeepJet'].array()
-    HY1_b1_btag = tree['HY1_b1_DeepJet'].array()
-    HY1_b2_btag = tree['HY1_b2_DeepJet'].array()
-    HY2_b1_btag = tree['HY2_b1_DeepJet'].array()
-    HY2_b2_btag = tree['HY2_b2_DeepJet'].array()
-
-    btagavg = (HX_b1_btag + HX_b2_btag + HY1_b1_btag + HY1_b2_btag + HY2_b1_btag + HY2_b2_btag)/6
-
-    low_btag_mask  = btagavg < score
-    high_btag_mask = btagavg >= score
-
-    SR_mask = (abs(HX_m - mH) <= maxSR) & (abs(HY1_m - mH) <= maxSR) & (abs(HY2_m - mH) <= maxSR)
-
-    SR_hs_mask = SR_mask & high_btag_mask
-    if is_signal: 
-        cutflow = uproot.open(f"{filename}:h_cutflow")
-        total = cutflow.to_numpy()[0][0]
-        lumi = lumiMap[year][0]
-        xsec = xsecMap['NMSSM']
-        scale = lumi * xsec / total
-        return tree, SR_hs_mask, scale
-
-    VR_mask = (abs(HX_m - mH) <= maxVR) & (abs(HY1_m - mH) <= maxVR) & (abs(HY2_m - mH) <= maxVR) & (abs(HX_m - mH) > maxSR) & (abs(HY1_m - mH) > maxSR) & (abs(HY2_m - mH) > maxSR)
-    CR_mask = (abs(HX_m - mH) <= maxCR) & (abs(HY1_m - mH) <= maxCR) & (abs(HY2_m - mH) <= maxCR) & (abs(HX_m - mH) > maxVR) & (abs(HY1_m - mH) > maxVR) & (abs(HY2_m - mH) > maxVR)
-
-    CR_ls_mask = CR_mask & low_btag_mask
-    CR_hs_mask = CR_mask & high_btag_mask
-
-    VR_ls_mask = VR_mask & low_btag_mask
-    VR_hs_mask = VR_mask & high_btag_mask
-
-    SR_ls_mask = SR_mask & low_btag_mask
-
-    return tree, CR_ls_mask, CR_hs_mask, VR_ls_mask, VR_hs_mask, SR_ls_mask, SR_hs_mask
-
 indir = f"root://cmseos.fnal.gov/{base}/{pairing}/"
-print(indir)
 
-sigtree, sig_SR_mask, scale = get_regions(base + signal, treename, is_signal=True)
-tree, CR_ls_mask, CR_hs_mask, VR_ls_mask, VR_hs_mask, SR_ls_mask, SR_hs_mask = get_regions(base + data, treename, is_signal=False)
+sigFileName = f"{indir}NMSSM/{signal}"
+sigTree = Signal(sigFileName)
+sigTree.rectangular_region()
 
-sys.exit()
+datFileName = f"{indir}{data}"
+datTree = Signal(datFileName)
+datTree.rectangular_region()
 
-print("N(data,SR) =",sum(SR_hs_mask))
+print("N(data,SR) =",sum(sigTree.SRhs_mask))
 
 ### ------------------------------------------------------------------------------------
 ## train BDT
 
 print(".. preparing inputs to train BDT")
 
-from utils.analysis import build_p4
-
-HX_b1 = build_p4(
-    tree['HX_b1_pt'].array(),
-    tree['HX_b1_eta'].array(),
-    tree['HX_b1_phi'].array(),
-    tree['HX_b1_m'].array()
-)
-HX_b2 = build_p4(
-    tree['HX_b2_pt'].array(),
-    tree['HX_b2_eta'].array(),
-    tree['HX_b2_phi'].array(),
-    tree['HX_b2_m'].array()
-)
-HY1_b1 = build_p4(
-    tree['HY1_b1_pt'].array(),
-    tree['HY1_b1_eta'].array(),
-    tree['HY1_b1_phi'].array(),
-    tree['HY1_b1_m'].array()
-)
-HY1_b2 = build_p4(
-    tree['HY1_b2_pt'].array(),
-    tree['HY1_b2_eta'].array(),
-    tree['HY1_b2_phi'].array(),
-    tree['HY1_b2_m'].array()
-)
-HY2_b1 = build_p4(
-    tree['HY2_b1_pt'].array(),
-    tree['HY2_b1_eta'].array(),
-    tree['HY2_b1_phi'].array(),
-    tree['HY2_b1_m'].array()
-)
-HY2_b2 = build_p4(
-    tree['HY2_b2_pt'].array(),
-    tree['HY2_b2_eta'].array(),
-    tree['HY2_b2_phi'].array(),
-    tree['HY2_b2_m'].array()
-)
-
-HX = HX_b1 + HX_b2
-HY1 = HY1_b1 + HY1_b2
-HY2 = HY2_b1 + HY2_b2
-
-HX_dr = HX_b1.deltaR(HX_b2)
-HY1_dr = HY1_b1.deltaR(HY1_b2)
-HY2_dr = HY2_b1.deltaR(HY2_b2)
-
-HX_HY1_dEta = HX.deltaeta(HY1)
-HY1_HY2_dEta = HY1.deltaeta(HY2)
-HY2_HX_dEta = HY2.deltaeta(HX)
-
-vars = {
-    'HX_dr':HX_dr, 'HY1_dr':HY1_dr, 'HY2_dr':HY2_dr, 
-    'HX_HY1_dEta':HX_HY1_dEta, 'HY1_HY2_dEta':HY1_HY2_dEta, 'HY2_HX_dEta':HY2_HX_dEta
-    }
-
 def create_dict(mask):
     features = {}
     for var in variables:
-        if var in tree.keys(): features[var] = tree[var].array()[mask]
-        else: features[var] = vars[var][mask]
+        features[var] = datTree.get(var)[mask]
     return features
 
-df_cr_ls = DataFrame(create_dict(CR_ls_mask))
-df_cr_hs = DataFrame(create_dict(CR_hs_mask))
+df_cr_ls = DataFrame(create_dict(datTree.CRls_mask))
+df_cr_hs = DataFrame(create_dict(datTree.CRhs_mask))
 
-df_vr_ls = DataFrame(create_dict(VR_ls_mask))
-df_vr_hs = DataFrame(create_dict(VR_hs_mask))
+df_vr_ls = DataFrame(create_dict(datTree.VRls_mask))
+df_vr_hs = DataFrame(create_dict(datTree.VRhs_mask))
 
-df_sr_ls = DataFrame(create_dict(SR_ls_mask))
+df_sr_ls = DataFrame(create_dict(datTree.SRls_mask))
 
-TF = sum(CR_hs_mask)/sum(CR_ls_mask)
+TF = sum(datTree.CRhs_mask)/sum(datTree.CRls_mask)
 print("TF",TF)
 
 # Train BDT on CR data
 # Use low-score CR to estimate high-score CR
 
-ls_weights = np.ones(ak.sum(CR_ls_mask))*TF
-hs_weights = np.ones(ak.sum([CR_hs_mask]))
+ls_weights = np.ones(ak.sum(datTree.CRls_mask))*TF
+hs_weights = np.ones(ak.sum([datTree.CRhs_mask]))
 
 np.random.seed(randomState) #Fix any random seed using numpy arrays
 print(".. calling reweight.GBReweighter")
@@ -242,32 +152,36 @@ print(".. fitting BDT")
 print(".. calling reweighter.fit")
 reweighter.fit(df_cr_ls,df_cr_hs,ls_weights,hs_weights)
 
+### ------------------------------------------------------------------------------------
+## predict weights using BDT
+
 print(".. predicting weights in validation region")
-weights_pred = reweighter.predict_weights(df_vr_ls,np.ones(ak.sum(VR_ls_mask))*TF,lambda x: np.mean(x, axis=0))
+weights_pred = reweighter.predict_weights(df_vr_ls,np.ones(ak.sum(datTree.VRls_mask))*TF,lambda x: np.mean(x, axis=0))
 
 nbins = 60
 mBins = np.linspace(0,2000,nbins)
 
 fig, ax = plt.subplots()
-n_dat_VRls, _ = np.histogram(tree['X_m'].array(library='np')[VR_ls_mask], bins=mBins)
+n_dat_VRls, _ = np.histogram(datTree.X_m[datTree.VRls_mask].to_numpy(), bins=mBins)
+n_dat_VRls, _ = np.histogram(datTree.np('X_m')[datTree.VRls_mask], bins=mBins)
 
-n_dat_VRls_transformed, e = Hist(tree['X_m'].array(library='np')[VR_ls_mask], weights=weights_pred, bins=mBins, ax=ax, label='Estimation')
-n_dat_VRhs, e = Hist(tree['X_m'].array(library='np')[VR_hs_mask], bins=mBins, ax=ax, label='Target')
+n_dat_VRls_transformed, e = Hist(datTree.X_m[datTree.VRls_mask], weights=weights_pred, bins=mBins, ax=ax, label='Estimation')
+n_dat_VRhs, e = Hist(datTree.X_m[datTree.VRhs_mask], bins=mBins, ax=ax, label='Target')
 ax.set_xlabel(r"$m_X$ [GeV]")
 ax.set_ylabel("Events")
 ax.set_title("BDT Estimation of Data Yield in Validation Region")
 fig.savefig(f"combine/{outputFile}.pdf", bbox_inches='tight')
 
-n_sig_SRhs, _ = np.histogram(sigtree['X_m'].array(library='np')[sig_SR_mask], bins=mBins)
-n_sig_SRhs = n_sig_SRhs * scale
+n_sig_SRhs, _ = np.histogram(sigTree.X_m[sigTree.SRhs_mask].to_numpy(), bins=mBins)
+n_sig_SRhs = n_sig_SRhs * sigTree.scale
 
 ### ------------------------------------------------------------------------------------
 ## add branches and prepare to save
 
-weights_pred = reweighter.predict_weights(df_sr_ls,np.ones(ak.sum(SR_ls_mask))*TF,lambda x: np.mean(x, axis=0))
-n_dat_SRls, _ = np.histogram(tree['X_m'].array(library='np')[SR_ls_mask], bins=mBins)
+weights_pred = reweighter.predict_weights(df_sr_ls,np.ones(ak.sum(datTree.SRls_mask))*TF,lambda x: np.mean(x, axis=0))
+n_dat_SRls, _ = np.histogram(datTree.np('X_m')[datTree.SRls_mask], bins=mBins)
 
-n_dat_SRls_transformed, e = Hist(tree['X_m'].array(library='np')[SR_ls_mask], weights=weights_pred, bins=mBins, ax=ax, label='Estimation')
+n_dat_SRls_transformed, e = Hist(datTree.np('X_m')[datTree.SRls_mask], weights=weights_pred, bins=mBins, ax=ax, label='Estimation')
 
 print("N(data,SR,est) =",n_dat_SRls_transformed.sum())
 
@@ -298,10 +212,8 @@ leg.AddEntry(h_dat, "Background", "l")
 leg.AddEntry(h_sig, "Signal", "l")
 leg.Draw()
 
-# canvas.Print(f"plots/{sigTree.mXmY}_SR.pdf)","Title:Signal Region");
 canvas.Print(f"combine/{outputFile}.pdf)","Title:Signal Region");
 
-# fout = ROOT.TFile("mass_info/{sigTree.mXmY}_mX.root","recreate")
 fout = ROOT.TFile(f"combine/{outputFile}.root","recreate")
 fout.cd()
 h_dat.Write()
