@@ -2,25 +2,17 @@ print("[INFO] .. starting program")
 
 from argparse import ArgumentParser
 from array import array
-import ast
 import awkward as ak
 from configparser import ConfigParser
 from hep_ml import reweight
-import itertools
 import matplotlib.pyplot as plt
 import numpy as np
 from pandas import DataFrame
 import re
 import ROOT
 import sys
-import uproot
-# https://pypi.org/project/uproot-tree-utils/
-from uproot_tree_utils import clone_tree
-# from utils.analysis import Signal, Particle
-from utils.analysis import Signal, Particle
+from utils.analysis import Signal
 from utils.plotter import Hist
-from utils.xsecUtils import lumiMap, xsecMap
-import vector
 
 ### ------------------------------------------------------------------------------------
 ## Implement command line parser
