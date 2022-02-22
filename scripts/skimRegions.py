@@ -219,24 +219,3 @@ fout.cd()
 h_dat.Write()
 h_sig.Write()
 fout.Close()
-
-# print(".. appending region masks to tree")
-
-# new_branches = {'CR_ls':CR_ls_mask, 'CR_hs':CR_hs_mask,'VR_ls':VR_ls_mask, 'VR_hs':VR_hs_mask, 'SR_ls':SR_ls_mask, 'SR_hs':SR_hs_mask}
-
-# print(".. adding new branches")
-
-# newtree = {}
-# for k,v in itertools.chain(tree.items(),new_branches.items()):
-#     try: newtree[k] = v.array()
-#     except: newtree[k] = v
-
-# NormWeightTree = {}
-# for k,v in nwtree.items():
-#     NormWeightTree[k] = v.array()
-
-# print(".. saving to output")
-# with uproot.recreate(args.output) as file:
-#     file[treename] = newtree
-#     file['NormWeightTree'] = NormWeightTree
-#     print(file[treename].show())
