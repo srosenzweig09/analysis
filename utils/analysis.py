@@ -40,15 +40,6 @@ def get_scaled_weights(list_of_arrs, bins, scale):
         except: n += n_i
     return n, b, centers
 
-def build_p4(pt, eta, phi, m):
-    return vector.obj(pt=pt, eta=eta, phi=phi, m=m)
-
-def p4(tree, jet):
-    return  vector.obj(pt=tree.jet_pt[jet],
-                        eta=tree.jet_eta[jet],
-                        phi=tree.jet_phi[jet],
-                        m=tree.jet_m[jet])
-
 def get_boosted_p4(tree, jets):
     jet_p4 = p4(tree, jets[0])
     for jet in jets[1:]:
@@ -72,13 +63,63 @@ def get_6jet_p4(p4):
     boost_5 = part5.boost_p4(evt_p4)
     return evt_p4, [boost_0, boost_1, boost_2, boost_3, boost_4, boost_5]
 
-# class Data():
+class Particle():
+    def __init__(self, tree=None, particle_name=None, particle=None):
+        """_summary_
+
+        Args:
+            tree (_type_): _description_
+            particle_name (_type_): _description_
+
+        Returns:
+            _type_: _description_
+
+        Yields:
+            _type_: _description_
+        """
+
+        if tree is not None and particle_name is not None:
+            self.initialize_from_tree(tree, particle_name)
+        elif particle is not None:
+            self. initialize_from_particle(particle)
+        self.P4 = self.get_vector()
+
+    def initialize_from_tree(self, tree, particle_name):
+        self.pt = tree.get(particle_name + '_pt')
+        # self.ptRegressed = tree.get(particle_name + '_ptRegressed')
+        self.eta = tree.get(particle_name + '_eta')
+        self.phi = tree.get(particle_name + '_phi')
+        self.m = tree.get(particle_name + '_m')
+
+    def initialize_from_particle(self, particle):
+        self.pt = particle.pt
+        self.eta = particle.eta
+        self.phi = particle.phi
+        self.m = particle.m
+
+    def get_vector(self):
+        p4 = vector.obj(
+            pt  = self.pt,
+            eta = self.eta,
+            phi = self.phi,
+            m   = self.m
+        )
+        return p4
+
+    def __add__(self, another_particle):
+        particle1 = self.P4
+        particle2 = another_particle.P4
+        parent = particle1 + particle2
+        return Particle(particle=parent)
+    
+    def boost(self, another_particle):
+        return self.P4.boost(-another_particle.P4)
 
 
 class Signal():
     def __init__(self, filename, treename='sixBtree', year=2018, training=False):
         """
-        A class for handling TTrees.
+        A class for handling TTrees from recent skims, which output a single branch for each b jet kinematic. (Older skims output an array of jet kinematics.)
 
         args:
             filename: string containing name of a single file OR a list of several files to open
@@ -251,9 +292,10 @@ class Signal():
 
 
 class Tree():
+    
     def __init__(self, filename, treename='sixBtree', year=2018, training=False, exploration=False, signal=True):
         """
-        A class for handling TTrees.
+        A class for handling TTrees from older skims, which output an array of jet kinematics. (Newer skims output a single branch for each b jet kinematic.)
 
         args:
             filename: string containing name of a single file OR a list of several files to open
@@ -286,19 +328,6 @@ class Tree():
 
         self.nevents = len(tree[used_key].array())
 
-        # for k, v in tree.items():
-        #     setattr(self, k, v.array())
-        # nevents = len(tree[k].array())
-
-        # self.local_ind = ak.local_index(self.jet_pt)
-
-        # try:
-        #     self.signal_evt_mask = ak.sum(self.jet_signalId > -1, axis=1) == 6
-        #     self.signal_jet_mask = self.jet_signalId[self.signal_evt_mask] > -1
-        # except:
-        #     self.signal_evt_mask = ak.sum(self.jet_idx > -1, axis=1) == 6
-        #     self.signal_jet_mask = self.jet_idx[self.signal_evt_mask] > -1
-
         if training: return
         cutflow = uproot.open(f"{filename}:h_cutflow")
         # save total number of events for scaling purposes
@@ -311,13 +340,6 @@ class Tree():
         self.lumi = lumiMap[year][0]
         self.scale = self.lumi*xsec/total
         self.cutflow = cutflow.to_numpy()[0]*self.scale
-
-        # for k, v in tree.items():
-        #     try: setattr(self, 'signal_' + k, v.array()[self.signal_evt_mask][self.signal_jet_mask])
-        #     except: continue
-
-    # def get_sr_cr(self):
-        # """Triple mass veto."""
 
     def multi_init(self, filelist, treename, year=2018):
         """Opens a list of files into several TTrees. Typically used for bkgd events."""
@@ -522,50 +544,6 @@ class Tree():
             m   = self.t6_jet_m[higgs3_mask][Hb3_mask[:,1]])
 
         self.t6_X = self.t6_H1_b1 + self.t6_H1_b2 + self.t6_H2_b1 + self.t6_H2_b2 + self.t6_H3_b1 + self.t6_H3_b2
-
-    # def get_t6_pair_p4(self):
-    #     # if signal: mask = self.jet_idx > -1
-    #     # else: mask = self.jet_idx == -1
-    #     jet1_pt, jet2_pt = ak.unzip(ak.combinations(self.jet_pt[:,:6], 2))
-    #     jet1_eta, jet2_eta = ak.unzip(ak.combinations(self.jet_eta[:,:6], 2))
-    #     jet1_phi, jet2_phi = ak.unzip(ak.combinations(self.jet_phi[:,:6], 2))
-    #     jet1_m, jet2_m = ak.unzip(ak.combinations(self.jet_m[:,:6], 2))
-    #     jet1_idx, jet2_idx = ak.unzip(ak.combinations(self.jet_signalId[:,:6], 2))
-    #     jet12_ind = ak.combinations(ak.local_index(self.jet_pt[:,:6]),2)
-    #     jet1_ind, jet2_ind = ak.unzip(jet12_ind)
-
-    #     jet1_p4 = vector.obj(
-    #         pt  = jet1_pt,
-    #         eta = jet1_eta,
-    #         phi = jet1_phi,
-    #         m   = jet1_m)
-
-    #     jet2_p4 = vector.obj(
-    #         pt  = jet2_pt,
-    #         eta = jet2_eta,
-    #         phi = jet2_phi,
-    #         m   = jet2_m)
-
-    #     return jet1_p4, jet2_p4, jet1_ind, jet2_ind, jet12_ind, jet1_idx, jet2_idx
-    
-    # def p4(self, pt, eta, phi, m):
-    #     return vector.obj(pt=pt, eta=eta, phi=phi, m=m)
-
-    # def get_all_p4(self, pts, etas, phis, ms):
-    #     return [self.p4(pt, eta, phi, m) for pt,eta,phi,m in zip(pts,etas,phis,ms)]
-
-    # def get_six_p4(self, mask=None):
-    #     jet_pt = ak.unzip(ak.combinations(self.jet_pt[mask], 6))
-    #     jet_eta = ak.unzip(ak.combinations(self.jet_eta[mask], 6))
-    #     jet_phi = ak.unzip(ak.combinations(self.jet_phi[mask], 6))
-    #     jet_m = ak.unzip(ak.combinations(self.jet_m[mask], 6))
-
-    #     return self.get_all_p4(jet_pt, jet_eta, jet_phi, jet_m)
-
-    # def sort(self, mask):
-    #     for k, v in self.tree.items():
-    #         try: setattr(self, k, v.array()[mask])
-    #         except: continue
 
     def keys(self):
         print(self.tree.keys())
