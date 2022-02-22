@@ -23,6 +23,7 @@ from .plotter import latexTitle
 import re
 import sys 
 import uproot
+import pandas as pd
 
 vector.register_awkward()
 
@@ -39,29 +40,6 @@ def get_scaled_weights(list_of_arrs, bins, scale):
         try: n += n_i*scale
         except: n += n_i
     return n, b, centers
-
-def get_boosted_p4(tree, jets):
-    jet_p4 = p4(tree, jets[0])
-    for jet in jets[1:]:
-        jet_p4 += p4(tree, jet)
-    
-    jet_pt = []
-    for jet in jets:
-        jet_pt.append(ak.flatten(p4(tree, jet).boost_p4(jet_p4).pt).to_numpy()[:, np.newaxis])
-
-    return jet_pt
-
-def get_6jet_p4(p4):
-    combos = ak.combinations(p4, 6)
-    part0, part1, part2, part3, part4, part5 = ak.unzip(combos)
-    evt_p4 = part0 + part1 + part2 + part3 + part4 + part5
-    boost_0 = part0.boost_p4(evt_p4)
-    boost_1 = part1.boost_p4(evt_p4)
-    boost_2 = part2.boost_p4(evt_p4)
-    boost_3 = part3.boost_p4(evt_p4)
-    boost_4 = part4.boost_p4(evt_p4)
-    boost_5 = part5.boost_p4(evt_p4)
-    return evt_p4, [boost_0, boost_1, boost_2, boost_3, boost_4, boost_5]
 
 class Particle():
     def __init__(self, tree=None, particle_name=None, particle=None):
@@ -117,6 +95,9 @@ class Particle():
 
 
 class Signal():
+    _rect_region_bool = False
+    _sphere_region_bool = False
+
     def __init__(self, filename, treename='sixBtree', year=2018, training=False):
         """
         A class for handling TTrees from recent skims, which output a single branch for each b jet kinematic. (Older skims output an array of jet kinematics.)
@@ -172,124 +153,127 @@ class Signal():
     def get(self, key, library='ak'):
         return self.tree[key].array(library=library)
 
-    def region_yield(self, normalized=False):
-
-        # edges of mH windows
-        SR_edge = 25 # GeV
-        VR_edge = 60 # GeV
-        CR_edge = 120 # GeV
-
-        mH = 125 # GeV
-
+    def rectangular_region(self, SR_edge=25, VR_edge=60, CR_edge=-1):
         higgs = ['HX_m', 'HY1_m', 'HY2_m']
         Dm_cand = np.column_stack(([abs(self.get(mH,'np') - 125) for mH in higgs]))
-        SR = ak.all(Dm_cand <= SR_edge, axis=1) # SR
-        VR = ak.all(Dm_cand > SR_edge, axis=1) & ak.all(Dm_cand <= VR_edge, axis=1) # VR
-        CR = ak.all(Dm_cand > VR_edge, axis=1) # CR
-
+        SR_mask = ak.all(Dm_cand <= SR_edge, axis=1) # SR
+        VR_mask = ak.all(Dm_cand > SR_edge, axis=1) & ak.all(Dm_cand <= VR_edge, axis=1) # VR
+        CR_mask = ak.all(Dm_cand > VR_edge, axis=1) # CR
+        
         score_cut = 0.66
 
         ls_mask = self.btag_avg < score_cut # ls
         hs_mask = self.btag_avg >= score_cut # hs
 
-        if normalized:
-            CRls_yield = ak.sum(CR & ls_mask)*self.scale
-            CRhs_yield = ak.sum(CR & hs_mask)*self.scale
-            VRls_yield = ak.sum(VR & ls_mask)*self.scale
-            VRhs_yield = ak.sum(VR & hs_mask)*self.scale
-            SRls_yield = ak.sum(SR & ls_mask)*self.scale
-            SRhs_yield = ak.sum(SR & hs_mask)*self.scale
+        self.CRls_mask = CR_mask & ls_mask
+        self.CRhs_mask = CR_mask & hs_mask
+        self.VRls_mask = VR_mask & ls_mask
+        self.VRhs_mask = VR_mask & hs_mask
+        self.SRls_mask = SR_mask & ls_mask
+        self.SRhs_mask = SR_mask & hs_mask
 
-            total = CRls_yield + CRhs_yield + VRls_yield + VRhs_yield + SRls_yield + SRhs_yield
-            
-            CRls_yield = int((CRls_yield / total)*100)
-            CRhs_yield = int((CRhs_yield / total)*100)
-            VRls_yield = int((VRls_yield / total)*100)
-            VRhs_yield = int((VRhs_yield / total)*100)
-            SRls_yield = int((SRls_yield / total)*100)
-            SRhs_yield = int((SRhs_yield / total)*100)
+        self._rect_region_bool = True
 
-        else:
-            CRls_yield = int(ak.sum(CR & ls_mask)*self.scale)
-            CRhs_yield = int(ak.sum(CR & hs_mask)*self.scale)
-            VRls_yield = int(ak.sum(VR & ls_mask)*self.scale)
-            VRhs_yield = int(ak.sum(VR & hs_mask)*self.scale)
-            SRls_yield = int(ak.sum(SR & ls_mask)*self.scale)
-            SRhs_yield = int(ak.sum(SR & hs_mask)*self.scale)
-
-        print('|Signal Region | Validation Region | Control Region|')
-        print('|Low   | High  | Low     |    High | Low    |  High|')
-        print(f'|{SRls_yield}  | {SRhs_yield}  | {VRls_yield}     | {VRhs_yield}     | {CRls_yield}    | {CRhs_yield}  |')
-
-    def region_yield_sphere(self, normalized=False):
-
-        # edges of mH windows
-        SR_edge = 25 # GeV
-        VR_edge = 60 # GeV
-        CR_edge = 120 # GeV
-
-        mH = 125 # GeV
-
+    def spherical_region(self, SR_edge=25, VR_edge=50):
         higgs = ['HX_m', 'HY1_m', 'HY2_m']
         Dm_cand = np.column_stack(([abs(self.get(mH,'np') - 125) for mH in higgs]))
         Dm_cand = Dm_cand * Dm_cand
         Dm_cand = Dm_cand.sum(axis=1)
         Dm_cand = np.sqrt(Dm_cand)
-        A_SR = Dm_cand <= SR_edge # SR
-        A_CR = (Dm_cand > SR_edge) & (Dm_cand <= VR_edge) # VR
+        A_SR_mask = Dm_cand <= SR_edge # Analysis SR
+        A_CR_mask = (Dm_cand > SR_edge) & (Dm_cand <= VR_edge) # Analysis CR
 
         Dm_cand = np.column_stack(([abs(self.get(mH,'np') - 185) for mH in higgs]))
         Dm_cand = Dm_cand * Dm_cand
         Dm_cand = Dm_cand.sum(axis=1)
         Dm_cand = np.sqrt(Dm_cand)
-        V_SR = Dm_cand <= SR_edge # SR
-        V_CR = (Dm_cand > SR_edge) & (Dm_cand <= VR_edge) # VR
+        V_SR_mask = Dm_cand <= SR_edge # Validation SR
+        V_CR_mask = (Dm_cand > SR_edge) & (Dm_cand <= VR_edge) # Validation CR
 
         score_cut = 0.66
 
         ls_mask = self.btag_avg < score_cut # ls
         hs_mask = self.btag_avg >= score_cut # hs
 
-        if normalized:
-            A_CRls_yield = ak.sum(A_CR & ls_mask)
-            A_CRhs_yield = ak.sum(A_CR & hs_mask)
-            A_SRls_yield = ak.sum(A_SR & ls_mask)
-            A_SRhs_yield = ak.sum(A_SR & hs_mask)
+        self.A_CRls_mask = A_CR_mask & ls_mask
+        self.A_CRhs_mask = A_CR_mask & hs_mask
+        self.A_SRls_mask = A_SR_mask & ls_mask
+        self.A_SRhs_mask = A_SR_mask & hs_mask
+
+        self.V_CRls_mask = V_CR_mask & ls_mask
+        self.V_CRhs_mask = V_CR_mask & hs_mask
+        self.V_SRls_mask = V_SR_mask & ls_mask
+        self.V_SRhs_mask = V_SR_mask & hs_mask
+
+        self._sphere_region_bool = True
+
+    def region_yield(self, definition='rect', normalized=False):
+
+        if definition == 'rect':
+            if not self._rect_region_bool: self.rectangular_region()
+
+            CRls_yield = int(ak.sum(self.CRls_mask)*self.scale)
+            CRhs_yield = int(ak.sum(self.CRhs_mask)*self.scale)
+            VRls_yield = int(ak.sum(self.VRls_mask)*self.scale)
+            VRhs_yield = int(ak.sum(self.VRhs_mask)*self.scale)
+            SRls_yield = int(ak.sum(self.SRls_mask)*self.scale)
+            SRhs_yield = int(ak.sum(self.SRhs_mask)*self.scale)
+
+            if normalized:
+                total = CRls_yield + CRhs_yield + VRls_yield + VRhs_yield + SRls_yield + SRhs_yield
+                CRls_yield = int((CRls_yield / total)*100)
+                CRhs_yield = int((CRhs_yield / total)*100)
+                VRls_yield = int((VRls_yield / total)*100)
+                VRhs_yield = int((VRhs_yield / total)*100)
+                SRls_yield = int((SRls_yield / total)*100)
+                SRhs_yield = int((SRhs_yield / total)*100)
+            
+            yields = [CRls_yield, CRhs_yield, VRls_yield, VRhs_yield, SRls_yield, SRhs_yield]
+            cols = ['CR low-avg', 'CR high-avg', 'VR low-avg', 'VR high-avg', 'SR low-avg', 'SR high-avg']
+            data = {col:[value] for col,value in zip(cols,yields)}
+            print(data)
+
+            df = pd.DataFrame(data=data, columns=cols)
+            pd.set_option('display.colheader_justify', 'center')
+            print(df.to_string(index=False))
+        elif definition == 'sphere':
+            if not self._sphere_region_bool: self.spherical_region()
+
+            A_CRls_yield = ak.sum(self.A_CRls_mask)
+            A_CRhs_yield = ak.sum(self.A_CRhs_mask)
+            A_SRls_yield = ak.sum(self.A_SRls_mask)
+            A_SRhs_yield = ak.sum(self.A_SRhs_mask)
 
             A_total = A_CRls_yield + A_CRhs_yield + A_SRls_yield + A_SRhs_yield
 
-            V_CRls_yield = ak.sum(V_CR & ls_mask)
-            V_CRhs_yield = ak.sum(V_CR & hs_mask)
-            V_SRls_yield = ak.sum(V_SR & ls_mask)
-            V_SRhs_yield = ak.sum(V_SR & hs_mask)
+            V_CRls_yield = ak.sum(self.V_CRls_mask)
+            V_CRhs_yield = ak.sum(self.V_CRhs_mask)
+            V_SRls_yield = ak.sum(self.V_SRls_mask)
+            V_SRhs_yield = ak.sum(self.V_SRhs_mask)
 
             V_total = V_CRls_yield + V_CRhs_yield + V_SRls_yield + V_SRhs_yield
 
-            A_CRls_yield = A_CRls_yield / A_total
-            A_CRhs_yield = A_CRhs_yield / A_total
-            A_SRls_yield = A_SRls_yield / A_total
-            A_SRhs_yield = A_SRhs_yield / A_total
-            
-            V_CRls_yield = V_CRls_yield / V_total
-            V_CRhs_yield = V_CRhs_yield / V_total
-            V_SRls_yield = V_SRls_yield / V_total
-            V_SRhs_yield = V_SRhs_yield / V_total
+            if normalized:
+                A_CRls_yield = A_CRls_yield / A_total
+                A_CRhs_yield = A_CRhs_yield / A_total
+                A_SRls_yield = A_SRls_yield / A_total
+                A_SRhs_yield = A_SRhs_yield / A_total
 
-        else:
-            A_CRls_yield = int(ak.sum(A_CR & ls_mask)*self.scale)
-            A_CRhs_yield = int(ak.sum(A_CR & hs_mask)*self.scale)
-            A_SRls_yield = int(ak.sum(A_SR & ls_mask)*self.scale)
-            A_SRhs_yield = int(ak.sum(A_SR & hs_mask)*self.scale)
+                V_CRls_yield = V_CRls_yield / V_total
+                V_CRhs_yield = V_CRhs_yield / V_total
+                V_SRls_yield = V_SRls_yield / V_total
+                V_SRhs_yield = V_SRhs_yield / V_total
 
-            V_CRls_yield = int(ak.sum(V_CR & ls_mask)*self.scale)
-            V_CRhs_yield = int(ak.sum(V_CR & hs_mask)*self.scale)
-            V_SRls_yield = int(ak.sum(V_SR & ls_mask)*self.scale)
-            V_SRhs_yield = int(ak.sum(V_SR & hs_mask)*self.scale)
+            regions = np.repeat(['Analysis Region', 'Validation Region'],4)
+            cols = np.tile(['CR low-avg', 'CR high-avg', 'SR low-avg', 'SR high-avg'],2)
+            yields = [A_CRls_yield, A_CRhs_yield, A_SRls_yield, A_SRhs_yield, V_CRls_yield, V_CRhs_yield, V_SRls_yield, V_SRhs_yield]
 
-        print('|Signal Region | Validation Region | Control Region|')
-        print('|Low   | High  | Low     |    High | Low    |  High|')
-        print(f'|{SRls_yield}  | {SRhs_yield}  | {VRls_yield}     | {VRhs_yield}     | {CRls_yield}    | {CRhs_yield}  |')
+            index = [(region, col) for region,col in zip(regions,cols)]
 
+            index = pd.MultiIndex.from_tuples(index)
+
+            yields = pd.Series(yields, index=index)
+            print(yields)
 
 class Tree():
     
