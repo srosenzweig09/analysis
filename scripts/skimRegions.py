@@ -28,6 +28,8 @@ print(".. parsing command line arguments")
 parser = ArgumentParser(description='Command line parser of model options and tags')
 
 parser.add_argument('--cfg',    dest='cfg',    help='config file', required=True)
+parser.add_argument('--rectangular',    dest='rectangular',    help='', action='store_true', default=False)
+parser.add_argument('--spherical',    dest='spherical',    help='', action='store_true', default=False)
 # parser.add_argument('--signal', dest='signal', help='signal file')
 # parser.add_argument('--data' ,  dest='data',   help='data file')
 # parser.add_argument('--output', dest='output', help='output file', required=True)
@@ -43,10 +45,12 @@ config = ConfigParser()
 config.optionxform = str
 config.read(args.cfg)
 
+base = config['file']['base']
 signal = config['file']['signal']
 data = config['file']['data']
 treename = config['file']['tree']
 year = int(config['file']['year'])
+pairing = config['pairing']['scheme']
 
 # Assumptions here:
 # Signal file is saved in an NMSSM folder with the following format:
@@ -56,10 +60,18 @@ start = re.search('NMSSM_XYH',signal).start()
 end = re.search('/ntuple.root',signal).start()
 outputFile = f"{signal[start:end]}"
 
-maxSR = float(config['mass']['maxSR'])
-maxVR = float(config['mass']['maxVR'])
-maxCR = float(config['mass']['maxCR'])
-if maxCR == -1: maxCR = 9999
+if args.rectangular:
+    maxSR = float(config['rectangular']['maxSR'])
+    maxVR = float(config['rectangular']['maxVR'])
+    maxCR = float(config['rectangular']['maxCR'])
+    if maxCR == -1: maxCR = 9999
+elif args.spherical:
+    ARcenter =float(config['spherical']['ARcenter'])
+    VRcenter =float(config['spherical']['VRcenter'])
+    rInner   =float(config['spherical']['rInner'])
+    rOuter   =float(config['spherical']['rOuter'])
+else:
+    raise AttributeError("No mass region definition!")
 
 score = float(config['score']['threshold'])
 
@@ -121,10 +133,13 @@ def get_regions(filename, treename, is_signal):
 
     return tree, CR_ls_mask, CR_hs_mask, VR_ls_mask, VR_hs_mask, SR_ls_mask, SR_hs_mask
 
-base = 'root://cmseos.fnal.gov/'
+indir = f"root://cmseos.fnal.gov/{base}/{pairing}/"
+print(indir)
 
 sigtree, sig_SR_mask, scale = get_regions(base + signal, treename, is_signal=True)
 tree, CR_ls_mask, CR_hs_mask, VR_ls_mask, VR_hs_mask, SR_ls_mask, SR_hs_mask = get_regions(base + data, treename, is_signal=False)
+
+sys.exit()
 
 print("N(data,SR) =",sum(SR_hs_mask))
 
