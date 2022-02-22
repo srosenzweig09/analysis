@@ -24,9 +24,10 @@ class FileLocations:
 
     def __init__(self, run='default', pair='default', warn=True):
 
+        self.warn = warn
         self.check_initializations(run, pair)
         
-        self.base = f"/eos/uscms/store/user/srosenzw/sixb/sixb_ntuples/{run}/{pair}"
+        self.base = f"/eos/uscms/store/user/srosenzw/sixb/sixb_ntuples/{self.run}/{self.pair}"
 
         self.data = f"{self.base}/JetHT_Data_UL/JetHT_Run2018_full/ntuple.root"
         if not os.path.isfile(self.data):
@@ -49,17 +50,17 @@ class FileLocations:
         return getattr(self, mxmy_name)
 
     def check_initializations(self, run, pair):
-        if run == 'default' and warn:
+        if run == 'default' and self.warn:
             print(f"Using default run: {run}")
-        if pair == 'default' and warn:
+        if pair == 'default' and self.warn:
             print(f"Using default pair: {pair}")
-        if run not in self.run_conditions:
+        if run != 'default' and run not in self.run_conditions:
             raise KeyError(f'Run "{run}" is not a valid  option. Please use one of the following keys:\n{run_conditions.keys()}')
-        if pair not in self.pairing_schemes:
+        if pair != 'default' and pair not in self.pairing_schemes:
             raise KeyError(f'Run "{pair}" is not a valid  option. Please use one of the following keys:\n{pairing_schemes.keys()}')
         
-        self.run = run
-        self.pair = pair
+        self.run = default_run
+        self.pair = default_pair
 
 
 # NMSSM_MX_450_MY_300 = f"{base}/NMSSM/NMSSM_XYH_YToHH_6b_MX_450_MY_300/ntuple.root"
