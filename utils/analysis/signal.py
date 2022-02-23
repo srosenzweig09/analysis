@@ -12,11 +12,11 @@ from .particle import Particle
 
 # Standard library imports
 # from math import comb
+from hep_ml import reweight
 import re
 import sys 
 import uproot
 import pandas as pd
-
 class Signal():
     """A class for handling TTrees from recent skims, which output a single branch for each b jet kinematic. (Older skims output an array of jet kinematics.)
     
@@ -34,7 +34,6 @@ class Signal():
     _sphere_region_bool = False
 
     def __init__(self, filename, treename='sixBtree', year=2018):
-        
         if 'NMSSM' in filename:
             self.filename = re.search('NMSSM_.+/', filename).group()[:-1]
         tree = uproot.open(f"{filename}:{treename}")
@@ -111,6 +110,7 @@ class Signal():
         return self.get(key, library='np')
 
     def rectangular_region(self, SR_edge=25, VR_edge=60, CR_edge=-1):
+        """Defines rectangular region masks."""
         higgs = ['HX_m', 'HY1_m', 'HY2_m']
         Dm_cand = np.column_stack(([abs(self.get(mH,'np') - 125) for mH in higgs]))
         SR_mask = ak.all(Dm_cand <= SR_edge, axis=1) # SR
@@ -131,16 +131,18 @@ class Signal():
 
         self._rect_region_bool = True
 
-    def spherical_region(self, SR_edge=25, VR_edge=50):
+    def spherical_region(self, SR_edge=25, VR_edge=50, AR_center=125, VR_center=185):
+        """Defines spherical estimation region masks."""
         higgs = ['HX_m', 'HY1_m', 'HY2_m']
-        Dm_cand = np.column_stack(([abs(self.get(mH,'np') - 125) for mH in higgs]))
+
+        Dm_cand = np.column_stack(([abs(self.get(mH,'np') - AR_center) for mH in higgs]))
         Dm_cand = Dm_cand * Dm_cand
         Dm_cand = Dm_cand.sum(axis=1)
         Dm_cand = np.sqrt(Dm_cand)
         A_SR_mask = Dm_cand <= SR_edge # Analysis SR
         A_CR_mask = (Dm_cand > SR_edge) & (Dm_cand <= VR_edge) # Analysis CR
 
-        Dm_cand = np.column_stack(([abs(self.get(mH,'np') - 185) for mH in higgs]))
+        Dm_cand = np.column_stack(([abs(self.get(mH,'np') - VR_center) for mH in higgs]))
         Dm_cand = Dm_cand * Dm_cand
         Dm_cand = Dm_cand.sum(axis=1)
         Dm_cand = np.sqrt(Dm_cand)
@@ -165,6 +167,7 @@ class Signal():
         self._sphere_region_bool = True
 
     def region_yield(self, definition='rect', normalized=False):
+        """Prints original or normalized estimation region yields."""
 
         if definition == 'rect':
             if not self._rect_region_bool: self.rectangular_region()
@@ -235,3 +238,93 @@ class Signal():
 
             yields = pd.Series(yields, index=index)
             print(yields)
+
+    def get_df(self, mask, variables):
+        features = {}
+        for var in variables:
+            features[var] = self.get(var)[mask]
+        df = pd.DataFrame(features)
+        return df
+
+    def train_bdt(self, config, region):
+
+        Nestimators  = int(config['BDT']['Nestimators'])
+        learningRate = float(config['BDT']['learningRate'])
+        maxDepth     = int(config['BDT']['maxDepth'])
+        minLeaves    = int(config['BDT']['minLeaves'])
+        GBsubsample  = float(config['BDT']['GBsubsample'])
+        randomState  = int(config['BDT']['randomState'])
+        variables    = config['BDT']['variables'].split(", ")
+        self.variables = variables
+
+        if region == 'CR': # rectangular
+            ls_mask = self.CRls_mask
+            hs_mask = self.CRhs_mask
+        elif region == 'V_CR': # spherical V_CR
+            ls_mask = self.V_CRls_mask
+            hs_mask = self.V_CRhs_mask
+        elif region == 'A_CR': # spherical A_CR
+            ls_mask = self.A_CRls_mask
+            hs_mask = self.A_CRhs_mask
+
+        self.TF = sum(hs_mask)/sum(ls_mask)
+        ls_weights = np.ones(ak.sum(ls_mask))*self.TF
+        hs_weights = np.ones(ak.sum([hs_mask]))
+
+        df_ls = self.get_df(ls_mask, variables)
+        df_hs = self.get_df(hs_mask, variables)
+
+        np.random.seed(randomState) #Fix any random seed using numpy arrays
+        print(".. calling reweight.GBReweighter")
+        reweighter_base = reweight.GBReweighter(
+            n_estimators=Nestimators, 
+            learning_rate=learningRate, 
+            max_depth=maxDepth, 
+            min_samples_leaf=minLeaves,
+            gb_args={'subsample': GBsubsample})
+
+        print(".. calling reweight.FoldingReweighter")
+        reweighter = reweight.FoldingReweighter(reweighter_base, random_state=randomState, n_folds=2, verbose=False)
+
+        print(".. calling reweighter.fit")
+        reweighter.fit(df_ls,df_hs,ls_weights,hs_weights)
+        self.reweighter = reweighter
+
+    def bdt_prediction(self, region):
+        if region == 'VR':
+            mask = self.VRls_mask
+        if region == 'SR':
+            mask = self.SRls_mask
+        elif region == 'V_SR':
+            mask = self.V_SRls_mask
+        elif region == 'A_SR':
+            mask = self.A_SRls_mask
+        
+        df_ls = self.get_df(mask, self.variables)
+        initial_weights = np.ones(ak.sum(mask))*self.TF
+
+        weights_pred = self.reweighter.predict_weights(df_ls,initial_weights,lambda x: np.mean(x, axis=0))
+        return weights_pred
+
+    def bdt_process(self, scheme, config, validate=True):
+        if scheme == 'rect':
+            if not self._rect_region_bool: self.rectangular_region()
+            print(".. training BDT in CR")
+            self.train_bdt(config, 'CR')
+            print(".. predicting weights in VR")
+            VR_weights = self.bdt_prediction('VR')
+            print(".. predicting weights in SR")
+            SR_weights = self.bdt_prediction('SR')
+            return VR_weights, SR_weights
+        elif scheme == 'sphere':
+            if not self._sphere_region_bool: self.spherical_region()
+            print(".. training BDT in V_CR")
+            self.train_bdt(config, 'V_CR')
+            print(".. predicting weights in V_SR")
+            V_SR_weights = self.bdt_prediction('V_SR')
+
+            print(".. training BDT in A_CR")
+            self.train_bdt(config, 'A_CR')
+            print(".. predicting weights in A_SR")
+            A_SR_weights = self.bdt_prediction('A_SR')
+            return V_SR_weights, A_SR_weights

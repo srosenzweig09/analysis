@@ -24,9 +24,8 @@ parser = ArgumentParser(description='Command line parser of model options and ta
 parser.add_argument('--cfg',    dest='cfg',    help='config file', required=True)
 parser.add_argument('--rectangular',    dest='rectangular',    help='', action='store_true', default=False)
 parser.add_argument('--spherical',    dest='spherical',    help='', action='store_true', default=False)
-# parser.add_argument('--signal', dest='signal', help='signal file')
-# parser.add_argument('--data' ,  dest='data',   help='data file')
-# parser.add_argument('--output', dest='output', help='output file', required=True)
+parser.add_argument('--dHHH',    dest='dHHH',    help='', action='store_true', default=False)
+parser.add_argument('--mH',    dest='mH',    help='', action='store_true', default=False)
 
 args = parser.parse_args()
 
@@ -46,11 +45,25 @@ treename = config['file']['tree']
 year = int(config['file']['year'])
 pairing = config['pairing']['scheme']
 
+minMX = int(config['plot']['minMX'])
+maxMX = int(config['plot']['maxMX'])
+nbins = int(config['plot']['nbins'])
+mBins = np.linspace(minMX,maxMX,nbins)
+
 if args.rectangular: region_type = 'rect'
 elif args.spherical: region_type = 'sphere'
 
-if 'dHHH' in pairing: pairing_type = 'dHHH'
-elif 'mH' in pairing: pairing_type = 'mH'
+if args.dHHH: pairing = 'dHHH_pairs'
+elif args.mH: pairing = 'mH_pairs'
+pairing_type = pairing.split('_')[0]
+
+indir = f"root://cmseos.fnal.gov/{base}/{pairing}/"
+
+sigFileName = f"{indir}NMSSM/{signal}"
+sigTree = Signal(sigFileName)
+
+datFileName = f"{indir}{data}"
+datTree = Signal(datFileName)
 
 # Assumptions here:
 # Signal file is saved in an NMSSM folder with the following format:
@@ -65,11 +78,23 @@ if args.rectangular:
     maxVR = float(config['rectangular']['maxVR'])
     maxCR = float(config['rectangular']['maxCR'])
     if maxCR == -1: maxCR = 9999
+    sigTree.rectangular_region(maxSR, maxVR, maxCR)
+    datTree.rectangular_region(maxSR, maxVR, maxCR)
+    dat_mX_VRls = datTree.np('X_m')[datTree.VRls_mask]
+    dat_mX_VRhs = datTree.X_m[datTree.VRhs_mask]
+    dat_mX_SRls = datTree.np('X_m')[datTree.SRls_mask]
+    sig_mX_SRhs = sigTree.np('X_m')[sigTree.SRhs_mask]
 elif args.spherical:
     ARcenter =float(config['spherical']['ARcenter'])
     VRcenter =float(config['spherical']['VRcenter'])
     rInner   =float(config['spherical']['rInner'])
     rOuter   =float(config['spherical']['rOuter'])
+    sigTree.spherical_region(rInner, rOuter, ARcenter, VRcenter)
+    datTree.spherical_region(rInner, rOuter, ARcenter, VRcenter)
+    dat_mX_VRls = datTree.np('X_m')[datTree.V_SRls_mask]
+    dat_mX_VRhs = datTree.np('X_m')[datTree.V_SRhs_mask]
+    dat_mX_SRls = datTree.np('X_m')[datTree.A_SRls_mask]
+    sig_mX_SRhs = sigTree.np('X_m')[sigTree.A_SRhs_mask]
 else:
     raise AttributeError("No mass region definition!")
 
@@ -86,104 +111,36 @@ randomState  = int(config['BDT']['randomState'])
 variables    = config['BDT']['variables'].split(", ")
 
 ### ------------------------------------------------------------------------------------
-## build region masks
-
-mH = 125 # GeV
-
-indir = f"root://cmseos.fnal.gov/{base}/{pairing}/"
-
-sigFileName = f"{indir}NMSSM/{signal}"
-sigTree = Signal(sigFileName)
-sigTree.rectangular_region()
-
-datFileName = f"{indir}{data}"
-datTree = Signal(datFileName)
-datTree.rectangular_region()
-
-print("N(data,SR) =",sum(sigTree.SRhs_mask))
-
-### ------------------------------------------------------------------------------------
-## train BDT
-
-print(".. preparing inputs to train BDT")
-
-def create_dict(mask):
-    features = {}
-    for var in variables:
-        features[var] = datTree.get(var)[mask]
-    return features
-
-df_cr_ls = DataFrame(create_dict(datTree.CRls_mask))
-df_cr_hs = DataFrame(create_dict(datTree.CRhs_mask))
-
-df_vr_ls = DataFrame(create_dict(datTree.VRls_mask))
-df_vr_hs = DataFrame(create_dict(datTree.VRhs_mask))
-
-df_sr_ls = DataFrame(create_dict(datTree.SRls_mask))
-
-TF = sum(datTree.CRhs_mask)/sum(datTree.CRls_mask)
-print("TF",TF)
-
-# Train BDT on CR data
-# Use low-score CR to estimate high-score CR
-
-ls_weights = np.ones(ak.sum(datTree.CRls_mask))*TF
-hs_weights = np.ones(ak.sum([datTree.CRhs_mask]))
-
-np.random.seed(randomState) #Fix any random seed using numpy arrays
-print(".. calling reweight.GBReweighter")
-reweighter_base = reweight.GBReweighter(
-    n_estimators=Nestimators, 
-    learning_rate=learningRate, 
-    max_depth=maxDepth, 
-    min_samples_leaf=minLeaves,
-    gb_args={'subsample': GBsubsample})
-print(".. calling reweight.FoldingReweighter")
-reweighter = reweight.FoldingReweighter(reweighter_base, random_state=randomState, n_folds=2, verbose=False)
-print(".. fitting BDT")
-print(".. calling reweighter.fit")
-reweighter.fit(df_cr_ls,df_cr_hs,ls_weights,hs_weights)
-
-### ------------------------------------------------------------------------------------
-## predict weights using BDT
+## train bdt and predict weights
 
 print(".. predicting weights in validation region")
-weights_pred = reweighter.predict_weights(df_vr_ls,np.ones(ak.sum(datTree.VRls_mask))*TF,lambda x: np.mean(x, axis=0))
-
-nbins = 60
-mBins = np.linspace(0,2000,nbins)
+VR_weights, SR_weights = datTree.bdt_process(region_type, config)
 
 fig, ax = plt.subplots()
-n_dat_VRls, _ = np.histogram(datTree.X_m[datTree.VRls_mask].to_numpy(), bins=mBins)
-n_dat_VRls, _ = np.histogram(datTree.np('X_m')[datTree.VRls_mask], bins=mBins)
-
-n_dat_VRls_transformed, e = Hist(datTree.X_m[datTree.VRls_mask], weights=weights_pred, bins=mBins, ax=ax, label='Estimation')
-n_dat_VRhs, e = Hist(datTree.X_m[datTree.VRhs_mask], bins=mBins, ax=ax, label='Target')
+n_estimate, _ = Hist(dat_mX_VRls, weights=VR_weights, bins=mBins, ax=ax, label='Estimation')
+n_target, _ = Hist(dat_mX_VRhs, bins=mBins, ax=ax, label='Target')
 ax.set_xlabel(r"$m_X$ [GeV]")
 ax.set_ylabel("Events")
 ax.set_title("BDT Estimation of Data Yield in Validation Region")
-fig.savefig(f"combine/{outputFile}.pdf", bbox_inches='tight')
-
-n_sig_SRhs, _ = np.histogram(sigTree.X_m[sigTree.SRhs_mask].to_numpy(), bins=mBins)
-n_sig_SRhs = n_sig_SRhs * sigTree.scale
+fig.savefig(f"combine/{outputFile}_validation.pdf", bbox_inches='tight')
 
 ### ------------------------------------------------------------------------------------
-## add branches and prepare to save
+## signal region estimate
 
-weights_pred = reweighter.predict_weights(df_sr_ls,np.ones(ak.sum(datTree.SRls_mask))*TF,lambda x: np.mean(x, axis=0))
-n_dat_SRls, _ = np.histogram(datTree.np('X_m')[datTree.SRls_mask], bins=mBins)
+n_sig_SRhs, _ = np.histogram(sig_mX_SRhs, bins=mBins)
+n_sig_SRhs = n_sig_SRhs * sigTree.scale
 
-n_dat_SRls_transformed, e = Hist(datTree.np('X_m')[datTree.SRls_mask], weights=weights_pred, bins=mBins, ax=ax, label='Estimation')
+n_dat_SRhs_estimate, e = Hist(dat_mX_SRls, weights=SR_weights, bins=mBins, ax=ax, label='Estimation')
 
-print("N(data,SR,est) =",n_dat_SRls_transformed.sum())
+print("N(data,SR,est) =",n_dat_SRhs_estimate.sum())
 
 canvas = ROOT.TCanvas('c1','c1', 600, 600)
 canvas.SetFrameLineWidth(3)
 
-h_dat = ROOT.TH1D("h_dat",";m_{X} [GeV];Events",len(n_dat_SRls_transformed),array('d',list(e)))
+h_dat = ROOT.TH1D("h_dat",";m_{X} [GeV];Events",len(n_dat_SRhs_estimate),array('d',list(e)))
 h_sig = ROOT.TH1D("h_sig",";m_{X} [GeV];Events",len(n_sig_SRhs),array('d',list(e)))
 
-for i,(bin_sig,bin_dat) in enumerate(zip(n_sig_SRhs, n_dat_SRls_transformed)):
+for i,(bin_sig,bin_dat) in enumerate(zip(n_sig_SRhs, n_dat_SRhs_estimate)):
     h_dat.SetBinContent(i+1, bin_dat)
     h_sig.SetBinContent(i+1, bin_sig)
 
@@ -211,3 +168,4 @@ fout.cd()
 h_dat.Write()
 h_sig.Write()
 fout.Close()
+
