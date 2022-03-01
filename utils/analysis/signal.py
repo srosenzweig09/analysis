@@ -11,12 +11,12 @@ from utils.plotter import latexTitle
 from .particle import Particle
 
 # Standard library imports
-# from math import comb
 from hep_ml import reweight
 import re
 import sys 
 import uproot
 import pandas as pd
+from hep_ml.metrics_utils import ks_2samp_weighted
 class Signal():
     """A class for handling TTrees from recent skims, which output a single branch for each b jet kinematic. (Older skims output an array of jet kinematics.)
     
@@ -65,6 +65,7 @@ class Signal():
             self.mXmY = self.sample.replace('$','').replace('_','').replace('= ','_').replace(', ','_').replace(' GeV','')
             self._isdata = False
         else:
+            self.scale = 1
             self._isdata = True
 
         self.initialize_vars()
@@ -109,13 +110,18 @@ class Signal():
         """Returns the key as a numpy array."""
         return self.get(key, library='np')
 
-    def rectangular_region(self, SR_edge=25, VR_edge=60, CR_edge=-1):
+    def rectangular_region(self, config):
         """Defines rectangular region masks."""
+        SR_edge = float(config['rectangular']['maxSR'])
+        VR_edge = float(config['rectangular']['maxVR'])
+        CR_edge = float(config['rectangular']['maxCR'])
+        if CR_edge == -1: CR_edge = 9999
+
         higgs = ['HX_m', 'HY1_m', 'HY2_m']
         Dm_cand = np.column_stack(([abs(self.get(mH,'np') - 125) for mH in higgs]))
         SR_mask = ak.all(Dm_cand <= SR_edge, axis=1) # SR
         VR_mask = ak.all(Dm_cand > SR_edge, axis=1) & ak.all(Dm_cand <= VR_edge, axis=1) # VR
-        CR_mask = ak.all(Dm_cand > VR_edge, axis=1) # CR
+        CR_mask = ak.all(Dm_cand > VR_edge, axis=1) & ak.all(Dm_cand <= CR_edge, axis=1) # CR
         
         score_cut = 0.66
 
@@ -129,10 +135,21 @@ class Signal():
         self.SRls_mask = SR_mask & ls_mask
         self.SRhs_mask = SR_mask & hs_mask
 
+        if self._isdata:
+            print("SR_edge",int(SR_edge))
+            print("VR_edge",int(VR_edge))
+            print("CR_edge",int(CR_edge))
+            self.blinded_mask = VR_mask | CR_mask
+
         self._rect_region_bool = True
 
-    def spherical_region(self, SR_edge=25, VR_edge=50, AR_center=125, VR_center=185):
+    def spherical_region(self, config):
         """Defines spherical estimation region masks."""
+        AR_center = float(config['spherical']['ARcenter'])
+        VR_center = float(config['spherical']['VRcenter'])
+        SR_edge   = float(config['spherical']['rInner'])
+        CR_edge   = float(config['spherical']['rOuter'])
+
         higgs = ['HX_m', 'HY1_m', 'HY2_m']
 
         Dm_cand = np.column_stack(([abs(self.get(mH,'np') - AR_center) for mH in higgs]))
@@ -140,14 +157,14 @@ class Signal():
         Dm_cand = Dm_cand.sum(axis=1)
         Dm_cand = np.sqrt(Dm_cand)
         A_SR_mask = Dm_cand <= SR_edge # Analysis SR
-        A_CR_mask = (Dm_cand > SR_edge) & (Dm_cand <= VR_edge) # Analysis CR
+        A_CR_mask = (Dm_cand > SR_edge) & (Dm_cand <= CR_edge) # Analysis CR
 
         Dm_cand = np.column_stack(([abs(self.get(mH,'np') - VR_center) for mH in higgs]))
         Dm_cand = Dm_cand * Dm_cand
         Dm_cand = Dm_cand.sum(axis=1)
         Dm_cand = np.sqrt(Dm_cand)
         V_SR_mask = Dm_cand <= SR_edge # Validation SR
-        V_CR_mask = (Dm_cand > SR_edge) & (Dm_cand <= VR_edge) # Validation CR
+        V_CR_mask = (Dm_cand > SR_edge) & (Dm_cand <= CR_edge) # Validation CR
 
         score_cut = 0.66
 
@@ -164,13 +181,17 @@ class Signal():
         self.V_SRls_mask = V_SR_mask & ls_mask
         self.V_SRhs_mask = V_SR_mask & hs_mask
 
+        if self._isdata:
+            print("SR_edge",int(SR_edge))
+            print("CR_edge",int(CR_edge))
+
         self._sphere_region_bool = True
 
-    def region_yield(self, definition='rect', normalized=False):
+    def region_yield(self, definition='rect', normalized=False, config=None, SR_ls=None, SR_hs_est=None, circ_region=None):
         """Prints original or normalized estimation region yields."""
 
         if definition == 'rect':
-            if not self._rect_region_bool: self.rectangular_region()
+            if not self._rect_region_bool: self.rectangular_region(config)
 
             CRls_yield = int(ak.sum(self.CRls_mask)*self.scale)
             CRhs_yield = int(ak.sum(self.CRhs_mask)*self.scale)
@@ -181,6 +202,8 @@ class Signal():
 
             if self._isdata:
                 SRls_yield, SRhs_yield = 0, 0
+            if SR_ls is not None and SR_hs_est is not None:
+                SRls_yield, SRhs_yield = int(SR_ls), int(SR_hs_est)
 
             if normalized:
                 total = CRls_yield + CRhs_yield + VRls_yield + VRhs_yield + SRls_yield + SRhs_yield
@@ -199,7 +222,7 @@ class Signal():
             pd.set_option('display.colheader_justify', 'center')
             print(df.to_string(index=False))
         elif definition == 'sphere':
-            if not self._sphere_region_bool: self.spherical_region()
+            if not self._sphere_region_bool: self.spherical_region(config)
 
             A_CRls_yield = ak.sum(self.A_CRls_mask)
             A_CRhs_yield = ak.sum(self.A_CRhs_mask)
@@ -211,8 +234,13 @@ class Signal():
             V_SRls_yield = ak.sum(self.V_SRls_mask)
             V_SRhs_yield = ak.sum(self.V_SRhs_mask)
 
-            if isdata:
+            if self._isdata:
                 A_SRls_yield, A_SRhs_yield = 0, 0
+            if SR_ls is not None and SR_hs_est is not None:
+                if circ_region == 'AR':
+                    A_SRls_yield, A_SRhs_yield = SR_ls, SR_hs_est
+                elif circ_region == 'VR':
+                    V_SRls_yield, V_SRhs_yield = SR_ls, SR_hs_est
 
             A_total = A_CRls_yield + A_CRhs_yield + A_SRls_yield + A_SRhs_yield
             V_total = V_CRls_yield + V_CRhs_yield + V_SRls_yield + V_SRhs_yield
@@ -231,12 +259,14 @@ class Signal():
             regions = np.repeat(['Analysis Region', 'Validation Region'],4)
             cols = np.tile(['CR low-avg', 'CR high-avg', 'SR low-avg', 'SR high-avg'],2)
             yields = [A_CRls_yield, A_CRhs_yield, A_SRls_yield, A_SRhs_yield, V_CRls_yield, V_CRhs_yield, V_SRls_yield, V_SRhs_yield]
+            yields = [int(value) for value in yields]
 
             index = [(region, col) for region,col in zip(regions,cols)]
 
             index = pd.MultiIndex.from_tuples(index)
 
             yields = pd.Series(yields, index=index)
+            print("Printing yields.")
             print(yields)
 
     def get_df(self, mask, variables):
@@ -267,6 +297,7 @@ class Signal():
             ls_mask = self.A_CRls_mask
             hs_mask = self.A_CRhs_mask
 
+        self.original_mask = ls_mask
         self.TF = sum(hs_mask)/sum(ls_mask)
         ls_weights = np.ones(ak.sum(ls_mask))*self.TF
         hs_weights = np.ones(ak.sum([hs_mask]))
@@ -291,33 +322,66 @@ class Signal():
         self.reweighter = reweighter
 
     def bdt_prediction(self, region):
+        print_stats = False
+        circ_region = None
+        if region == 'CR':
+            mask = self.CRls_mask
+            obs = self.CRhs_mask
         if region == 'VR':
+            print_stats = True
+            region = 'rect'
             mask = self.VRls_mask
+            obs = self.VRhs_mask
         if region == 'SR':
+            print_stats = True
+            region = 'rect'
             mask = self.SRls_mask
+            obs = ak.zeros_like(self.SRls_mask)
         elif region == 'V_SR':
+            region = 'sphere'
             mask = self.V_SRls_mask
+            obs = self.V_SRhs_mask
+            circ_region = 'VR'
+            print_stats = True
         elif region == 'A_SR':
+            region = 'sphere'
             mask = self.A_SRls_mask
+            circ_region = 'AR'
+            obs = ak.zeros_like(self.A_SRls_mask)
         
         df_ls = self.get_df(mask, self.variables)
         initial_weights = np.ones(ak.sum(mask))*self.TF
 
         weights_pred = self.reweighter.predict_weights(df_ls,initial_weights,lambda x: np.mean(x, axis=0))
+        self.region_yield(definition=region, SR_ls=ak.sum(mask), SR_hs_est=ak.sum(weights_pred), circ_region=circ_region)
+
+        if print_stats:
+            Nobs = ak.sum(obs)
+            Npred = ak.sum(weights_pred)
+            Sobs = 1/np.sqrt(Nobs)
+            Spred = np.sqrt(ak.sum(weights_pred**2))
+            Scomb = np.sqrt(Sobs**2 + Spred**2)
+
+            std = (Nobs - Npred)/Scomb
+            print(f"Standard Deviation     = {std:.2f}")
+
+            uncertainty = np.sqrt(ak.sum(weights_pred**2))
+            print(f"Estimation Uncertainty = {uncertainty:.1f}")
         return weights_pred
 
     def bdt_process(self, scheme, config, validate=True):
         if scheme == 'rect':
-            if not self._rect_region_bool: self.rectangular_region()
+            if not self._rect_region_bool: self.rectangular_region(config)
             print(".. training BDT in CR")
             self.train_bdt(config, 'CR')
+            self.CR_weights = self.bdt_prediction('CR')
             print(".. predicting weights in VR")
-            VR_weights = self.bdt_prediction('VR')
+            self.VR_weights = self.bdt_prediction('VR')
             print(".. predicting weights in SR")
-            SR_weights = self.bdt_prediction('SR')
-            return VR_weights, SR_weights
+            self.SR_weights = self.bdt_prediction('SR')
+            self.target_mask = self.CRhs_mask
         elif scheme == 'sphere':
-            if not self._sphere_region_bool: self.spherical_region()
+            if not self._sphere_region_bool: self.spherical_region(config)
             print(".. training BDT in V_CR")
             self.train_bdt(config, 'V_CR')
             print(".. predicting weights in V_SR")
@@ -327,4 +391,38 @@ class Signal():
             self.train_bdt(config, 'A_CR')
             print(".. predicting weights in A_SR")
             A_SR_weights = self.bdt_prediction('A_SR')
-            return V_SR_weights, A_SR_weights
+            self.VR_weights = V_SR_weights
+            self.target_mask = self.V_CRhs_mask
+            self.SR_weights = A_SR_weights
+
+        return self.VR_weights, self.SR_weights
+
+    def kstest(self,BDT=True):
+        ksresults=[] 
+        original = self.get_df(self.original_mask, self.variables)
+        target = self.get_df(self.target_mask, self.variables)
+
+        if BDT: weights1 = self.CR_weights
+        else: weights1 = np.ones(len(original))*self.TF
+
+        weights2 = np.ones(len(target), dtype=int)
+
+        print(f"N low = {len(weights1)}")
+        print(f"N high = {len(weights2)}")
+
+        cols = []
+        skip = ['HX_eta', 'HY1_eta', 'HY2_eta', 'HX_HY1_dEta', 'HY1_HY2_dEta', 'HY2_HX_dEta']
+        for i, column in enumerate(self.variables):
+            if column in skip: continue
+            cols.append(column)
+            ks =  ks_2samp_weighted(original[column], target[column], weights1=weights1, weights2=weights2)
+            ksresults.append(ks)
+        additional = [self.np('X_m')]
+        for extra in additional:
+            original = extra[self.original_mask]
+            target = extra[self.target_mask]
+            ks =  ks_2samp_weighted(original, target, weights1=weights1, weights2=weights2)
+            ksresults.append(ks)
+        cols.append('MX')
+        ksresults = pd.DataFrame([ksresults], columns=cols)
+        return ksresults 
