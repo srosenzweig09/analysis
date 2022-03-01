@@ -7,9 +7,11 @@ from configparser import ConfigParser
 from hep_ml import reweight
 import matplotlib.pyplot as plt
 import numpy as np
-from pandas import DataFrame
+import pandas as pd
 import re
 import ROOT
+from scipy.stats import kstest
+import subprocess
 import sys
 from utils.analysis import Signal
 from utils.plotter import Hist
@@ -21,13 +23,30 @@ print(".. parsing command line arguments")
 
 parser = ArgumentParser(description='Command line parser of model options and tags')
 
-parser.add_argument('--cfg',    dest='cfg',    help='config file', required=True)
-parser.add_argument('--rectangular',    dest='rectangular',    help='', action='store_true', default=False)
-parser.add_argument('--spherical',    dest='spherical',    help='', action='store_true', default=False)
-parser.add_argument('--dHHH',    dest='dHHH',    help='', action='store_true', default=False)
-parser.add_argument('--mH',    dest='mH',    help='', action='store_true', default=False)
+parser.add_argument('--cfg', dest='cfg', help='config file', required=True)
+
+parser.add_argument('--rectangular', dest='rectangular', help='', action='store_true', default=False)
+parser.add_argument('--spherical', dest='spherical', help='', action='store_true', default=False)
+
+parser.add_argument('--dHHH', dest='dHHH', help='', action='store_true', default=False)
+parser.add_argument('--mH', dest='mH', help='', action='store_true', default=False)
+
+parser.add_argument('--BDTonly', dest='BDT_bool', action='store_true', default=False)
+parser.add_argument('--nestimators', dest='N')
+parser.add_argument('--learningRate', dest='lr')
+parser.add_argument('--maxDepth', dest='depth')
+parser.add_argument('--GBsubsample', dest='gbsub')
+parser.add_argument('--randomState', dest='rand')
 
 args = parser.parse_args()
+
+BDT_dict = {
+    'Nestimators' : args.N,
+    'learningRate' : args.lr,
+    'maxDepth' : args.depth,
+    'GBsubsample' : args.gbsub,
+    'randomState' : args.rand
+}
 
 ### ------------------------------------------------------------------------------------
 ## Implement config parser
@@ -37,6 +56,12 @@ print(".. parsing config file")
 config = ConfigParser()
 config.optionxform = str
 config.read(args.cfg)
+
+overwrite = False
+for hyper in BDT_dict:
+    if BDT_dict[hyper] is not None:
+        config['BDT'][hyper] = BDT_dict[hyper]
+        print(f"Overwriting [{hyper}] from config file with command line argument.")
 
 base = config['file']['base']
 signal = config['file']['signal']
@@ -74,27 +99,22 @@ end = re.search('/ntuple.root',signal).start()
 outputFile = f"{signal[start:end]}_{pairing_type}_{region_type}"
 
 if args.rectangular:
-    maxSR = float(config['rectangular']['maxSR'])
-    maxVR = float(config['rectangular']['maxVR'])
-    maxCR = float(config['rectangular']['maxCR'])
-    if maxCR == -1: maxCR = 9999
-    sigTree.rectangular_region(maxSR, maxVR, maxCR)
-    datTree.rectangular_region(maxSR, maxVR, maxCR)
+    print("RECTANGULAR")
+    sigTree.rectangular_region(config)
+    datTree.rectangular_region(config)
+    sig_mX_SRhs = sigTree.np('X_m')[sigTree.SRhs_mask]
     dat_mX_VRls = datTree.np('X_m')[datTree.VRls_mask]
     dat_mX_VRhs = datTree.X_m[datTree.VRhs_mask]
     dat_mX_SRls = datTree.np('X_m')[datTree.SRls_mask]
-    sig_mX_SRhs = sigTree.np('X_m')[sigTree.SRhs_mask]
+    dat_mX_blinded = datTree.np('X_m')[datTree.blinded_mask]
 elif args.spherical:
-    ARcenter =float(config['spherical']['ARcenter'])
-    VRcenter =float(config['spherical']['VRcenter'])
-    rInner   =float(config['spherical']['rInner'])
-    rOuter   =float(config['spherical']['rOuter'])
-    sigTree.spherical_region(rInner, rOuter, ARcenter, VRcenter)
-    datTree.spherical_region(rInner, rOuter, ARcenter, VRcenter)
+    print("SPHERICAL")
+    sigTree.spherical_region(config)
+    datTree.spherical_region(config)
+    sig_mX_SRhs = sigTree.np('X_m')[sigTree.A_SRhs_mask]
     dat_mX_VRls = datTree.np('X_m')[datTree.V_SRls_mask]
     dat_mX_VRhs = datTree.np('X_m')[datTree.V_SRhs_mask]
     dat_mX_SRls = datTree.np('X_m')[datTree.A_SRls_mask]
-    sig_mX_SRhs = sigTree.np('X_m')[sigTree.A_SRhs_mask]
 else:
     raise AttributeError("No mass region definition!")
 
@@ -115,6 +135,15 @@ variables    = config['BDT']['variables'].split(", ")
 
 print(".. predicting weights in validation region")
 VR_weights, SR_weights = datTree.bdt_process(region_type, config)
+sys.exit()
+
+# with or without BDT
+ks_noBDT = datTree.kstest(BDT=False)
+ks_BDT = datTree.kstest() # may need to add a normalization factor eventually - to be studied
+
+df = pd.concat([ks_noBDT, ks_BDT], axis=0)
+df.index = ['TF','BDT']
+print(df.T)
 
 fig, ax = plt.subplots()
 n_estimate, _ = Hist(dat_mX_VRls, weights=VR_weights, bins=mBins, ax=ax, label='Estimation')
@@ -169,3 +198,15 @@ h_dat.Write()
 h_sig.Write()
 fout.Close()
 
+print()
+print("PLEASE RUN THE FOLLOWING COMMAND:")
+print("---------------------------------")
+print("ssh srosenzw@cmslpc-sl7.fnal.gov 'cd /uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_2_18/src/HiggsAnalysis/CombinedLimit/; source env_standalone.sh; make -j 8; make; python3 generateDataCards.py'")
+# process = subprocess.Popen(bashCommand.split(), stdout=subprocess.PIPE)
+# output, error = process.communicate()
+# bashCommand = "runcombine"
+# process = subprocess.Popen(bashCommand.split(), stdout=subprocess.PIPE)
+# output, error = process.communicate()
+# bashCommand = "exit"
+# process = subprocess.Popen(bashCommand.split(), stdout=subprocess.PIPE)
+# output, error = process.communicate()
