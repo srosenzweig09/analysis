@@ -1,3 +1,4 @@
+print()
 print("[INFO] .. starting program")
 
 from argparse import ArgumentParser
@@ -35,8 +36,12 @@ parser.add_argument('--BDTonly', dest='BDT_bool', action='store_true', default=F
 parser.add_argument('--nestimators', dest='N')
 parser.add_argument('--learningRate', dest='lr')
 parser.add_argument('--maxDepth', dest='depth')
+parser.add_argument('--minLeaves', dest='minLeaves')
 parser.add_argument('--GBsubsample', dest='gbsub')
 parser.add_argument('--randomState', dest='rand')
+
+parser.add_argument('--rInner', dest='rInner')
+parser.add_argument('--rOuter', dest='rOuter')
 
 args = parser.parse_args()
 
@@ -44,8 +49,13 @@ BDT_dict = {
     'Nestimators' : args.N,
     'learningRate' : args.lr,
     'maxDepth' : args.depth,
+    'minLeaves' : args.minLeaves,
     'GBsubsample' : args.gbsub,
     'randomState' : args.rand
+}
+sphere_dict = {
+    'rInner' : args.rInner,
+    'rOuter' : args.rOuter
 }
 
 ### ------------------------------------------------------------------------------------
@@ -61,7 +71,11 @@ overwrite = False
 for hyper in BDT_dict:
     if BDT_dict[hyper] is not None:
         config['BDT'][hyper] = BDT_dict[hyper]
-        print(f"Overwriting [{hyper}] from config file with command line argument.")
+        print(f"Overwriting [{hyper}={BDT_dict[hyper]}] from config file with command line argument.")
+for hyper in sphere_dict:
+    if sphere_dict[hyper] is not None:
+        config['spherical'][hyper] = sphere_dict[hyper]
+        print(f"Overwriting [{hyper}={sphere_dict[hyper]}] from config file with command line argument.")
 
 base = config['file']['base']
 signal = config['file']['signal']
@@ -135,15 +149,16 @@ variables    = config['BDT']['variables'].split(", ")
 
 print(".. predicting weights in validation region")
 VR_weights, SR_weights = datTree.bdt_process(region_type, config)
-sys.exit()
 
 # with or without BDT
-ks_noBDT = datTree.kstest(BDT=False)
-ks_BDT = datTree.kstest() # may need to add a normalization factor eventually - to be studied
+# ks_noBDT = datTree.kstest(BDT=False)
+# ks_BDT = datTree.kstest() # may need to add a normalization factor eventually - to be studied
 
-df = pd.concat([ks_noBDT, ks_BDT], axis=0)
-df.index = ['TF','BDT']
-print(df.T)
+# df = pd.concat([ks_noBDT, ks_BDT], axis=0)
+# df.index = ['TF','BDT']
+# print(df.T)
+
+sys.exit()
 
 fig, ax = plt.subplots()
 n_estimate, _ = Hist(dat_mX_VRls, weights=VR_weights, bins=mBins, ax=ax, label='Estimation')
