@@ -13,9 +13,9 @@ Training samples are prepared such that these requirements are already imposed:
 - n_sixb == 6
 """
 
-from . import *
-from .varUtils import *
-from .plotter import latexTitle
+from utils import *
+from utils.varUtils import *
+from utils.plotter import latexTitle
 
 # Standard library imports
 import sys 
