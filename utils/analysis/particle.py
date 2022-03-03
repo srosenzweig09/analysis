@@ -1,3 +1,5 @@
+import awkward as ak
+import numpy as np
 import vector
 vector.register_awkward()
 
@@ -28,12 +30,16 @@ class Particle():
         self.eta = tree.get(particle_name + '_eta')
         self.phi = tree.get(particle_name + '_phi')
         self.m = tree.get(particle_name + '_m')
+        self.theta = ak.from_numpy(2*np.arctan(np.exp(-self.eta.to_numpy())))
+        self.cosTheta = np.cos(self.theta)
 
     def initialize_from_particle(self, particle):
         self.pt = particle.pt
         self.eta = particle.eta
         self.phi = particle.phi
         self.m = particle.m
+        self.theta = ak.from_numpy(2*np.arctan(np.exp(-self.eta.to_numpy())))
+        self.cosTheta = np.cos(self.theta)
 
     def get_vector(self):
         p4 = vector.obj(
