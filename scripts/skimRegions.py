@@ -7,7 +7,6 @@ from array import array
 from configparser import ConfigParser
 import matplotlib.pyplot as plt
 import numpy as np
-import re
 import ROOT
 import sys
 from utils.analysis import Signal
@@ -68,16 +67,19 @@ config = ConfigParser()
 config.optionxform = str
 config.read(args.cfg)
 
-print()
-overwrite = False
+overwrite_log = []
 for hyper in BDT_dict:
     if BDT_dict[hyper] is not None:
         config['BDT'][hyper] = BDT_dict[hyper]
-        print(f"Overwriting [{hyper}={BDT_dict[hyper]}] from config file with command line argument.")
+        overwrite_log.append(f"Overwriting [{hyper}={BDT_dict[hyper]}] from config file with command line argument.")
+if len(overwrite_log) > 0: overwrite_log.insert(0, '')
 for hyper in sphere_dict:
     if sphere_dict[hyper] is not None:
         config['spherical'][hyper] = sphere_dict[hyper]
         print(f"Overwriting [{hyper}={sphere_dict[hyper]}] from config file with command line argument.")
+if len(overwrite_log) > 0: overwrite_log.insert(0, '')
+for line in overwrite_log:
+    print(overwrite_log)
 print()
 
 base = config['file']['base']
