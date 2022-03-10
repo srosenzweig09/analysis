@@ -1,21 +1,12 @@
 import awkward as ak
 import numpy as np
+np.seterr(all="ignore")
 import vector
 vector.register_awkward()
 
 class Particle():
     def __init__(self, tree=None, particle_name=None, particle=None):
-        """_summary_
-
-        Args:
-            tree (_type_): _description_
-            particle_name (_type_): _description_
-
-        Returns:
-            _type_: _description_
-
-        Yields:
-            _type_: _description_
+        """A class much like the TLorentzVector objects in the vector module but with more customizability for my analysis
         """
 
         if tree is not None and particle_name is not None:
