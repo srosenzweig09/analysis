@@ -3,7 +3,7 @@ import argparse, imp, multiprocessing, os, time, subprocess, sys
 from itertools import islice
 from functools import partial
 from contextlib import contextmanager
-from . import getSiteInfo, xrdfs_find
+import getSiteInfo, xrdfs_find
 try:
 	from tqdm import tqdm
 except:
@@ -27,9 +27,9 @@ class col:
 def compare_checksum_dicts(args,dict1,dict2):
 	header = "Comparing the names and checksums in the dictionaries from " + col.bold + col.blue + args.start + col.endc + " and " + col.bold + col.blue + args.end + col.endc + " ..."
 	if args.progress:
-		print(header)
+		print header
 	else:
-		print(header, end=' ')
+		print header,
 		sys.stdout.flush()
 		function_start_time = time.time()
 
@@ -39,9 +39,9 @@ def compare_checksum_dicts(args,dict1,dict2):
 		print_done(function_start_time,time.time())
 
 	if len(diff_dict)>0:
-		print(col.red + "\tPROBLEM!!! There are either missing files or files with different checksums!" + col.endc)
+		print col.red + "\tPROBLEM!!! There are either missing files or files with different checksums!" + col.endc
 	else:
-		print(col.green + "\tThe checksums for both lists of files match!" + col.endc)
+		print col.green + "\tThe checksums for both lists of files match!" + col.endc
 
 	if args.debug:
 		print_partial_list(dict1,"Partial dict of files from " + args.start + ":")
@@ -51,7 +51,7 @@ def compare_checksum_dicts(args,dict1,dict2):
 	return diff_dict
 
 def diff_file_list(args,start_files,end_files):
-	print("Comparing the names in the file lists from " + col.bold + col.blue + args.start + col.endc + " and " + col.bold + col.blue + args.end + col.endc + " ...", end=' ')
+	print "Comparing the names in the file lists from " + col.bold + col.blue + args.start + col.endc + " and " + col.bold + col.blue + args.end + col.endc + " ...",
 	sys.stdout.flush()
 	function_start_time = time.time()
 
@@ -60,10 +60,10 @@ def diff_file_list(args,start_files,end_files):
 	print_done(function_start_time,time.time())
 
 	if len(diff_list)>0:
-		print("\t" + col.bold + col.red + "PROBLEM!!!" + col.endc + " There are missing files at " + col.yellow + args.end + col.endc + "!")
+		print "\t" + col.bold + col.red + "PROBLEM!!!" + col.endc + " There are missing files at " + col.yellow + args.end + col.endc + "!"
 	else:
-		print("\tAll files in " + col.yellow + args.indir + col.endc + "at " + col.bold + col.green + args.start + col.endc + \
-			  " are in " +col.blue + endslash_check(args.outdir) + args.indir + col.endc +" at " + col.bold + col.red + args.end + col.endc + ".")
+		print "\tAll files in " + col.yellow + args.indir + col.endc + "at " + col.bold + col.green + args.start + col.endc + \
+			  " are in " +col.blue + endslash_check(args.outdir) + args.indir + col.endc +" at " + col.bold + col.red + args.end + col.endc + "."
 
 	if args.debug:
 		print_partial_list(start_files,"Partial list of " + str(len(start_files)) + " files from " + args.start + ":")
@@ -77,7 +77,7 @@ def endslash_check(string):
 	else: return string+"/"
 
 def format_and_write_transfer_lines(args,start_site,end_site,start_list):
-	print("Formatting and writing the list of files to transfer from " + col.bold + col.blue + start_site.alias + col.endc + " to " + col.bold + col.blue + end_site.alias + col.endc + " ...", end=' ')
+	print "Formatting and writing the list of files to transfer from " + col.bold + col.blue + start_site.alias + col.endc + " to " + col.bold + col.blue + end_site.alias + col.endc + " ...",
 	sys.stdout.flush()
 	function_start_time = time.time()
 
@@ -93,11 +93,11 @@ def format_and_write_transfer_lines(args,start_site,end_site,start_list):
 	print_done(function_start_time,time.time())
 
 	if len(lines)>0 and os.path.isfile(args.tmp+"/"+output_filename):
-		print("\t" + str(output_filename) + " created " + col.bold + col.green + "successfully!" + col.endc)
+		print "\t" + str(output_filename) + " created " + col.bold + col.green + "successfully!" + col.endc
 	elif os.path.isfile(args.tmp+"/"+output_filename) and len(lines)==0:
-		print("\t" + str(output_filename) + " created, but it is " + col.bold + col.yellow + "empty!" + col.endc)
+		print "\t" + str(output_filename) + " created, but it is " + col.bold + col.yellow + "empty!" + col.endc
 	else:
-		print("\tCreation of " + str(output_filename) + col.bold + col.red +" failed!" + col.endc)
+		print "\tCreation of " + str(output_filename) + col.bold + col.red +" failed!" + col.endc
 	
 	return lines
 
@@ -105,9 +105,9 @@ def get_checksum_dict(args=None, site=None, user='', flist=[], quite=False, q=No
 	if not quite:
 		header = "Making a dictionary of filenames and checksums for " + col.bold + col.blue + site.alias + col.endc + " ..."
 		if args.progress:
-			print(header)
+			print header
 		else:
-			print(header, end=' ')
+			print header,
 			sys.stdout.flush()
 			function_start_time = time.time()
 
@@ -146,7 +146,7 @@ def get_checksum_dict(args=None, site=None, user='', flist=[], quite=False, q=No
 	return csdict
 
 def get_file_list(args,site,user):
-	print("Getting file list from " + col.bold + col.blue + site.alias + col.endc + " ...", end=' ')
+	print "Getting file list from " + col.bold + col.blue + site.alias + col.endc + " ...",
 	sys.stdout.flush()
 	function_start_time = time.time()
 
@@ -155,7 +155,7 @@ def get_file_list(args,site,user):
 	                                              maxdepth=args.maxdepth,skipstat=args.skipstat)
 	filelist_stripped = [f[f.find(user)+len(user)+1:] for f in filelist]
 	if (args.make or args.compare_names) and args.debug:
-		print("\nFound",str(len(filelist)),"at %s/store/user/%s/%s" % (site.xrootd_endpoint,user,args.indir))
+		print "\nFound",str(len(filelist)),"at %s/store/user/%s/%s" % (site.xrootd_endpoint,user,args.indir)
 		print_partial_list(filelist,"Initial file list:")
 		print_partial_list(directories,"Initial directory list:")
 		print_partial_list(filelist_stripped,"Stripped file list:")
@@ -194,24 +194,24 @@ def print_done(start_time=None,end_time=None,prefix="",suffix=""):
 		diff /= 3600.
 
 	if start_time!=None and end_time!=None:
-		print("%s[DONE, %.2f %s]%s" % (prefix,diff,unit,suffix))
+		print "%s[DONE, %.2f %s]%s" % (prefix,diff,unit,suffix)
 	else:
-		print("%s[DONE]%s" % (prefix,suffix))
+		print "%s[DONE]%s" % (prefix,suffix)
 
 def print_partial_list(lst, header=""):
 	if header!="":
 		print(header)
 	if type(lst)==list or type(lst)==set:
 		for l in lst[0:3]:
-			print(("\t"+l.strip()))
+			print("\t"+l.strip())
 		if len(lst)>3:
 			print("\t...")
 			for l in lst[-1:]:
-				print(("\t"+l.strip()))
+				print("\t"+l.strip())
 	elif type(lst)==dict:
 		first_three_keys = list(islice(lst, 3))
 		for key in first_three_keys:
-			print(("\t"+key+": "+str(lst[key])))
+			print("\t"+key+": "+str(lst[key]))
 		if len(lst)>3:
 			print("\t...")
 	else:
@@ -304,31 +304,31 @@ Transfers can be monitored at:
 		elif type(value) == int:
 			continue
 
-	print("Getting site information for " + col.bold + col.blue + args.start + col.endc + " ...", end=' ')
+	print "Getting site information for " + col.bold + col.blue + args.start + col.endc + " ...",
 	sys.stdout.flush()
 	start_site_time = time.time()
 	start_site = getSiteInfo.getSiteInfo(site_alias=args.start, debug=False, fast=True, quiet=True)
 	print_done(start_site_time,time.time())
-	print("Getting site information for " + col.bold + col.blue + args.end + col.endc + " ...", end=' ')
+	print "Getting site information for " + col.bold + col.blue + args.end + col.endc + " ...",
 	sys.stdout.flush()
 	end_site_time = time.time()
 	end_site = getSiteInfo.getSiteInfo(site_alias=args.end, debug=False, fast=True, quiet=True)
 	print_done(end_site_time,time.time())
 
 	if args.start_endpoint!="":
-		print("Overriding the xrootd endpoint for " + col.bold + col.blue + args.start + col.endc + " and setting it to " + col.bold + col.yellow + args.start_endpoint + col.endc)
+		print "Overriding the xrootd endpoint for " + col.bold + col.blue + args.start + col.endc + " and setting it to " + col.bold + col.yellow + args.start_endpoint + col.endc
 		start_site.xrootd_endpoint = args.start_endpoint
 	if args.end_endpoint!="":
-		print("Overriding the xrootd endpoint for " + col.bold + col.blue + args.end + col.endc + " and setting it to " + col.bold + col.yellow + args.end_endpoint + col.endc)
+		print "Overriding the xrootd endpoint for " + col.bold + col.blue + args.end + col.endc + " and setting it to " + col.bold + col.yellow + args.end_endpoint + col.endc
 		end_site.xrootd_endpoint = args.end_endpoint
 	if args.start_port:
-		print("Overriding the default xrootd endpoint port for " + col.bold + col.blue + args.start + col.endc + " and setting it to " + col.bold + col.yellow + args.start_port + col.endc)
+		print "Overriding the default xrootd endpoint port for " + col.bold + col.blue + args.start + col.endc + " and setting it to " + col.bold + col.yellow + args.start_port + col.endc
 		if start_site.xrootd_endpoint[-1]=="/":
 			start_site.xrootd_endpoint = start_site.xrootd_endpoint[:-1] + ":" + args.start_port + start_site.xrootd_endpoint[-1:]
 		else:
 			start_site.xrootd_endpoint = start_site.xrootd_endpoint + ":" + args.start_port + "/"
 	if args.end_port:
-		print("Overriding the default xrootd endpoint port for " + col.bold + col.blue + args.end + col.endc + " and setting it to " + col.bold + col.yellow + args.end_port + col.endc)
+		print "Overriding the default xrootd endpoint port for " + col.bold + col.blue + args.end + col.endc + " and setting it to " + col.bold + col.yellow + args.end_port + col.endc
 		if end_site.xrootd_endpoint[-1]=="/":
 			end_site.xrootd_endpoint = end_site.xrootd_endpoint[:-1] + ":" + args.end_port + end_site.xrootd_endpoint[-1:]
 		else:
@@ -338,7 +338,7 @@ Transfers can be monitored at:
 
 	if args.count or args.make:		
 		if args.count:
-			print("There are",col.bold+col.green+str(len(start_files))+col.endc,"files at the site",col.red+args.start+col.endc,"in the folder",col.yellow+args.indir+col.endc,"and its subfolders")
+			print "There are",col.bold+col.green+str(len(start_files))+col.endc,"files at the site",col.red+args.start+col.endc,"in the folder",col.yellow+args.indir+col.endc,"and its subfolders"
 			if args.debug:
 				print_partial_list(start_files)
 		elif args.make:
@@ -346,7 +346,7 @@ Transfers can be monitored at:
 	elif args.compare_checksum or args.compare_names:
 		end_files = get_file_list(args,end_site,args.user2)
 		if args.compare_checksum:
-			print("Will checksum files in the range %s[%s:%s]%s" % (col.magenta,args.chk_range[0],args.chk_range[1],col.endc))
+			print "Will checksum files in the range %s[%s:%s]%s" % (col.magenta,args.chk_range[0],args.chk_range[1],col.endc)
 			if args.npool == 1:
 				start_checksum_dict = get_checksum_dict(args,start_site,args.user1,start_files[args.chk_range[0]:args.chk_range[1]])
 				end_checksum_dict = get_checksum_dict(args,end_site,args.user2,end_files[args.chk_range[0]:args.chk_range[1]])				
@@ -359,7 +359,7 @@ Transfers can be monitored at:
 				# https://stackoverflow.com/questions/13689927/how-to-get-the-amount-of-work-left-to-be-done-by-a-python-multiprocessing-pool
 				with poolcontext(processes=args.npool) as pool:
 					header = "Making a multiprocessed dictionary of filenames and checksums for " + col.bold + col.blue + start_site.alias + col.endc + " ... "
-					print(header, end=' ')
+					print header,
 					sys.stdout.flush()
 					start_pool_time = time.time()
 					m = multiprocessing.Manager()
@@ -374,7 +374,7 @@ Transfers can be monitored at:
 							break
 						else:
 							size = q.qsize()
-							print((line_running % (header,total-size,total)), end=' ')
+							print (line_running % (header,total-size,total)),
 							sys.stdout.flush()
 							time.sleep(1)
 					# multiprocessing actually returns [{u'key1':'value1',...}]
@@ -382,7 +382,7 @@ Transfers can be monitored at:
 					start_checksum_dict = start_checksum_dict.get()[0]
 					print_done(start_pool_time,time.time(),header," "*(len_line_running-16))
 					header = "Making a multiprocessed dictionary of filenames and checksums for " + col.bold + col.blue + end_site.alias + col.endc + " ... "
-					print(header, end=' ')
+					print header,
 					sys.stdout.flush()
 					start_pool_time = time.time()
 					q = m.Queue()
@@ -394,7 +394,7 @@ Transfers can be monitored at:
 							break
 						else:
 							size = q.qsize()
-							print((line_running % (header,total-size,total)), end=' ')
+							print (line_running % (header,total-size,total)),
 							sys.stdout.flush()
 							time.sleep(1)
 					# multiprocessing actually returns [{u'key1':'value1',...}]

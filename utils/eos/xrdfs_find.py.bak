@@ -1,26 +1,25 @@
 #!/usr/bin/env python
 import argparse, itertools, os, re
 from operator import ior
-from functools import reduce
 
 # Must use a python release from CMSSW 93X or higher for the pyxrootd bindings
-# min_cmssw_version = (9,3,0)
-# try:
-# 	cmssw_version = tuple(os.environ['CMSSW_VERSION'].split('_')[1:4])
-# except:
-# 	cmssw_version = (0,0,0)
-# if cmssw_version < min_cmssw_version:# and not kwargs['ignore_cmssw']:
-# 	raise RuntimeError("Must be using CMSSW_%s_%s_%s or higher to get the pyxrootd bindings. You are currently using CMSSW_%s_%s_%s or some variant." % (min_cmssw_version+cmssw_version))
-# else:
-from XRootD import client
-from XRootD.client.flags import DirListFlags, StatInfoFlags, OpenFlags, MkDirFlags, QueryCode
+min_cmssw_version = (9,3,0)
+try:
+	cmssw_version = tuple(os.environ['CMSSW_VERSION'].split('_')[1:4])
+except:
+	cmssw_version = (0,0,0)
+if cmssw_version < min_cmssw_version:# and not kwargs['ignore_cmssw']:
+	raise RuntimeError("Must be using CMSSW_%s_%s_%s or higher to get the pyxrootd bindings. You are currently using CMSSW_%s_%s_%s or some variant." % (min_cmssw_version+cmssw_version))
+else:
+	from XRootD import client
+	from XRootD.client.flags import DirListFlags, StatInfoFlags, OpenFlags, MkDirFlags, QueryCode
 
 # pyxrootd does not tell you what flags the or'ed value to which they correspond.
 # Thus we need to form a mappign between the or'ed values and the flags they represent.
 # This will be used by the isdir() function and need only be computed onece.
 BitwiseOrOfStatInfoFlags = {0:[0]}
 for n in range(1,8):
-	for n_combination in itertools.combinations(list(StatInfoFlags.reverse_mapping.keys()), n):
+	for n_combination in itertools.combinations(StatInfoFlags.reverse_mapping.keys(), n):
 		BitwiseOrOfStatInfoFlags[reduce(ior,list(n_combination))] = list(n_combination)
 
 
@@ -159,23 +158,23 @@ def xrdls(xrdfs, directory, fullpath=True, skipstat=''):
 		return {("%s%s" % (prefix, startslash_check(entry.name))) : entry.statinfo.flags for entry in listing}
 
 def locate_disk_server(xrdfs,path,debug=False):
-    """
-    Takes in an XRootD file system object and a directory path.
-    Returns an XRootD file system object
-    """
-    if debug: print("xrdfs_find::locate_disk_server Finding list of path locations ... ")
-    status, locations = xrdfs.deeplocate(path, OpenFlags.NOWAIT)
-    if debug: print("xrdfs_find::locate_disk_server List of locations found.")
-    if status.status != 0:
-        raise Exception("XRootD failed to locate %s%s" % (str(xrdfs.url),path))
-    for location in locations:
-        if debug: print("\tTrying location root://"+str(location.address)+"/")
-        xrdfs_tmp = client.FileSystem("root://"+location.address+"/")
-        status, listing = xrdfs_tmp.dirlist(path)
-        if status.code == 0:
-            if debug: print("xrdfs_find::locate_disk_server Valid address is root://"+str(location.address)+"/")
-            return xrdfs_tmp
-    raise Exception("XRootD failed to locate any valid disk servers for %s%s" % (str(xrdfs.url),path))
+	"""
+	Takes in an XRootD file system object and a directory path.
+	Returns an XRootD file system object
+	"""
+        if debug: print "xrdfs_find::locate_disk_server Finding list of path locations ... "
+	status, locations = xrdfs.deeplocate(path, OpenFlags.NOWAIT)
+        if debug: print "xrdfs_find::locate_disk_server List of locations found."
+	if status.status != 0:
+		raise Exception("XRootD failed to locate %s%s" % (str(xrdfs.url),path))
+	for location in locations:
+                if debug: print "\tTrying location root://"+str(location.address)+"/"
+		xrdfs_tmp = client.FileSystem("root://"+location.address+"/")
+		status, listing = xrdfs_tmp.dirlist(path)
+		if status.code == 0:
+                        if debug: print "xrdfs_find::locate_disk_server Valid address is root://"+str(location.address)+"/"
+			return xrdfs_tmp
+	raise Exception("XRootD failed to locate any valid disk servers for %s%s" % (str(xrdfs.url),path))
 
 def xrdfs_find(xrootd_endpoint, path, bottomup=False, childcount=False, count=False, debug=False, directories_only=False, files_only=False, \
                fullpath=False, grep=[], ignore=[], ignore_cmssw=False, maxdepth=9999, name='', quiet=False, skipstat='', vgrep=[], xurl=False):
@@ -196,9 +195,9 @@ def xrdfs_find(xrootd_endpoint, path, bottomup=False, childcount=False, count=Fa
 
 	for root, walkdirs, dirs, files in walk(xrdfs,path,topdown=not bottomup, maxdepth=maxdepth, filename_filter=name, fullpath=fullpath, xurl=xurl, skipstat=skipstat):
 		if debug:
-			print(root)
-			print(dirs)
-			print(files)
+			print root
+			print dirs
+			print files
 
 		# Filter files by grep and vgrep
 		if len(grep)>0:
@@ -229,18 +228,18 @@ def xrdfs_find(xrootd_endpoint, path, bottomup=False, childcount=False, count=Fa
 	if count:
 		# If the count option is set, return the number of files and folders found
 		if not quiet:
-			print("nfiles="+str(len(all_files))+" ndirectories="+str(len(all_directories)))
+			print "nfiles="+str(len(all_files))+" ndirectories="+str(len(all_directories))
 		return len(all_files), len(all_directories)
 	else:
 		# If not count, then return the list of files and the list of folders
 		if not quiet:
 			if len(all_files) > 0:
-				print('\n'.join(map(str,all_files)))
+				print '\n'.join(map(str,all_files))
 			if len(all_directories) > 0:
 				if childcount:
-					print('\n'.join("%s ndir=%i nfiles=%i" % tup for tup in all_directories))
+					print '\n'.join("%s ndir=%i nfiles=%i" % tup for tup in all_directories)
 				else:
-					print('\n'.join("%s" % tup[0] for tup in all_directories))
+					print '\n'.join("%s" % tup[0] for tup in all_directories)
 		return all_files, [tup[0] for tup in all_directories]
 
 if __name__ == "__main__":
