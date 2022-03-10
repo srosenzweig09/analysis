@@ -346,27 +346,15 @@ class Signal():
         reweighter.fit(df_ls,df_hs,ls_weights,hs_weights)
         self.reweighter = reweighter
 
-    def bdt_prediction(self, mask, obs):
+    def bdt_prediction(self, ls_mask, hs_mask):
     
-        df_ls = self.get_df(mask, self.variables)
-        initial_weights = np.ones(ak.sum(mask))*self.TF
+        df_ls = self.get_df(ls_mask, self.variables)
+        initial_weights = np.ones(ak.sum(ls_mask))*self.TF
 
         weights_pred = self.reweighter.predict_weights(df_ls,initial_weights,lambda x: np.mean(x, axis=0))
 
         # self.region_yield(definition=region, SR_hs_est=ak.sum(weights_pred), circ_region=circ_region)
 
-        if print_stats:
-            Nobs = ak.sum(obs)
-            Npred = ak.sum(weights_pred)
-            Sobs = 1/np.sqrt(Nobs)
-            Spred = np.sqrt(ak.sum(weights_pred**2))
-            Scomb = np.sqrt(Sobs**2 + Spred**2)
-
-            std = (Nobs - Npred)/Scomb
-            print(f"[STATS] Standard Deviation     = {std:.2f}")
-
-        uncertainty = np.sqrt(ak.sum(weights_pred**2))
-        print(f"[STATS] Estimation Uncertainty = {uncertainty:.1f}")
         return weights_pred
 
     def bdt_process(self, scheme, config):
@@ -383,6 +371,14 @@ class Signal():
 
             print(".. predicting weights in SR")
             self.SR_weights = self.bdt_prediction(self.SRls_mask, ak.zeros_like(self.SRls_mask))
+
+            CRls = self.CRls_mask
+            CRhs = self.CRhs_mask
+            VRls = self.VRls_mask
+            VRhs = self.VRhs_mask
+            SRls = self.SRls_mask
+            SRhs = self.SRhs_mask
+
         elif scheme == 'sphere':
             if not self._sphere_region_bool: self.spherical_region(config)
 
@@ -400,7 +396,43 @@ class Signal():
             print(".. predicting weights in A_SR")
             self.SR_weights = self.bdt_prediction(self.A_SRls_mask, ak.zeros_like(self.A_SRls_mask))
 
+            CRls = self.A_CRls_mask
+            CRhs = self.A_CRhs_mask
+            VRls = self.V_VRls_mask
+            VRhs = self.V_VRhs_mask
+            SRls = self.A_SRls_mask
+            SRhs = self.A_SRhs_mask
+
+        self.get_stats(CRls, CRhs, VRls, VRhs, SRls, SRhs)
         return self.VR_weights, self.SR_weights
+
+    def get_stats(self, CRls, CRhs, VRls, VRhs, SRls, SRhs):
+        N_CRls = ak.sum(CRls)
+        N_CRhs = ak.sum(CRhs)
+        N_VRls = ak.sum(VRls)
+        N_VRhs = ak.sum(VRhs)
+        N_VRpred = ak.sum(self.VR_weights)
+        N_SRls = ak.sum(SRls)
+        N_SRpred = ak.sum(self.SR_weights)
+
+        s_CRls = 1/np.sqrt(N_CRls)
+        s_CRhs = 1/np.sqrt(N_CRhs)
+        s_VRls = 1/np.sqrt(N_VRls)
+        s_VRhs = 1/np.sqrt(N_VRhs)
+        s_VRpred = np.sqrt(ak.sum(self.VR_weights**2))
+        s_SRls = 1/np.sqrt(N_SRls)
+        s_SRhs = 1/np.sqrt(N_SRhs)
+
+        self.bkg_crtf = 1 + np.sqrt((s_CRls/N_CRls)**2 + (s_CRhs/N_CRhs)**2)
+        self.bkgd_vrpred = 1 + np.where(s_VRpred/N_VRpred > s_SRpred/N_SRpred, np.sqrt((s_VRls/N_VRls)**2 - (s_SRhs/N_SRhs)**2), 0)
+        
+        err = np.sqrt(N_VRpred**2 + s_VRpred**2 + (N_VRpred*(self.bkg_crtf-1))**2)
+        k = np.sqrt((N_VRhs - N_VRpred)**2 - err**2)
+        self.vr_normval = 1 + k/N_VRpred
+
+        print(self.bkg_crtf)
+        print(self.bkgd_vrpred)
+        print(self.vr_normval)
 
     def kstest(self, ls_mask, hs_mask, BDT=True):
         ksresults = [] 
