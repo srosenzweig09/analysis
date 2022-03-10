@@ -6,18 +6,32 @@ pairing_schemes = ['dHHH_pairs','mH_pairs']
 default_run = run_conditions[0]
 default_pair = pairing_schemes[0]
 
+mx_my_masses = [
+    [ 450,300],
+    [ 500,300],
+    [ 600,300],
+    [ 600,400],
+    [ 700,300],
+    [ 700,400],
+    [ 700,500],
+    [1000,300],
+    [1000,700],
+    ]
+
 class FileLocations:
-    mx_my_masses = [
-        [ 450,300],
-        [ 500,300],
-        [ 600,300],
-        [ 600,400],
-        [ 700,300],
-        [ 700,400],
-        [ 700,500],
-        [1000,300],
-        [1000,700],
-        ]
+    # mx_my_masses = [
+    #     [ 450,300],
+    #     [ 500,300],
+    #     [ 600,300],
+    #     [ 600,400],
+    #     [ 700,300],
+    #     [ 700,400],
+    #     [ 700,500],
+    #     [1000,300],
+    #     [1000,700],
+    #     ]
+
+    mx_my_masses = mx_my_masses
 
     run_conditions  = run_conditions
     pairing_schemes = pairing_schemes
