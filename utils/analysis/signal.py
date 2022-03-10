@@ -11,7 +11,7 @@ from utils.plotter import latexTitle
 from .particle import Particle
 
 # Standard library imports
-from colorama import Fore, Style
+from colorama import Fore
 from hep_ml import reweight
 import re
 import sys 
@@ -312,7 +312,7 @@ class Signal():
         df = pd.DataFrame(features)
         return df
 
-    def train_bdt(self, config, region):
+    def train_bdt(self, config, ls_mask, hs_mask):
 
         Nestimators  = int(config['BDT']['Nestimators'])
         learningRate = float(config['BDT']['learningRate'])
@@ -323,17 +323,6 @@ class Signal():
         variables    = config['BDT']['variables'].split(", ")
         self.variables = variables
 
-        if region == 'CR': # rectangular
-            ls_mask = self.CRls_mask
-            hs_mask = self.CRhs_mask
-        elif region == 'V_CR': # spherical V_CR
-            ls_mask = self.V_CRls_mask
-            hs_mask = self.V_CRhs_mask
-        elif region == 'A_CR': # spherical A_CR
-            ls_mask = self.A_CRls_mask
-            hs_mask = self.A_CRhs_mask
-
-        self.original_mask = ls_mask
         self.TF = sum(hs_mask)/sum(ls_mask)
         ls_weights = np.ones(ak.sum(ls_mask))*self.TF
         hs_weights = np.ones(ak.sum([hs_mask]))
@@ -357,49 +346,14 @@ class Signal():
         reweighter.fit(df_ls,df_hs,ls_weights,hs_weights)
         self.reweighter = reweighter
 
-    def bdt_prediction(self, region):
-        print_stats = False
-        circ_region = None
-        if region == 'CR':
-            mask = self.CRls_mask
-            obs = self.CRhs_mask
-        if region == 'VR':
-            print_stats = True
-            region = 'rect'
-            mask = self.VRls_mask
-            obs = self.VRhs_mask
-        if region == 'SR':
-            print_stats = True
-            region = 'rect'
-            mask = self.SRls_mask
-            obs = ak.zeros_like(self.SRls_mask)
-        elif region == 'V_CR':
-            region = 'sphere'
-            mask = self.V_CRls_mask
-        elif region == 'V_SR':
-            region = 'sphere'
-            mask = self.V_SRls_mask
-            obs = self.V_SRhs_mask
-            circ_region = 'VR'
-            print_stats = True
-        elif region == 'A_CR':
-            region = 'sphere'
-            mask = self.A_CRls_mask
-            obs = self.A_CRhs_mask
-            circ_region = 'VR'
-            print_stats = True
-        elif region == 'A_SR':
-            region = 'sphere'
-            mask = self.A_SRls_mask
-            circ_region = 'AR'
-            obs = ak.zeros_like(self.A_SRls_mask)
+    def bdt_prediction(self, mask, obs):
     
         df_ls = self.get_df(mask, self.variables)
         initial_weights = np.ones(ak.sum(mask))*self.TF
 
         weights_pred = self.reweighter.predict_weights(df_ls,initial_weights,lambda x: np.mean(x, axis=0))
 
-        self.region_yield(definition=region, SR_hs_est=ak.sum(weights_pred), circ_region=circ_region)
+        # self.region_yield(definition=region, SR_hs_est=ak.sum(weights_pred), circ_region=circ_region)
 
         if print_stats:
             Nobs = ak.sum(obs)
@@ -418,46 +372,40 @@ class Signal():
     def bdt_process(self, scheme, config):
         if scheme == 'rect':
             if not self._rect_region_bool: self.rectangular_region(config)
+
             print(".. training BDT in CR")
-            self.train_bdt(config, 'CR')
-            self.CR_weights = self.bdt_prediction('CR')
-            self.target_mask = self.CRhs_mask
+            self.train_bdt(config, self.CRls_mask, self.CRhs_mask)
+            self.CR_weights = self.bdt_prediction(self.CRls_mask, self.CRhs_mask)
+            self.kstest(self.CRls_mask, self.CRhs_mask)
+
             print(".. predicting weights in VR")
-            self.VR_weights = self.bdt_prediction('VR')
+            self.VR_weights = self.bdt_prediction(self.VRls_mask, self.VRhs_mask)
+
             print(".. predicting weights in SR")
-            self.SR_weights = self.bdt_prediction('SR')
-            if self.kstest():
-                print(f"Training {Fore.GREEN}PASSED{Fore.RESET} kstest! ->",self.ksmax)
-            else:
-                print(f"Training {Fore.RED}FAILED{Fore.RESET} kstest! ->",self.ksmax)
-                # self.VR_weights = 0
-                # self.SR_weights = 0
+            self.SR_weights = self.bdt_prediction(self.SRls_mask, ak.zeros_like(self.SRls_mask))
         elif scheme == 'sphere':
             if not self._sphere_region_bool: self.spherical_region(config)
-            print(".. training BDT in V_CR")
-            self.train_bdt(config, 'V_CR')
-            self.CR_weights = self.bdt_prediction('V_CR')
-            self.target_mask = self.V_CRhs_mask
 
-            if not self.kstest():
-                print(f"Training {Fore.RED}FAILED{Fore.RESET} kstest! ->",self.ksmax)
-                # return 0,0
-            else:
-                print(f"Training {Fore.GREEN}PASSED{Fore.RESET} kstest! ->",self.ksmax)
+            print(".. training BDT in V_CR")
+            self.train_bdt(config, self.V_CRls_mask, self.V_CRhs_mask)
+            self.CR_weights = self.bdt_prediction(self.V_CRls_mask, self.V_CRhs_mask)
+            self.kstest(self.V_CRls_mask, self.V_CRhs_mask)
+                
             print(".. predicting weights in V_SR")
-            self.VR_weights = self.bdt_prediction('V_SR')
+            self.VR_weights = self.bdt_prediction(self.A_CRls_mask, self.A_CRhs_mask)
 
             print(".. training BDT in A_CR")
-            self.train_bdt(config, 'A_CR')
+            self.train_bdt(config, self.A_CRls_mask, self.A_CRhs_mask)
+
             print(".. predicting weights in A_SR")
-            self.SR_weights = self.bdt_prediction('A_SR')
+            self.SR_weights = self.bdt_prediction(self.A_SRls_mask, ak.zeros_like(self.A_SRls_mask))
 
         return self.VR_weights, self.SR_weights
 
-    def kstest(self,BDT=True):
-        ksresults=[] 
-        original = self.get_df(self.original_mask, self.variables)
-        target = self.get_df(self.target_mask, self.variables)
+    def kstest(self, ls_mask, hs_mask, BDT=True):
+        ksresults = [] 
+        original = self.get_df(ls_mask, self.variables)
+        target = self.get_df(hs_mask, self.variables)
 
         if BDT: weights1 = self.CR_weights
         else: weights1 = np.ones(len(original))*self.TF
@@ -469,22 +417,21 @@ class Signal():
         for i, column in enumerate(self.variables):
             if column in skip: continue
             cols.append(column)
-            # print('og',len(original))
-            # print('tg',len(target))
-            # print('cl',column)
             ks =  ks_2samp_weighted(original[column], target[column], weights1=weights1, weights2=weights2)
             ksresults.append(ks)
         additional = [self.np('X_m')]
         for extra in additional:
-            original = extra[self.original_mask]
-            target = extra[self.target_mask]
+            original = extra[ls_mask]
+            target = extra[hs_mask]
             ks =  ks_2samp_weighted(original, target, weights1=weights1, weights2=weights2)
             ksresults.append(ks)
         cols.append('MX')
-        # ksresults = pd.DataFrame([ksresults], columns=cols)
-        # return ksresults 
         ksresults = np.asarray(ksresults)
         self.ksmax = round(ksresults.max(),4)
-        # print(self.ksmax)
-        if self.ksmax < 0.01: return True
-        else: return False
+        
+        if self.ksmax < 0.01: 
+            self.kstest = True
+            print(f"Training {Fore.GREEN}PASSED{Fore.RESET} kstest! ->",self.ksmax)
+        else: 
+            self.kstest = False
+            print(f"Training {Fore.RED}FAILED{Fore.RESET} kstest! ->",self.ksmax)
