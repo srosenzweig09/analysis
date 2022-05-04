@@ -7,30 +7,88 @@ from array import array
 from configparser import ConfigParser
 import matplotlib.pyplot as plt
 import numpy as np
+import os
+import re
 import ROOT
+from scipy.stats import kstest
+# from sklearn.ensemble import GradientBoostingClassifier
+# from sklearn.metrics import roc_auc_score, roc_curve, auc
+# from sklearn.model_selection import StratifiedKFold
 import sys
+from tqdm import tqdm
 from utils.analysis import Signal
-from utils.fileUtils import mx_my_masses
+from utils.analysis.data import createDataCard
+from utils.fileUtils import mx_my_masses, combineDir
 from utils.plotter import Hist
 
-### ------------------------------------------------------------------------------------
+def getROOTCanvas(h_title, bin_values, outFile):
+    print(f".. generating root hist for {h_title}")
+    canvas = ROOT.TCanvas('c1','c1', 600, 600)
+    canvas.SetFrameLineWidth(3)
+
+    ROOT_hist = ROOT.TH1D(h_title,";m_{X} [GeV];Events",len(bin_values),array('d',list(mBins)))
+
+    for i,(bin_vals) in enumerate(bin_values):
+        ROOT_hist.SetBinContent(i+1, bin_vals)
+
+    ROOT_hist.Draw("hist")
+    canvas.Draw()
+    ROOT.gStyle.SetOptStat(0)
+
+    canvas.Print(f"{outFile}.pdf)","Title:Signal Region");
+
+    fout = ROOT.TFile(f"{outFile}.root","recreate")
+    fout.cd()
+    ROOT_hist.Write()
+    fout.Close()
+
+def getROOTCanvas_VR(h_title, bin_values, outFile):
+   h1_title = h_title[0]
+   h2_title = h_title[1]
+   assert(h1_title == "h_obs")
+   assert(h2_title == "h_est")
+   h1_bin_vals = bin_values[0]
+   h2_bin_vals = bin_values[1]
+   # print("h1_bin_vals",h1_bin_vals)
+   # print("h2_bin_vals",h2_bin_vals)
+   print(f".. generating root hist for VR")
+   canvas = ROOT.TCanvas('c1','c1', 600, 600)
+   canvas.SetFrameLineWidth(3)
+
+   h1 = ROOT.TH1D(h1_title,";m_{X} [GeV];Events",len(h1_bin_vals),array('d',list(mBins)))
+   h2 = ROOT.TH1D(h2_title,";m_{X} [GeV];Events",len(h2_bin_vals),array('d',list(mBins)))
+
+   for i,(vals1,vals2) in enumerate(zip(h1_bin_vals,h2_bin_vals)):
+      h1.SetBinContent(i+1, vals1)
+      h2.SetBinContent(i+1, vals2)
+
+   h1.Draw("hist")
+   h2.Draw("hist same")
+   # h1.SetMarkerStyle(20)
+   # h1.SetMarkerSize(1)
+   h1.SetLineWidth(1)
+   h2.SetLineWidth(2)
+   h1.SetLineColor(1)
+   h2.SetLineColor(38)
+
+   print(h1.KolmogorovTest(h2))
+
+## ------------------------------------------------------------------------------------
 ## Implement command line parser
 
 print(".. parsing command line arguments")
 
 parser = ArgumentParser(description='Command line parser of model options and tags')
 
-parser.add_argument('--cfg', dest='cfg', help='config file', required=True)
+# parser.add_argument('--cfg', dest='cfg', help='config file', default='')
+parser.add_argument('--testing', dest='testing', action='store_true', default=False)
+parser.add_argument('--all-signal', dest='allSignal', action='store_true', default=False)
 
+# region shapes
 parser.add_argument('--rectangular', dest='rectangular', help='', action='store_true', default=True)
 parser.add_argument('--spherical', dest='spherical', help='', action='store_true', default=False)
 
-parser.add_argument('--testing', dest='testing', action='store_true', default=False)
-
-parser.add_argument('--dHHH', dest='dHHH', help='', action='store_true', default=False)
-parser.add_argument('--mH', dest='mH', help='', action='store_true', default=False)
-
-parser.add_argument('--BDTonly', dest='BDT_bool', action='store_true', default=False)
+# bdt parameters
 parser.add_argument('--nestimators', dest='N')
 parser.add_argument('--learningRate', dest='lr')
 parser.add_argument('--maxDepth', dest='depth')
@@ -38,10 +96,9 @@ parser.add_argument('--minLeaves', dest='minLeaves')
 parser.add_argument('--GBsubsample', dest='gbsub')
 parser.add_argument('--randomState', dest='rand')
 
-parser.add_argument('--rInner', dest='rInner')
-parser.add_argument('--rOuter', dest='rOuter')
-
-parser.add_argument('--all-signal', dest='allSignal', action='store_true', default=False)
+# stats parameters
+parser.add_argument('--no-stats', dest='no_stats', action='store_true', default=False)
+parser.add_argument('--no-MCstats', dest='MCstats', action='store_false', default=True)
 
 args = parser.parse_args()
 
@@ -53,30 +110,29 @@ BDT_dict = {
     'GBsubsample' : args.gbsub,
     'randomState' : args.rand
 }
-sphere_dict = {
-    'rInner' : args.rInner,
-    'rOuter' : args.rOuter
-}
 
 ### ------------------------------------------------------------------------------------
 ## Implement config parser
 
 print(".. parsing config file")
 
+if args.spherical and args.rectangular: args.rectangular = False
+if args.rectangular: 
+   region_type = 'rect'
+   cfg = 'config/rectConfig.cfg'
+elif args.spherical: 
+   region_type = 'sphere'
+   cfg = 'config/sphereConfig.cfg'
+
 config = ConfigParser()
 config.optionxform = str
-config.read(args.cfg)
+config.read(cfg)
 
 overwrite_log = []
 for hyper in BDT_dict:
     if BDT_dict[hyper] is not None:
         config['BDT'][hyper] = BDT_dict[hyper]
         overwrite_log.append(f"Overwriting [{hyper}={BDT_dict[hyper]}] from config file with command line argument.")
-if len(overwrite_log) > 0: overwrite_log.insert(0, '')
-for hyper in sphere_dict:
-    if sphere_dict[hyper] is not None:
-        config['spherical'][hyper] = sphere_dict[hyper]
-        print(f"Overwriting [{hyper}={sphere_dict[hyper]}] from config file with command line argument.")
 if len(overwrite_log) > 0: overwrite_log.insert(0, '')
 for line in overwrite_log:
     print(overwrite_log)
@@ -88,19 +144,12 @@ data = config['file']['data']
 treename = config['file']['tree']
 year = int(config['file']['year'])
 pairing = config['pairing']['scheme']
+pairing_type = pairing.split('_')[0]
 
 minMX = int(config['plot']['minMX'])
 maxMX = int(config['plot']['maxMX'])
 nbins = int(config['plot']['nbins'])
 mBins = np.linspace(minMX,maxMX,nbins)
-
-if args.spherical and args.rectangular: args.rectangular = False
-if args.rectangular: region_type = 'rect'
-elif args.spherical: region_type = 'sphere'
-
-if args.dHHH: pairing = 'dHHH_pairs'
-elif args.mH: pairing = 'mH_pairs'
-pairing_type = pairing.split('_')[0]
 
 score = float(config['score']['threshold'])
 
@@ -114,38 +163,10 @@ randomState  = int(config['BDT']['randomState'])
 
 variables    = config['BDT']['variables'].split(", ")
 
-outputFile = f"CombineInput_{pairing_type}_{region_type}"
-
-### ------------------------------------------------------------------------------------
-## Obtain MC signal counts
-
-def get_sig_SRhs(sigFileName):
-    sigTree = Signal(sigFileName)
-    if args.rectangular:
-        sigTree.rectangular_region(config)
-        sig_mX_SRhs = sigTree.np('X_m')[sigTree.SRhs_mask]
-    elif args.spherical:
-        sigTree.spherical_region(config)
-        sig_mX_SRhs = sigTree.np('X_m')[sigTree.A_SRhs_mask]
-    n_sig_SRhs, _ = np.histogram(sig_mX_SRhs, bins=mBins)
-    n_sig_SRhs = n_sig_SRhs * sigTree.scale
-    return n_sig_SRhs
-
 indir = f"root://cmseos.fnal.gov/{base}/{pairing}/"
-signal_nSR = []
-if args.allSignal:
-    for mx,my in mx_my_masses:
-        signal = f'NMSSM_XYH_YToHH_6b_MX_{mx}_MY_{my}'
-        sigFileName = f"{indir}NMSSM/{signal}/ntuple.root"
-        n_sig_SRhs = get_sig_SRhs(sigFileName)
-        signal_nSR.append(n_sig_SRhs)
-else:
-    sigFileName = f"{indir}NMSSM/{signal}"
-    n_sig_SRhs = get_sig_SRhs(sigFileName)
-    print(signal)
-    sys.exit()
-    mx_my_masses = []
-    signal_nSR.append(n_sig_SRhs)
+outDir = f"combine/{pairing_type}/{region_type}"
+datacardDir = f"{combineDir}datacards/{pairing_type}/{region_type}"
+loc = f"{os.getcwd()}/{outDir}"
 
 ### ------------------------------------------------------------------------------------
 ## Obtain data regions
@@ -154,92 +175,96 @@ datFileName = f"{indir}{data}"
 datTree = Signal(datFileName)
 
 if args.rectangular:
-    print("\nRECTANGULAR")
+    print("\n ---RECTANGULAR---")
     datTree.rectangular_region(config)
-    dat_mX_VRls = datTree.np('X_m')[datTree.VRls_mask]
-    dat_mX_VRhs = datTree.X_m[datTree.VRhs_mask]
-    dat_mX_SRls = datTree.np('X_m')[datTree.SRls_mask]
-    dat_mX_blinded = datTree.np('X_m')[datTree.blinded_mask]
 elif args.spherical:
-    print("\nSPHERICAL")
+    print("\n ----SPHERICAL----")
     datTree.spherical_region(config)
-    dat_mX_VRls = datTree.np('X_m')[datTree.V_SRls_mask]
-    dat_mX_VRhs = datTree.np('X_m')[datTree.V_SRhs_mask]
-    dat_mX_SRls = datTree.np('X_m')[datTree.A_SRls_mask]
 else:
     raise AttributeError("No mass region definition!")
+
+dat_mX_VRls = datTree.dat_mX_VRls
+dat_mX_VRhs = datTree.dat_mX_VRhs
+dat_mX_SRls = datTree.dat_mX_SRls
 
 ### ------------------------------------------------------------------------------------
 ## train bdt and predict data SR weights
 
-print(".. predicting weights in validation region")
 VR_weights, SR_weights = datTree.bdt_process(region_type, config)
 
-if args.testing: sys.exit()
+err_dict = {
+    'bkg_crtf' : datTree.bkg_crtf,
+    'bkg_vrpred' : datTree.bkg_vrpred,
+    'bkg_vr_normval' : datTree.bkg_vr_normval
+}
+
+if args.no_stats: err_dict = {key:1 for key in err_dict.keys()}
 
 fig, ax = plt.subplots()
-n_estimate, _ = Hist(dat_mX_VRls, weights=VR_weights, bins=mBins, ax=ax, label='Estimation')
-n_target, _ = Hist(dat_mX_VRhs, bins=mBins, ax=ax, label='Target')
+n_VRtarget = Hist(dat_mX_VRhs, bins=mBins, ax=ax, label='Target')
+n_VRestimate = Hist(dat_mX_VRls, weights=VR_weights, bins=mBins, ax=ax, label='Estimation')
+
+print(kstest(n_VRtarget,n_VRestimate))
+# sys.exit()
+
 ax.set_xlabel(r"$m_X$ [GeV]")
 ax.set_ylabel("Events")
 ax.set_title("BDT Estimation of Data Yield in Validation Region")
-fig.savefig(f"combine/{outputFile}_validation.pdf", bbox_inches='tight')
+fig.savefig(f"{outDir}/data_validation.pdf", bbox_inches='tight')
 
-n_dat_SRhs_estimate, e = Hist(dat_mX_SRls, weights=SR_weights, bins=mBins, ax=ax, label='Estimation')
+getROOTCanvas_VR(["h_obs", "h_est"], [n_VRtarget,n_VRestimate], f"{outDir}/data_VR")
 
-print("N(data,SR,est) =",int(n_dat_SRhs_estimate.sum()))
+fig, ax = plt.subplots()
+n_dat_SRhs_pred = Hist(dat_mX_SRls, weights=SR_weights, bins=mBins, ax=ax, label='Estimation')
+
+
+### ------------------------------------------------------------------------------------
+## Obtain MC signal counts
+
+def get_sig_SRhs(sigFileName):
+    sigTree = Signal(sigFileName)
+    if args.rectangular:
+        sig_mX_SRhs = sigTree.rectangular_region(config)
+    elif args.spherical:
+        sig_mX_SRhs = sigTree.spherical_region(config)
+    n_sig_SRhs, _ = np.histogram(sig_mX_SRhs, bins=mBins)
+    n_sig_SRhs = n_sig_SRhs * sigTree.scale
+    return n_sig_SRhs
+
+print("\n.. obtaining MC signal yields")
+signal_nSR = []
+signal_out = []
+if args.allSignal:
+    for mx,my in tqdm(mx_my_masses, ncols=50):
+        signal = f'NMSSM_XYH_YToHH_6b_MX_{mx}_MY_{my}'
+        sigFileName = f"{indir}NMSSM/{signal}/ntuple.root"
+        n_sig_SRhs = get_sig_SRhs(sigFileName)
+        signal_nSR.append(n_sig_SRhs)
+        sigFileName = re.search('MX_.+/', sigFileName).group()[:-1]
+        signal_out.append(sigFileName)
+else:
+    sigFileName = f"{indir}NMSSM/{signal}"
+    n_sig_SRhs = get_sig_SRhs(sigFileName)
+    mx_my_masses = []
+    signal_nSR.append(n_sig_SRhs)
+    sigFileName = re.search('MX_.+/', sigFileName).group()[:-1]
+    signal_out.append(sigFileName)
 
 ### ------------------------------------------------------------------------------------
 ## signal region estimate
 
-canvas = ROOT.TCanvas('c1','c1', 600, 600)
-canvas.SetFrameLineWidth(3)
+ROOT.gROOT.SetBatch(True)
 
-h_dat = ROOT.TH1D("h_dat",";m_{X} [GeV];Events",len(n_dat_SRhs_estimate),array('d',list(e)))
+print(f"Estimated data = {n_dat_SRhs_pred.sum()}")
+getROOTCanvas("data", n_dat_SRhs_pred, f"{outDir}/data_{region_type}")
+for sig_bin_vals,sig_name in tqdm(zip(signal_nSR, signal_out), ncols=50):
+    hist_name = f"h_{sig_name}"
+    getROOTCanvas(hist_name, sig_bin_vals, f"{outDir}/{sig_name}_nosyst")
+   #  createDataCard(location=loc, sigROOT=sig_name, h_name=hist_name, err_dict=err_dict, outdir=datacardDir, no_bkg_stats=args.no_stats, MCstats=args.MCstats)
 
-# for 
-h_sig = ROOT.TH1D("h_sig",";m_{X} [GeV];Events",len(n_sig_SRhs),array('d',list(e)))
-
-for i,(bin_sig,bin_dat) in enumerate(zip(n_sig_SRhs, n_dat_SRhs_estimate)):
-    h_dat.SetBinContent(i+1, bin_dat)
-    h_sig.SetBinContent(i+1, bin_sig)
-
-h_sig.Draw("hist")
-h_dat.Draw("hist same")
-
-h_dat.SetLineColor(1)
-h_sig.SetLineColor(ROOT.kBlue + 1)
-
-canvas.Draw()
-
-ROOT.gStyle.SetOptStat(0)
-leg = ROOT.TLegend(0.4, 0.65, 0.88, 0.88)
-leg.SetFillStyle(0)
-leg.SetBorderSize(0)
-leg.SetTextSize(0.03)
-leg.AddEntry(h_dat, "Background", "l")
-leg.AddEntry(h_sig, "Signal", "l")
-leg.Draw()
-
-canvas.Print(f"combine/{outputFile}.pdf)","Title:Signal Region");
-
-fout = ROOT.TFile(f"combine/{outputFile}.root","recreate")
-fout.cd()
-h_dat.Write()
-h_sig.Write()
-fout.Close()
-
-print()
-print("PLEASE RUN THE FOLLOWING COMMAND:")
-print("---------------------------------")
-print("ssh srosenzw@cmslpc-sl7.fnal.gov 'cd /uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_2_18/src/HiggsAnalysis/CombinedLimit/; source env_standalone.sh; make -j 8; make; python3 generateDataCards.py'")
+# print()
+# print("PLEASE RUN THE FOLLOWING COMMAND:")
+# print("---------------------------------")
+# print("ssh srosenzw@cmslpc-sl7.fnal.gov 'cd /uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_2_18/src/HiggsAnalysis/CombinedLimit/; source env_standalone.sh; make -j 8; make; python3 runCombine.py'")
 print("---------------------------------")
 print("END PROCESS\n")
-# process = subprocess.Popen(bashCommand.split(), stdout=subprocess.PIPE)
-# output, error = process.communicate()
-# bashCommand = "runcombine"
-# process = subprocess.Popen(bashCommand.split(), stdout=subprocess.PIPE)
-# output, error = process.communicate()
-# bashCommand = "exit"
-# process = subprocess.Popen(bashCommand.split(), stdout=subprocess.PIPE)
-# output, error = process.communicate()
