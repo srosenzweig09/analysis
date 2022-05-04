@@ -5,6 +5,7 @@ Classes:
     Signal
 """
 
+from cmath import nan
 from utils import *
 from utils.varUtils import *
 from utils.plotter import latexTitle
@@ -18,6 +19,7 @@ import sys
 import uproot
 import pandas as pd
 from hep_ml.metrics_utils import ks_2samp_weighted
+
 class Signal():
     """A class for handling TTrees from recent skims, which output a single branch for each b jet kinematic. (Older skims output an array of jet kinematics.)
     
@@ -133,11 +135,15 @@ class Signal():
         if key in self.tree.keys():
             return self.tree[key].array(library=library)
         else:
-            return getattr(self, key)
+            arr = getattr(self, key)
+            if library=='np' and not isinstance(arr, np.ndarray): arr = arr.to_numpy()
+            return arr
     
     def np(self, key):
         """Returns the key as a numpy array."""
-        return self.get(key, library='np')
+        np_arr = self.get(key, library='np')
+        if not isinstance(np_arr, np.ndarray): np_arr = np_arr.to_numpy()
+        return np_arr
 
     def rectangular_region(self, config):
         """Defines rectangular region masks."""
@@ -145,6 +151,10 @@ class Signal():
         VR_edge = float(config['rectangular']['maxVR'])
         CR_edge = float(config['rectangular']['maxCR'])
         if CR_edge == -1: CR_edge = 9999
+
+        self.SR_edge = SR_edge
+        self.VR_edge = VR_edge
+        self.CR_edge = CR_edge
 
         higgs = ['HX_m', 'HY1_m', 'HY2_m']
         Dm_cand = np.column_stack(([abs(self.get(mH,'np') - 125) for mH in higgs]))
@@ -165,23 +175,31 @@ class Signal():
         self.SRhs_mask = SR_mask & hs_mask
 
         if self._isdata:
-            print("SR_edge",int(SR_edge))
-            print("VR_edge",int(VR_edge))
-            print("CR_edge",int(CR_edge))
+            print(f"   SR_edge   {int(SR_edge)}")
+            print(f"   VR_edge   {int(VR_edge)}")
+            print(f"   CR_edge   {int(CR_edge)}")
+            print(" -----------------")
             print()
-            self.blinded_mask = VR_mask | CR_mask
+            
+            # blinded_mask = VR_mask | CR_mask
+            self.dat_mX_CRls = self.np('X_m')[self.CRls_mask]
+            self.dat_mX_CRhs = self.np('X_m')[self.CRhs_mask]
+            self.dat_mX_VRls = self.np('X_m')[self.VRls_mask]
+            self.dat_mX_VRhs = self.np('X_m')[self.VRhs_mask]
+            self.dat_mX_SRls = self.np('X_m')[self.SRls_mask]
+            # self.dat_mX_blinded = self.np('X_m')[blinded_mask]
+        else:
+            return self.np('X_m')[self.SRhs_mask]
 
         self._rect_region_bool = True
 
     def spherical_region(self, config):
         """Defines spherical estimation region masks."""
         AR_center = float(config['spherical']['ARcenter'])
-        VR_center = float(config['spherical']['VRcenter'])
         SR_edge   = float(config['spherical']['rInner'])
         CR_edge   = float(config['spherical']['rOuter'])
 
         VR_center = int(AR_center + (SR_edge + CR_edge)/np.sqrt(2))
-        if self._isdata: print('VR_center',VR_center)
 
         higgs = ['HX_m', 'HY1_m', 'HY2_m']
 
@@ -215,9 +233,20 @@ class Signal():
         self.V_SRhs_mask = V_SR_mask & hs_mask
 
         if self._isdata:
-            print("SR_edge",int(SR_edge))
-            print("CR_edge",int(CR_edge))
+            print('   VR_center',VR_center)
+            print("    SR_edge",int(SR_edge))
+            print("    CR_edge",int(CR_edge))
+            print(" -----------------")
+            print()
 
+            self.dat_mX_CRhs = self.np('X_m')[self.A_CRhs_mask]
+            self.dat_mX_CRls = self.np('X_m')[self.A_CRls_mask]
+            self.dat_mX_VRhs = self.np('X_m')[self.V_SRhs_mask]
+            self.dat_mX_VRls = self.np('X_m')[self.V_SRls_mask]
+            self.dat_mX_SRls = self.np('X_m')[self.A_SRls_mask]
+        else:
+            return self.np('X_m')[self.A_SRhs_mask]
+        
         self._sphere_region_bool = True
 
     def region_yield(self, definition='rect', normalized=False, config=None, SR_hs_est=None, circ_region=None):
@@ -342,18 +371,16 @@ class Signal():
         print(".. calling reweight.FoldingReweighter")
         reweighter = reweight.FoldingReweighter(reweighter_base, random_state=randomState, n_folds=2, verbose=False)
 
-        print(".. calling reweighter.fit\n")
+        print(".. calling reweighter.fit")
         reweighter.fit(df_ls,df_hs,ls_weights,hs_weights)
         self.reweighter = reweighter
 
-    def bdt_prediction(self, ls_mask, hs_mask):
+    def bdt_prediction(self, ls_mask):
     
         df_ls = self.get_df(ls_mask, self.variables)
         initial_weights = np.ones(ak.sum(ls_mask))*self.TF
 
         weights_pred = self.reweighter.predict_weights(df_ls,initial_weights,lambda x: np.mean(x, axis=0))
-
-        # self.region_yield(definition=region, SR_hs_est=ak.sum(weights_pred), circ_region=circ_region)
 
         return weights_pred
 
@@ -363,78 +390,96 @@ class Signal():
 
             print(".. training BDT in CR")
             self.train_bdt(config, self.CRls_mask, self.CRhs_mask)
-            self.CR_weights = self.bdt_prediction(self.CRls_mask, self.CRhs_mask)
-            self.kstest(self.CRls_mask, self.CRhs_mask)
+            print(".. predicting weights in CR")
+            self.CR_weights = self.bdt_prediction(self.CRls_mask)
+            print(".. performing kstest")
+            self.ks_test(self.CRls_mask, self.CRhs_mask, BDT=False)
 
             print(".. predicting weights in VR")
-            self.VR_weights = self.bdt_prediction(self.VRls_mask, self.VRhs_mask)
+            self.VR_weights = self.bdt_prediction(self.VRls_mask)
 
             print(".. predicting weights in SR")
-            self.SR_weights = self.bdt_prediction(self.SRls_mask, ak.zeros_like(self.SRls_mask))
+            self.SR_weights = self.bdt_prediction(self.SRls_mask)
 
             CRls = self.CRls_mask
             CRhs = self.CRhs_mask
             VRls = self.VRls_mask
             VRhs = self.VRhs_mask
             SRls = self.SRls_mask
-            SRhs = self.SRhs_mask
 
         elif scheme == 'sphere':
             if not self._sphere_region_bool: self.spherical_region(config)
 
             print(".. training BDT in V_CR")
             self.train_bdt(config, self.V_CRls_mask, self.V_CRhs_mask)
-            self.CR_weights = self.bdt_prediction(self.V_CRls_mask, self.V_CRhs_mask)
-            self.kstest(self.V_CRls_mask, self.V_CRhs_mask)
+            print(".. predicting weights in CR")
+            self.CR_weights = self.bdt_prediction(self.V_CRls_mask)
+            print(".. performing kstest")
+            self.ks_test(self.V_CRls_mask, self.V_CRhs_mask)
                 
             print(".. predicting weights in V_SR")
-            self.VR_weights = self.bdt_prediction(self.A_CRls_mask, self.A_CRhs_mask)
+            self.VR_weights = self.bdt_prediction(self.V_SRls_mask)
 
             print(".. training BDT in A_CR")
             self.train_bdt(config, self.A_CRls_mask, self.A_CRhs_mask)
+            self.A_CR_weights = self.bdt_prediction(self.A_CRls_mask)
 
-            print(".. predicting weights in A_SR")
-            self.SR_weights = self.bdt_prediction(self.A_SRls_mask, ak.zeros_like(self.A_SRls_mask))
+            print(".. predicting weights in A_SR\n")
+            self.SR_weights = self.bdt_prediction(self.A_SRls_mask)
 
             CRls = self.A_CRls_mask
             CRhs = self.A_CRhs_mask
-            VRls = self.V_VRls_mask
-            VRhs = self.V_VRhs_mask
+            VRls = self.V_SRls_mask
+            VRhs = self.V_SRhs_mask
             SRls = self.A_SRls_mask
-            SRhs = self.A_SRhs_mask
 
-        self.get_stats(CRls, CRhs, VRls, VRhs, SRls, SRhs)
+        self.get_stats(CRls, CRhs, VRls, VRhs, SRls)
         return self.VR_weights, self.SR_weights
 
-    def get_stats(self, CRls, CRhs, VRls, VRhs, SRls, SRhs):
+    def get_stats(self, CRls, CRhs, VRls, VRhs, SRls):
         N_CRls = ak.sum(CRls)
         N_CRhs = ak.sum(CRhs)
-        N_VRls = ak.sum(VRls)
         N_VRhs = ak.sum(VRhs)
         N_VRpred = ak.sum(self.VR_weights)
-        N_SRls = ak.sum(SRls)
         N_SRpred = ak.sum(self.SR_weights)
 
         s_CRls = 1/np.sqrt(N_CRls)
         s_CRhs = 1/np.sqrt(N_CRhs)
-        s_VRls = 1/np.sqrt(N_VRls)
-        s_VRhs = 1/np.sqrt(N_VRhs)
         s_VRpred = np.sqrt(ak.sum(self.VR_weights**2))
-        s_SRls = 1/np.sqrt(N_SRls)
-        s_SRhs = 1/np.sqrt(N_SRhs)
+        s_SRpred = np.sqrt(ak.sum(self.SR_weights**2))
 
-        self.bkg_crtf = 1 + np.sqrt((s_CRls/N_CRls)**2 + (s_CRhs/N_CRhs)**2)
-        self.bkgd_vrpred = 1 + np.where(s_VRpred/N_VRpred > s_SRpred/N_SRpred, np.sqrt((s_VRls/N_VRls)**2 - (s_SRhs/N_SRhs)**2), 0)
+        self.bkg_crtf = round(1 + np.sqrt((s_CRls/N_CRls)**2 + (s_CRhs/N_CRhs)**2), 2)
+        self.bkg_vrpred = round(1 + np.where(s_VRpred/N_VRpred > s_SRpred/N_SRpred, np.sqrt((s_VRpred/N_VRpred)**2 - (s_SRpred/N_SRpred)**2), 0), 2)
         
-        err = np.sqrt(N_VRpred**2 + s_VRpred**2 + (N_VRpred*(self.bkg_crtf-1))**2)
+        err = np.sqrt(N_VRpred + s_VRpred**2 + (N_VRpred*(self.bkg_crtf-1))**2)
         k = np.sqrt((N_VRhs - N_VRpred)**2 - err**2)
-        self.vr_normval = 1 + k/N_VRpred
+        if np.isnan(k): k = 0
+        self.bkg_vr_normval = round(1 + k/N_VRpred, 2)
 
-        print(self.bkg_crtf)
-        print(self.bkgd_vrpred)
-        print(self.vr_normval)
+        s_obs = 1/N_VRhs
+        s_mod = 1/N_VRpred
 
-    def kstest(self, ls_mask, hs_mask, BDT=True):
+        esum1 = N_VRhs**2 / s_obs
+        esum2 = N_VRpred**2 / s_VRpred**2
+        
+        n_obs,e = np.histogram(self.dat_mX_VRhs, bins=np.linspace(375,2000,40))
+        n_mod,e = np.histogram(self.dat_mX_VRls, weights=self.VR_weights, bins=np.linspace(375,2000,40))
+        rsum1 = s_obs * n_obs
+        rsum2 = s_mod * n_mod
+
+        dfmax = np.max(np.abs(rsum1-rsum2))
+        z = dfmax*np.sqrt(esum1*esum2/(esum1+esum2))
+
+        p = 0
+        for j in range(1,1000):
+           p += 2*(-1)**(j-1)*np.exp(-2*j**2*z**2)
+         
+        ks =  ks_2samp_weighted(self.dat_mX_VRls, self.dat_mX_VRhs, weights1=self.VR_weights, weights2=np.ones_like(self.dat_mX_VRhs))
+         
+        print("CALCULATED PROBABILITY",p)
+        print("VR KS test",round(ks,3))
+
+    def ks_test(self, ls_mask, hs_mask, BDT=True):
         ksresults = [] 
         original = self.get_df(ls_mask, self.variables)
         target = self.get_df(hs_mask, self.variables)
@@ -459,11 +504,11 @@ class Signal():
             ksresults.append(ks)
         cols.append('MX')
         ksresults = np.asarray(ksresults)
-        self.ksmax = round(ksresults.max(),4)
+        self.ksmax = round(ksresults.max(),3)
         
         if self.ksmax < 0.01: 
             self.kstest = True
-            print(f"Training {Fore.GREEN}PASSED{Fore.RESET} kstest! ->",self.ksmax)
+            print(f"[{Fore.GREEN}SUCCESS{Fore.RESET}] ks-val = {self.ksmax}")
         else: 
             self.kstest = False
-            print(f"Training {Fore.RED}FAILED{Fore.RESET} kstest! ->",self.ksmax)
+            print(f"[{Fore.RED}FAILURE{Fore.RESET}] ks-val = {self.ksmax}")
