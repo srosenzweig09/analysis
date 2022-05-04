@@ -59,6 +59,55 @@ Mine = {
     "savefig.bbox": 'tight',
 }
 
+lotsa_plots = {
+    "font.sans-serif": ["DejaVu Sans"],
+    "font.family": "sans-serif",
+    "mathtext.fontset": "custom",
+    # "mathtext.rm": "Helvetica",
+    # "mathtext.bf": "Helvetica:bold",
+    # "mathtext.sf": "Helvetica",
+    # "mathtext.it": "Helvetica:italic",
+    # "mathtext.tt": "Helvetica",
+    # "mathtext.cal": "Helvetica",
+    "mathtext.default": "regular",
+    "figure.figsize": (10.0, 10.0),
+    "font.size": 16,
+    "axes.labelsize": "medium",
+    "axes.unicode_minus": False,
+    "xtick.labelsize": "small",
+    "ytick.labelsize": "small",
+    "legend.fontsize": "small",
+    "legend.handlelength": 1.5,
+    "legend.borderpad": 0.5,
+    "legend.frameon": False,
+    "xtick.direction": "in",
+    "xtick.major.size": 6,
+    "xtick.minor.size": 3,
+    "xtick.major.pad": 3,
+    "xtick.top": True,
+    "xtick.major.top": True,
+    "xtick.major.bottom": True,
+    "xtick.minor.top": True,
+    "xtick.minor.bottom": True,
+    "xtick.minor.visible": True,
+    "ytick.direction": "in",
+    "ytick.major.size": 6,
+    "ytick.minor.size": 2.0,
+    "ytick.right": True,
+    "ytick.major.left": True,
+    "ytick.major.right": True,
+    "ytick.minor.left": True,
+    "ytick.minor.right": True,
+    "ytick.minor.visible": True,
+    "grid.alpha": 0.8,
+    "grid.linestyle": ":",
+    "axes.linewidth": 2,
+    "savefig.transparent": False,
+    "savefig.bbox": "tight",
+    "xaxis.labellocation": "right",
+    "yaxis.labellocation": "top",
+}
+
 CMS = {
     "font.sans-serif": ["DejaVu Sans"],
     "font.family": "sans-serif",
@@ -109,6 +158,7 @@ CMS = {
 
 # Filter extra (labellocation) items if needed
 CMS = {k: v for k, v in CMS.items() if k in mpl.rcParams}
+lotsa_plots = {k: v for k, v in lotsa_plots.items() if k in mpl.rcParams}
 
 CMSTex = {
     **CMS,
