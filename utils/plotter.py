@@ -107,7 +107,7 @@ plot_dict = {
 }
 
 
-def Hist(x, scale=1, legend_loc='best', weights=None, density=False, ax=None, **kwargs):
+def Hist(x, scale=1, legend_loc='best', weights=None, density=False, ax=None, patches=False, **kwargs):
     """
     This function is a wrapper for matplotlib.pyplot.hist that allows me to generate histograms quickly and consistently.
     It also helps deal with background trees, which are typically given as lists of samples.
@@ -117,8 +117,9 @@ def Hist(x, scale=1, legend_loc='best', weights=None, density=False, ax=None, **
 
     # convert array to numpy if it is an awkward array
     if isinstance(x, Array): x = x.to_numpy()
+    if isinstance(weights, Array): weights = weights.to_numpy()
     if ax is None: fig, ax = plt.subplots()
-    if weights is None: weights = np.ones_like(x_arr)
+    if weights is None: weights = np.ones_like(x)
 
     # set default values for histogramming
     for k, v in plot_dict.items():
@@ -132,26 +133,57 @@ def Hist(x, scale=1, legend_loc='best', weights=None, density=False, ax=None, **
             n_temp, e = np.histogram(bkg_kin.to_numpy(), bins=bins)
             n += n_temp*scale
             if density: n = n/n.sum()
-        n, edges, im = ax.hist(x=x_bins(bins), weights=n, **kwargs)
-        return n, edges
+        n, _, im = ax.hist(x=x_bins(bins), weights=n, **kwargs)
+        return n
     
     if density:
-        n, edges = np.histogram(x, bins=bins)
-        n, edges, im = ax.hist(x_arr, weights=n/n.sum(), **kwargs)
+        if weights is None: weights = np.ones_like(x)
+        n, _ = np.histogram(x, weights=weights, bins=bins)
+        n, _, im = ax.hist(x_arr, weights=n/n.sum(), **kwargs)
         ax.yaxis.set_major_formatter(OOMFormatter(-2, "%2.0f"))
         ax.ticklabel_format(axis='y', style='sci', scilimits=(-2,4))
-        return n, edges
+        ax.legend()
+        return n
 
     if scale != 1:
-        n, edges, im = ax.hist(x_arr, weights=weights*scale, **kwargs)
+        n, _, im = ax.hist(x_arr, weights=weights*scale, **kwargs)
     if np.array_equal(weights, np.ones_like(x_arr)):
-        n, edges, im = ax.hist(x, **kwargs)
+        n, _, im = ax.hist(x, **kwargs)
     else:
-        n, edges, im = ax.hist(x, weights=weights, **kwargs)
+        n, _, im = ax.hist(x, weights=weights, **kwargs)
 
     if 'label' in kwargs.keys():
         ax.legend()
-        # handles, labels = ax.get_legend_handles_labels()
-        # ax.legend(bbox_to_anchor= (1.02, 0.6))
     
-    return n, edges
+    if patches: return n, im
+    return n
+
+def Ratio(data, bins, labels, xlabel, axs=None, weights1=None, weights2=None, one=True, density=False):
+   data1, data2 = data
+   label1, label2 = labels
+
+   if weights1 is None and weights2 is not None: 
+      weights1 = np.ones_like(data1)
+   if weights2 is None and weights1 is not None: 
+      weights2 = np.ones_like(data2),
+   
+   if axs is None: fig, axs = plt.subplots(nrows=2, ncols=1, gridspec_kw={'height_ratios':[4,1]})
+   ax = axs[0]
+   n_num = Hist(data1, bins=bins, ax=ax, label=label1, weights=weights1, density=density)
+   n_den = Hist(data2, bins=bins, ax=ax, label=label2, weights=weights2, density=density)
+
+   ax = axs[1]
+   x = (bins[1:] + bins[:-1])/2
+   n_ratio = n_num / n_den
+   n_ratio = np.where(np.isnan(n_ratio), 0, n_ratio)
+   dist = np.abs(n_ratio - 1)
+   dist = dist.sum()
+   ax.set_xlabel(xlabel)
+   print(dist)
+   if one: ax.plot(x, np.ones_like(x), '--', color='gray')
+   n_ratio = Hist(x, weights=n_ratio, bins=bins, ax=ax)
+   ax.set_ylabel('Ratio')
+   ax.set_ylim(0.75, 1.25)
+   
+   if axs is None: return fig, axs
+   else: return axs
