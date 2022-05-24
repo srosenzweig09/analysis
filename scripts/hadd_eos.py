@@ -22,6 +22,7 @@ def hadd_NMSSM(tag):
    output = output.decode("utf-8").split('\n')
 
    for line in output:
+      print(line)
       if 'NMSSM_XYH_YToHH' not in line: continue
       sample = line.split('/')[-1]
       print(sample)
@@ -42,25 +43,26 @@ def hadd_NMSSM(tag):
          print("[ERROR] Output files may not exist!")
       else:
          print("[INFO] Successfully hadded!")
+      print()
 
 # def hadd_NMSSM_syst(variation):
-   # # variation should be 'up' or 'down'
-   # outdir=f'/store/user/srosenzw/sixb/sixb_ntuples/Summer2018UL/{args.tag}/NMSSM/syst/{variation}/'
-   # cmd = f'xrdfs {root} ls -u {outdir}'
-   # output = subprocess.check_output(shlex.split(cmd))
-   # output = output.decode("utf-8").split('\n')
+#    # variation should be 'up' or 'down'
+#    outdir=f'/store/user/srosenzw/sixb/sixb_ntuples/Summer2018UL/{args.tag}/NMSSM/syst/{variation}/'
+#    cmd = f'xrdfs {root} ls -u {outdir}'
+#    output = subprocess.check_output(shlex.split(cmd))
+#    output = output.decode("utf-8").split('\n')
 
-   # for line in output:
-   #    if 'NMSSM_XYH_YToHH' not in line: continue
-   #    match = re.search('/store/', line)
-   #    start = match.start()
-   #    end = match.end()
-   #    cmd = f'xrdfs {root} ls -u {line[start:]}/output'
-   #    output = subprocess.check_output(shlex.split(cmd))
-   #    output = output.decode("utf-8").split('\n')
-   #    infiles = ' '.join(output)
-   #    cmd = f'hadd {root}/{line[start:]}/ntuple.root {infiles}'
-   #    subprocess.run(shlex.split(cmd))
+#    for line in output:
+#       if 'NMSSM_XYH_YToHH' not in line: continue
+#       match = re.search('/store/', line)
+#       start = match.start()
+#       end = match.end()
+#       cmd = f'xrdfs {root} ls -u {line[start:]}/output'
+#       output = subprocess.check_output(shlex.split(cmd))
+#       output = output.decode("utf-8").split('\n')
+#       infiles = ' '.join(output)
+#       cmd = f'hadd {root}/{line[start:]}/ntuple.root {infiles}'
+#       subprocess.run(shlex.split(cmd))
 
 def hadd_data():
    outdir=f'/store/user/srosenzw/sixb/sixb_ntuples/Summer2018UL/{args.tag}/JetHT_Run2018_full'
@@ -72,5 +74,5 @@ def hadd_data():
    subprocess.run(shlex.split(cmd))
 
 if args.data: hadd_data()
-if args.bias: hadd_NMSSM('dHHH_pairs')
-if args.btag: hadd_NMSSM('dHHH_pairs_maxbtag')
+if args.bias: hadd_NMSSM('bias')
+if args.btag: hadd_NMSSM('btag')
