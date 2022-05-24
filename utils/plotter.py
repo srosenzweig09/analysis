@@ -107,11 +107,14 @@ plot_dict = {
 }
 
 
-def Hist(x, scale=1, legend_loc='best', weights=None, density=False, ax=None, patches=False, **kwargs):
+def Hist(x, scale=1, legend_loc='best', weights=None, density=False, ax=None, patches=False, CMS=False, **kwargs):
     """
     This function is a wrapper for matplotlib.pyplot.hist that allows me to generate histograms quickly and consistently.
     It also helps deal with background trees, which are typically given as lists of samples.
     """
+
+    if CMS: plt.style.use(CMS)
+
     bins = kwargs['bins']
     x_arr = x_bins(bins)
 
@@ -158,14 +161,23 @@ def Hist(x, scale=1, legend_loc='best', weights=None, density=False, ax=None, pa
     if patches: return n, im
     return n
 
-def Ratio(data, bins, labels, xlabel, axs=None, weights1=None, weights2=None, one=True, density=False):
+def Ratio(data, bins, labels, xlabel, axs=None, weights=[None, None], one=True, density=False, ratio_ylabel='Ratio'):
    data1, data2 = data
    label1, label2 = labels
 
-   if weights1 is None and weights2 is not None: 
+   if weights[0] is None and weights[1] is not None: 
       weights1 = np.ones_like(data1)
-   if weights2 is None and weights1 is not None: 
-      weights2 = np.ones_like(data2),
+      weights2 = weights[1]
+   if weights[1] is None and weights[0] is not None: 
+      weights1 = weights[0]
+      weights2 = np.ones_like(data2)
+   if weights[0] is None and weights[1] is None: 
+      weights1 = np.ones_like(data1)
+      weights2 = np.ones_like(data2)
+   if isinstance(weights[0], float):
+      weights1 = weights[0] * np.ones_like(data1)
+   if isinstance(weights[1], float):
+      weights2 = weights[1] * np.ones_like(data2)
    
    if axs is None: fig, axs = plt.subplots(nrows=2, ncols=1, gridspec_kw={'height_ratios':[4,1]})
    ax = axs[0]
@@ -176,14 +188,16 @@ def Ratio(data, bins, labels, xlabel, axs=None, weights1=None, weights2=None, on
    x = (bins[1:] + bins[:-1])/2
    n_ratio = n_num / n_den
    n_ratio = np.where(np.isnan(n_ratio), 0, n_ratio)
+   n_ratio = np.where(np.isposinf(n_ratio), 0, n_ratio)
+   # print(n_ratio)
    dist = np.abs(n_ratio - 1)
    dist = dist.sum()
    ax.set_xlabel(xlabel)
    print(dist)
    if one: ax.plot(x, np.ones_like(x), '--', color='gray')
    n_ratio = Hist(x, weights=n_ratio, bins=bins, ax=ax)
-   ax.set_ylabel('Ratio')
+   ax.set_ylabel(ratio_ylabel)
    ax.set_ylim(0.75, 1.25)
    
-   if axs is None: return fig, axs
-   else: return axs
+   if axs is None: return fig, axs, dist
+   else: return n_num, n_den, dist
