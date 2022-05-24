@@ -9,7 +9,6 @@ import awkward as ak
 import numpy as np
 import sympy as sp
 
-from icecream import ic
 import string
 import re
 import vector
@@ -17,7 +16,6 @@ import vector
 from tqdm import tqdm
 
 from .xsecUtils import *
-from . import fileUtils as fc
 from .cutConfig import *
 from .varConfig import varinfo
 
