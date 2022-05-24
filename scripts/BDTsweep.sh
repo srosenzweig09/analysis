@@ -6,8 +6,8 @@ minLeaves=(200 250 300 350 400)
 minLeaves=(195 196 197 198 199 200 201 202 203)
 GBsubsample=(0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9)
 
-for n in ${GBsubsample[@]}; do
-    python scripts/skimRegions.py --cfg config/sphereConfig.cfg --spherical --testing --nestimators 75 --learningRate 0.15 --maxDepth 5 --minLeaves 200 --GBsubsample ${n} || exit
+for n in ${Nestimators[@]}; do
+   python scripts/skimRegions.py --btag --testing --nestimators ${n} || exit
 done
 
 
