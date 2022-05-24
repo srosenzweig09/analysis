@@ -8,18 +8,11 @@ from configparser import ConfigParser
 import matplotlib.pyplot as plt
 import numpy as np
 import os
-import re
+# import re
 import ROOT
-from scipy.stats import kstest
-# from sklearn.ensemble import GradientBoostingClassifier
-# from sklearn.metrics import roc_auc_score, roc_curve, auc
-# from sklearn.model_selection import StratifiedKFold
 import sys
-from tqdm import tqdm
 from utils.analysis import Signal
-from utils.analysis.data import createDataCard
-from utils.fileUtils import mx_my_masses, combineDir
-from utils.plotter import Hist
+from utils.plotter import Hist, Ratio
 
 def getROOTCanvas(h_title, bin_values, outFile):
     print(f".. generating root hist for {h_title}")
@@ -82,11 +75,15 @@ parser = ArgumentParser(description='Command line parser of model options and ta
 
 # parser.add_argument('--cfg', dest='cfg', help='config file', default='')
 parser.add_argument('--testing', dest='testing', action='store_true', default=False)
-parser.add_argument('--all-signal', dest='allSignal', action='store_true', default=False)
+parser.add_argument('--plot', dest='plot', action='store_true', default=False)
+
+# jets
+parser.add_argument('--bias', dest='bias', action='store_true', default=False)
+parser.add_argument('--btag', dest='btag', action='store_true', default=False)
 
 # region shapes
-parser.add_argument('--rectangular', dest='rectangular', help='', action='store_true', default=True)
-parser.add_argument('--spherical', dest='spherical', help='', action='store_true', default=False)
+parser.add_argument('--rectangular', dest='rectangular', help='', action='store_true', default=False)
+parser.add_argument('--spherical', dest='spherical', help='', action='store_true', default=True)
 
 # bdt parameters
 parser.add_argument('--nestimators', dest='N')
@@ -102,14 +99,9 @@ parser.add_argument('--no-MCstats', dest='MCstats', action='store_false', defaul
 
 args = parser.parse_args()
 
-BDT_dict = {
-    'Nestimators' : args.N,
-    'learningRate' : args.lr,
-    'maxDepth' : args.depth,
-    'minLeaves' : args.minLeaves,
-    'GBsubsample' : args.gbsub,
-    'randomState' : args.rand
-}
+if args.bias: jets = 'bias'
+elif args.btag: jets = 'btag'
+else: raise("Must provide --bias or --btag")
 
 ### ------------------------------------------------------------------------------------
 ## Implement config parser
@@ -119,14 +111,40 @@ print(".. parsing config file")
 if args.spherical and args.rectangular: args.rectangular = False
 if args.rectangular: 
    region_type = 'rect'
-   cfg = 'config/rectConfig.cfg'
+   cfg = f'config/rectConfig.cfg'
 elif args.spherical: 
    region_type = 'sphere'
-   cfg = 'config/sphereConfig.cfg'
+   cfg = f'config/sphereConfig_{jets}.cfg'
 
 config = ConfigParser()
 config.optionxform = str
 config.read(cfg)
+
+base = config['file']['base']
+data = config['file']['data']
+
+minMX = int(config['plot']['minMX'])
+maxMX = int(config['plot']['maxMX'])
+nbins = int(config['plot']['nbins'])
+mBins = np.linspace(minMX,maxMX,nbins)
+
+indir = f"root://cmseos.fnal.gov/{base}"
+outDir = f"combine/{jets}_{region_type}"
+loc = f"{os.getcwd()}/{outDir}"
+
+datFileName = f"{indir}{data}"
+
+### ------------------------------------------------------------------------------------
+## Set BDT parameters
+
+BDT_dict = {
+    'Nestimators' : args.N,
+    'learningRate' : args.lr,
+    'maxDepth' : args.depth,
+    'minLeaves' : args.minLeaves,
+    'GBsubsample' : args.gbsub,
+    'randomState' : args.rand
+}
 
 overwrite_log = []
 for hyper in BDT_dict:
@@ -138,40 +156,12 @@ for line in overwrite_log:
     print(overwrite_log)
 print()
 
-base = config['file']['base']
-signal = config['file']['signal']
-data = config['file']['data']
-treename = config['file']['tree']
-year = int(config['file']['year'])
-pairing = config['pairing']['scheme']
-pairing_type = pairing.split('_')[0]
-
-minMX = int(config['plot']['minMX'])
-maxMX = int(config['plot']['maxMX'])
-nbins = int(config['plot']['nbins'])
-mBins = np.linspace(minMX,maxMX,nbins)
-
-score = float(config['score']['threshold'])
-
-# BDT parameters
-Nestimators  = int(config['BDT']['Nestimators'])
-learningRate = float(config['BDT']['learningRate'])
-maxDepth     = int(config['BDT']['maxDepth'])
-minLeaves    = int(config['BDT']['minLeaves'])
-GBsubsample  = float(config['BDT']['GBsubsample'])
-randomState  = int(config['BDT']['randomState'])
-
-variables    = config['BDT']['variables'].split(", ")
-
-indir = f"root://cmseos.fnal.gov/{base}/{pairing}/"
-outDir = f"combine/{pairing_type}/{region_type}"
-datacardDir = f"{combineDir}datacards/{pairing_type}/{region_type}"
-loc = f"{os.getcwd()}/{outDir}"
+# datacardDir = f"{combineDir}datacards/{jets}_{region_type}"
+# print(datacardDir)
 
 ### ------------------------------------------------------------------------------------
 ## Obtain data regions
 
-datFileName = f"{indir}{data}"
 datTree = Signal(datFileName)
 
 if args.rectangular:
@@ -183,14 +173,64 @@ elif args.spherical:
 else:
     raise AttributeError("No mass region definition!")
 
-dat_mX_VRls = datTree.dat_mX_VRls
-dat_mX_VRhs = datTree.dat_mX_VRhs
-dat_mX_SRls = datTree.dat_mX_SRls
+dat_mX_V_CRls = datTree.dat_mX_V_CRls
+dat_mX_V_CRhs = datTree.dat_mX_V_CRhs
+dat_mX_V_SRls = datTree.dat_mX_V_SRls
+dat_mX_V_SRhs = datTree.dat_mX_V_SRhs
+dat_mX_A_CRls = datTree.dat_mX_A_CRls
+dat_mX_A_CRhs = datTree.dat_mX_A_CRhs
+dat_mX_A_SRls = datTree.dat_mX_A_SRls
+
+
+if args.plot:
+
+   # ## NO WEIGHTING
+
+   # fig, axs = plt.subplots(nrows=2, ncols=1, gridspec_kw={'height_ratios':[4,1]})
+   # fig.suptitle("Validation Control Region")
+   # axs = Ratio([dat_mX_V_CRhs, dat_mX_V_CRls], bins=mBins, xlabel=r"M$_\mathrm{X}$ [GeV]", axs=axs, labels=['Target', 'Base'], density=True, ratio_ylabel='Target/Base')
+   # fig.savefig('plots/base_target_comparison_VCR.pdf', bbox_inches='tight')
+
+   # fig, axs = plt.subplots(nrows=2, ncols=1, gridspec_kw={'height_ratios':[4,1]})
+   # fig.suptitle("Validation Signal Region")
+   # axs = Ratio([dat_mX_V_SRhs, dat_mX_V_SRls], bins=mBins, xlabel=r"M$_\mathrm{X}$ [GeV]", axs=axs, labels=['Target', 'Base'], density=True, ratio_ylabel='Target/Base')
+   # fig.savefig('plots/base_target_comparison_VSR.pdf', bbox_inches='tight')
+
+   # fig, axs = plt.subplots(nrows=2, ncols=1, gridspec_kw={'height_ratios':[4,1]})
+   # fig.suptitle("Analysis Control Region")
+   # axs = Ratio([dat_mX_A_CRhs, dat_mX_A_CRls], bins=mBins, xlabel=r"M$_\mathrm{X}$ [GeV]", axs=axs, labels=['Target', 'Base'], density=True, ratio_ylabel='Target/Base')
+   # fig.savefig('plots/base_target_comparison_ACR.pdf', bbox_inches='tight')
+
+   ## CONSTANT WEIGHTING   
+   ratio = len(dat_mX_V_CRhs) / len(dat_mX_V_CRls)
+   print("ratio",ratio)
+
+   fig, axs = plt.subplots(nrows=2, ncols=1, gridspec_kw={'height_ratios':[4,1]})
+   fig.suptitle("Validation Control Region")
+   axs = Ratio([dat_mX_V_CRhs, dat_mX_V_CRls], bins=mBins, xlabel=r"M$_\mathrm{X}$ [GeV]", axs=axs, labels=['Target', 'Ratio Reweight'], ratio_ylabel='Target/Reweight', weights=[None,ratio])
+   fig.savefig('plots/TF_target_comparison_VCR.pdf', bbox_inches='tight')
+
+   fig, axs = plt.subplots(nrows=2, ncols=1, gridspec_kw={'height_ratios':[4,1]})
+   fig.suptitle("Validation Signal Region")
+   axs = Ratio([dat_mX_V_SRhs, dat_mX_V_SRls], bins=mBins, xlabel=r"M$_\mathrm{X}$ [GeV]", axs=axs, labels=['Target', 'Ratio Reweight'], ratio_ylabel='Target/Reweight', weights=[None,ratio])
+   fig.savefig('plots/TF_target_comparison_VSR.pdf', bbox_inches='tight')
+
+   fig, axs = plt.subplots(nrows=2, ncols=1, gridspec_kw={'height_ratios':[4,1]})
+   fig.suptitle("Analysis Control Region")
+   axs = Ratio([dat_mX_A_CRhs, dat_mX_A_CRls], bins=mBins, xlabel=r"M$_\mathrm{X}$ [GeV]", axs=axs, labels=['Target', 'Ratio Reweight'], ratio_ylabel='Target/Reweight', weights=[None,ratio])
+   fig.savefig('plots/TF_target_comparison_ACR.pdf', bbox_inches='tight')
 
 ### ------------------------------------------------------------------------------------
 ## train bdt and predict data SR weights
 
-VR_weights, SR_weights = datTree.bdt_process(region_type, config)
+datTree.bdt_process(region_type, config)
+
+if args.testing: sys.exit()
+
+V_CR_weights = datTree.V_CR_weights
+V_SR_weights = datTree.V_SR_weights
+A_CR_weights = datTree.A_CR_weights
+A_SR_weights = datTree.A_SR_weights
 
 err_dict = {
     'bkg_crtf' : datTree.bkg_crtf,
@@ -198,57 +238,47 @@ err_dict = {
     'bkg_vr_normval' : datTree.bkg_vr_normval
 }
 
+print(err_dict)
+
+# print("datTree.V_CR_kstest",datTree.V_CR_kstest)
+# print("datTree.V_CR_prob_w",datTree.V_CR_prob_w)
+
 if args.no_stats: err_dict = {key:1 for key in err_dict.keys()}
 
-fig, ax = plt.subplots()
-n_VRtarget = Hist(dat_mX_VRhs, bins=mBins, ax=ax, label='Target')
-n_VRestimate = Hist(dat_mX_VRls, weights=VR_weights, bins=mBins, ax=ax, label='Estimation')
+if args.plot:
+   ratio = len(dat_mX_V_CRhs)/sum(datTree.V_CR_weights)
+   # fig, axs = plt.subplots()
+   fig, axs = plt.subplots(nrows=2, ncols=1, gridspec_kw={'height_ratios':[4,1]})
+   fig.suptitle("Validation Control Region")
+   axs, n_target, n_model = Ratio([dat_mX_V_CRhs, dat_mX_V_CRls], weights=[None, datTree.V_CR_weights*ratio], bins=mBins, axs=axs, labels=['Target', 'Model'], xlabel=r"M$_\mathrm{X}$ [GeV]", density=True, ratio_ylabel='Target/Model')
+   fig.savefig(f"plots/model_VCR.pdf", bbox_inches='tight')
 
-print(kstest(n_VRtarget,n_VRestimate))
+   ratio = len(dat_mX_V_SRhs)/sum(datTree.V_SR_weights)
+   fig, axs = plt.subplots(nrows=2, ncols=1, gridspec_kw={'height_ratios':[4,1]})
+   fig.suptitle("Validation Signal Region")
+   axs, n_target, n_model = Ratio([dat_mX_V_SRhs, dat_mX_V_SRls], weights=[None, V_SR_weights*ratio], bins=mBins, axs=axs, labels=['Target', 'Model'], xlabel=r"M$_\mathrm{X}$ [GeV]", density=True, ratio_ylabel='Target/Model')
+   fig.savefig(f"plots/model_VSR.pdf", bbox_inches='tight')
+
+   # getROOTCanvas_VR(["h_obs", "h_est"], [n_target, n_model], f"{outDir}/data_VR")
+
+   ratio = len(dat_mX_A_CRhs)/sum(datTree.A_CR_weights)
+   fig, axs = plt.subplots(nrows=2, ncols=1, gridspec_kw={'height_ratios':[4,1]})
+   fig.suptitle("Analysis Control Region")
+   axs, n_target, n_model = Ratio([dat_mX_A_CRhs, dat_mX_A_CRls], weights=[None, datTree.A_CR_weights*ratio], bins=mBins, axs=axs, labels=['Target', 'Model'], xlabel=r"M$_\mathrm{X}$ [GeV]", density=True, ratio_ylabel='Target/Model')
+   fig.savefig(f"plots/model_ACR.pdf", bbox_inches='tight')
+
+# n_VRtarget = Hist(dat_mX_V_CRhs, bins=mBins, ax=ax, label='Target')
+# n_VRestimate = Hist(dat_mX_V_SRls, weights=VR_weights, bins=mBins, ax=ax, label='Estimation')
+
+# print(kstest(n_VRtarget,n_VRestimate))
 # sys.exit()
 
-ax.set_xlabel(r"$m_X$ [GeV]")
-ax.set_ylabel("Events")
-ax.set_title("BDT Estimation of Data Yield in Validation Region")
-fig.savefig(f"{outDir}/data_validation.pdf", bbox_inches='tight')
-
-getROOTCanvas_VR(["h_obs", "h_est"], [n_VRtarget,n_VRestimate], f"{outDir}/data_VR")
+# ax.set_xlabel(r"M$_\mathrm{X}$ [GeV]")
+# ax.set_ylabel("Events")
+# ax.set_title("BDT Estimation of Data Yield in Validation Region")
 
 fig, ax = plt.subplots()
-n_dat_SRhs_pred = Hist(dat_mX_SRls, weights=SR_weights, bins=mBins, ax=ax, label='Estimation')
-
-
-### ------------------------------------------------------------------------------------
-## Obtain MC signal counts
-
-def get_sig_SRhs(sigFileName):
-    sigTree = Signal(sigFileName)
-    if args.rectangular:
-        sig_mX_SRhs = sigTree.rectangular_region(config)
-    elif args.spherical:
-        sig_mX_SRhs = sigTree.spherical_region(config)
-    n_sig_SRhs, _ = np.histogram(sig_mX_SRhs, bins=mBins)
-    n_sig_SRhs = n_sig_SRhs * sigTree.scale
-    return n_sig_SRhs
-
-print("\n.. obtaining MC signal yields")
-signal_nSR = []
-signal_out = []
-if args.allSignal:
-    for mx,my in tqdm(mx_my_masses, ncols=50):
-        signal = f'NMSSM_XYH_YToHH_6b_MX_{mx}_MY_{my}'
-        sigFileName = f"{indir}NMSSM/{signal}/ntuple.root"
-        n_sig_SRhs = get_sig_SRhs(sigFileName)
-        signal_nSR.append(n_sig_SRhs)
-        sigFileName = re.search('MX_.+/', sigFileName).group()[:-1]
-        signal_out.append(sigFileName)
-else:
-    sigFileName = f"{indir}NMSSM/{signal}"
-    n_sig_SRhs = get_sig_SRhs(sigFileName)
-    mx_my_masses = []
-    signal_nSR.append(n_sig_SRhs)
-    sigFileName = re.search('MX_.+/', sigFileName).group()[:-1]
-    signal_out.append(sigFileName)
+n_dat_SRhs_pred = Hist(dat_mX_A_SRls, weights=A_SR_weights, bins=mBins, ax=ax, label='Estimation')
 
 ### ------------------------------------------------------------------------------------
 ## signal region estimate
@@ -256,11 +286,8 @@ else:
 ROOT.gROOT.SetBatch(True)
 
 print(f"Estimated data = {n_dat_SRhs_pred.sum()}")
-getROOTCanvas("data", n_dat_SRhs_pred, f"{outDir}/data_{region_type}")
-for sig_bin_vals,sig_name in tqdm(zip(signal_nSR, signal_out), ncols=50):
-    hist_name = f"h_{sig_name}"
-    getROOTCanvas(hist_name, sig_bin_vals, f"{outDir}/{sig_name}_nosyst")
-   #  createDataCard(location=loc, sigROOT=sig_name, h_name=hist_name, err_dict=err_dict, outdir=datacardDir, no_bkg_stats=args.no_stats, MCstats=args.MCstats)
+getROOTCanvas("data", n_dat_SRhs_pred, f"{outDir}/data")
+print(f"Data ROOT file saved to {outDir}/data.root")
 
 # print()
 # print("PLEASE RUN THE FOLLOWING COMMAND:")
