@@ -26,8 +26,8 @@ def init_attr(attr,init,size):
 
 from .selectUtils import *
 from .plotUtils import *
-from .studyUtils import *
-from .classUtils import *
+# from .studyUtils import *
+# from .classUtils import *
 from .orderUtils import *
 from .testUtils import *
 
