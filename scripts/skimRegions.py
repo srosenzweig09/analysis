@@ -86,7 +86,7 @@ parser.add_argument('--rectangular', dest='rectangular', help='', action='store_
 parser.add_argument('--spherical', dest='spherical', help='', action='store_true', default=True)
 
 # bdt parameters
-parser.add_argument('--nestimators', dest='N')
+parser.add_argument('--Nestimators', dest='N')
 parser.add_argument('--learningRate', dest='lr')
 parser.add_argument('--maxDepth', dest='depth')
 parser.add_argument('--minLeaves', dest='minLeaves')
@@ -183,23 +183,6 @@ dat_mX_A_SRls = datTree.dat_mX_A_SRls
 
 
 if args.plot:
-
-   # ## NO WEIGHTING
-
-   # fig, axs = plt.subplots(nrows=2, ncols=1, gridspec_kw={'height_ratios':[4,1]})
-   # fig.suptitle("Validation Control Region")
-   # axs = Ratio([dat_mX_V_CRhs, dat_mX_V_CRls], bins=mBins, xlabel=r"M$_\mathrm{X}$ [GeV]", axs=axs, labels=['Target', 'Base'], density=True, ratio_ylabel='Target/Base')
-   # fig.savefig('plots/base_target_comparison_VCR.pdf', bbox_inches='tight')
-
-   # fig, axs = plt.subplots(nrows=2, ncols=1, gridspec_kw={'height_ratios':[4,1]})
-   # fig.suptitle("Validation Signal Region")
-   # axs = Ratio([dat_mX_V_SRhs, dat_mX_V_SRls], bins=mBins, xlabel=r"M$_\mathrm{X}$ [GeV]", axs=axs, labels=['Target', 'Base'], density=True, ratio_ylabel='Target/Base')
-   # fig.savefig('plots/base_target_comparison_VSR.pdf', bbox_inches='tight')
-
-   # fig, axs = plt.subplots(nrows=2, ncols=1, gridspec_kw={'height_ratios':[4,1]})
-   # fig.suptitle("Analysis Control Region")
-   # axs = Ratio([dat_mX_A_CRhs, dat_mX_A_CRls], bins=mBins, xlabel=r"M$_\mathrm{X}$ [GeV]", axs=axs, labels=['Target', 'Base'], density=True, ratio_ylabel='Target/Base')
-   # fig.savefig('plots/base_target_comparison_ACR.pdf', bbox_inches='tight')
 
    ## CONSTANT WEIGHTING   
    ratio = len(dat_mX_V_CRhs) / len(dat_mX_V_CRls)
