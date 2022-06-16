@@ -1,7 +1,8 @@
 import os
 
 run_conditions  = ['Summer2018UL']
-pairing_schemes = ['dHHH_pairs', 'dHHH_pairs_maxbtag', 'mH_pairs']
+pairing_schemes = ['bias', 'btag']
+studies         = ['nocuts', 'presel']
 
 mx_my_masses = [
     [ 450,300],
@@ -16,20 +17,25 @@ mx_my_masses = [
     ]
 
 fnal_root = "root://cmseos.fnal.gov/"
-base = '/eos/uscms/store/user/srosenzw/sixb/sixb_ntuples'
+base = '/eos/uscms/store/user/srosenzw/sixb/ntuples'
 current_base = f"{base}/Summer2018UL/bias/"
 data_path = 'JetHT_Data_UL/JetHT_Run2018_full/ntuple.root'
 config = 'config/sphereConfig.cfg'
 
-def get_NMSSM(mx, my, run='Summer2018UL', jets='dHHH_pairs', btag=False):
-   if btag: jets = jets + '_maxbtag'
+def get_NMSSM(mx, my, run='Summer2018UL', jets='bias'):
    return f"{base}/{run}/{jets}/NMSSM/NMSSM_XYH_YToHH_6b_MX_{mx}_MY_{my}/ntuple.root"
 
-def get_data(run='Summer2018UL', jets='dHHH_pairs', btag=False):
+def get_presel(mx=700, my=400, run='Summer2018UL'):
+   return f"{base}/{run}/NMSSM_presel/NMSSM_XYH_YToHH_6b_MX_{mx}_MY_{my}/ntuple.root"
+
+def get_nocuts(mx=700, my=400, run='Summer2018UL', study='nocuts'):
+   return f"{base}/{run}/NMSSM_{study}/NMSSM_XYH_YToHH_6b_MX_{mx}_MY_{my}/ntuple.root"
+
+def get_data(run='Summer2018UL', jets='bias', btag=False):
    if btag: jets = jets + '_maxbtag'
    return f"{base}/{run}/{jets}/{data_path}"
 
-def get_signal_list(run='Summer2018UL', jets='dHHH_pairs', btag=False):
+def get_signal_list(run='Summer2018UL', jets='bias'):
    NMSSM = []
    base = f"{base}/{run}/{jets}"
    for mx,my in mx_my_masses:
