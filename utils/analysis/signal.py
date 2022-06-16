@@ -38,7 +38,7 @@ class Signal():
    _rect_region_bool = False
    _sphere_region_bool = False
 
-   def __init__(self, filename, treename='sixBtree', year=2018):
+   def __init__(self, filename, treename='sixBtree', year=2018, presel=False):
       if 'NMSSM' in filename:
          self.filename = re.search('NMSSM_.+/', filename).group()[:-1]
       tree = uproot.open(f"{filename}:{treename}")
@@ -50,14 +50,11 @@ class Signal():
          if re.match(pattern, k):
                setattr(self, k, v.array())
 
-      jets = ['HX_b1_', 'HX_b2_', 'HY1_b1_', 'HY1_b2_', 'HY2_b1_', 'HY2_b2_']
-      try: self.btag_avg = np.column_stack(([self.get(jet + 'DeepJet').to_numpy() for jet in jets])).sum(axis=1)/6
-      except: self.btag_avg = np.column_stack(([self.get(jet + 'btag').to_numpy() for jet in jets])).sum(axis=1)/6
-
       self.nevents = len(tree['Run'].array())
 
       if 'NMSSM' in filename:
          cutflow = uproot.open(f"{filename}:h_cutflow")
+         print(cutflow.axis().labels())
          # save total number of events for scaling purposes
          total = cutflow.to_numpy()[0][0]
          self.scaled_total = total
@@ -73,8 +70,43 @@ class Signal():
          self.scale = 1
          self._isdata = True
 
-      self.initialize_vars()
+      if presel:
+         for k, v in tree.items():
+            if 'jet' in k or 'gen' in k:
+               setattr(self, k, v.array())
+      else:
+         jets = ['HX_b1_', 'HX_b2_', 'HY1_b1_', 'HY1_b2_', 'HY2_b1_', 'HY2_b2_']
+         try: self.btag_avg = np.column_stack(([self.get(jet + 'DeepJet').to_numpy() for jet in jets])).sum(axis=1)/6
+         except: self.btag_avg = np.column_stack(([self.get(jet + 'btag').to_numpy() for jet in jets])).sum(axis=1)/6
+
+         self.btag_avg2 = np.column_stack(([self.get(jet + 'btag').to_numpy()**2 for jet in jets])).sum(axis=1)/6
+
+         self.initialize_vars()
         
+   def keys(self):
+      return self.tree.keys()
+
+   def find_key(self, start):
+      for key in self.keys():
+         if start in key : print(key)
+
+   def get(self, key, library='ak'):
+      """Returns the key.
+      Use case: Sometimes keys are accessed directly, e.g. tree.key, but other times, the key may be accessed from a list of keys, e.g. tree.get(['key']). This function handles the latter case.
+      """
+      if key in self.tree.keys():
+         return self.tree[key].array(library=library)
+      else:
+         arr = getattr(self, key)
+         if library=='np' and not isinstance(arr, np.ndarray): arr = arr.to_numpy()
+         return arr
+    
+   def np(self, key):
+      """Returns the key as a numpy array."""
+      np_arr = self.get(key, library='np')
+      if not isinstance(np_arr, np.ndarray): np_arr = np_arr.to_numpy()
+      return np_arr
+
    def initialize_vars(self):
       """Initialize variables that don't exist in the original ROOT tree."""
       HX_b1  = Particle(self, 'HX_b1')
@@ -126,26 +158,6 @@ class Signal():
 
       X = HX + HY1 + HY2
       self.X_m = X.m
-
-   def keys(self):
-      return self.tree.keys()
-
-   def get(self, key, library='ak'):
-      """Returns the key.
-      Use case: Sometimes keys are accessed directly, e.g. tree.key, but other times, the key may be accessed from a list of keys, e.g. tree.get(['key']). This function handles the latter case.
-      """
-      if key in self.tree.keys():
-         return self.tree[key].array(library=library)
-      else:
-         arr = getattr(self, key)
-         if library=='np' and not isinstance(arr, np.ndarray): arr = arr.to_numpy()
-         return arr
-    
-   def np(self, key):
-      """Returns the key as a numpy array."""
-      np_arr = self.get(key, library='np')
-      if not isinstance(np_arr, np.ndarray): np_arr = np_arr.to_numpy()
-      return np_arr
 
    def rectangular_region(self, config):
       """Defines rectangular region masks."""
@@ -231,9 +243,15 @@ class Signal():
       self.V_CR_mask = (Dm_cand > SR_edge) & (Dm_cand <= CR_edge) # Validation CR
 
       score_cut = float(config['score']['threshold'])
-
       ls_mask = self.btag_avg < score_cut # ls
       hs_mask = self.btag_avg >= score_cut # hs
+
+
+      # b_cut = float(config['score']['n'])
+      # self.nloose_b = ak.sum(self.get('jet_btag') > 0.0490, axis=1)
+      # self.nmedium_b = ak.sum(self.get('jet_btag') > 0.2783, axis=1)
+      # ls_mask = self.nmedium_b < b_cut # ls
+      # hs_mask = self.nmedium_b >= b_cut # hs
 
       self.A_CRls_mask = self.A_CR_mask & ls_mask
       self.A_CRhs_mask = self.A_CR_mask & hs_mask
@@ -245,13 +263,17 @@ class Signal():
       self.V_SRls_mask = self.V_SR_mask & ls_mask
       self.V_SRhs_mask = self.V_SR_mask & hs_mask
 
+      self.hs_mask = hs_mask
+      self.ls_mask = ls_mask
+
       if self._isdata:
          print(f"VR_center   = {VR_center}")
          print(f"SR_edge     = {int(SR_edge)}")
          print(f"CR_edge     = {int(CR_edge)}")
          print( "--------------------")
-         print(f"b tag score = {score_cut}")
-         print( "--------------------")
+         # print(f"b tag score = {score_cut}")
+         # print(f"b tag score = {score_cut}")
+         # print( "--------------------")
          print()
 
          self.dat_mX_V_CRhs = self.np('X_m')[self.V_CRhs_mask]
@@ -261,8 +283,6 @@ class Signal():
          self.dat_mX_A_CRhs = self.np('X_m')[self.A_CRhs_mask]
          self.dat_mX_A_CRls = self.np('X_m')[self.A_CRls_mask]
          self.dat_mX_A_SRls = self.np('X_m')[self.A_SRls_mask]
-      else:
-         return self.np('X_m')[self.A_SRhs_mask]
       
       self._sphere_region_bool = True
 
@@ -366,7 +386,9 @@ class Signal():
       minLeaves    = int(config['BDT']['minLeaves'])
       GBsubsample  = float(config['BDT']['GBsubsample'])
       randomState  = int(config['BDT']['randomState'])
-      variables    = config['BDT']['variables'].split(", ")
+      variables = config['BDT']['variables']
+      if isinstance(variables, str):
+         variables = variables.split(", ")
       self.variables = variables
 
       self.TF = sum(hs_mask)/sum(ls_mask)
@@ -431,21 +453,24 @@ class Signal():
          self.train_bdt(config, self.V_CRls_mask, self.V_CRhs_mask)
          print(".. predicting weights in CR")
          self.V_CR_weights = self.bdt_prediction(self.V_CRls_mask)
-         print(".. performing kstest")
-         self.V_CR_kstest = self.ks_test(self.V_CRls_mask, self.V_CRhs_mask, self.V_CR_weights)
-         self.V_CR_prob_w, self.V_CR_prob_unw = self.get_prob(self.V_CRls_mask, self.V_CRhs_mask, self.V_CR_weights)
+         print()
+         # print(".. performing kstest")
+         # self.V_CR_kstest = self.ks_test(self.V_CRls_mask, self.V_CRhs_mask, self.V_CR_weights)
+         # self.V_CR_prob_w, self.V_CR_prob_unw = self.get_prob(self.V_CRls_mask, self.V_CRhs_mask, self.V_CR_weights)
                
          print(".. predicting weights in V_SR")
          self.V_SR_weights = self.bdt_prediction(self.V_SRls_mask)
-         self.V_SR_kstest_pre = self.ks_test(self.V_SRls_mask, self.V_SRhs_mask, np.ones_like(self.V_SR_weights))
-         self.V_SR_kstest = self.ks_test(self.V_SRls_mask, self.V_SRhs_mask, self.V_SR_weights)
-         self.V_SR_prob_w, self.V_SR_prob_unw = self.get_prob(self.V_SRls_mask, self.V_SRhs_mask, self.V_SR_weights)
+         print()
+         # self.V_SR_kstest_pre = self.ks_test(self.V_SRls_mask, self.V_SRhs_mask, np.ones_like(self.V_SR_weights))
+         # self.V_SR_kstest = self.ks_test(self.V_SRls_mask, self.V_SRhs_mask, self.V_SR_weights)
+         # self.V_SR_prob_w, self.V_SR_prob_unw = self.get_prob(self.V_SRls_mask, self.V_SRhs_mask, self.V_SR_weights)
 
          print(".. training BDT in A_CR")
          self.train_bdt(config, self.A_CRls_mask, self.A_CRhs_mask)
          self.A_CR_weights = self.bdt_prediction(self.A_CRls_mask)
-         self.A_CR_kstest = self.ks_test(self.A_CRls_mask, self.A_CRhs_mask, self.A_CR_weights)
-         self.A_CR_prob_w, self.A_CR_prob_unw = self.get_prob(self.A_CRls_mask, self.A_CRhs_mask, self.A_CR_weights)
+         print()
+         # self.A_CR_kstest = self.ks_test(self.A_CRls_mask, self.A_CRhs_mask, self.A_CR_weights)
+         # self.A_CR_prob_w, self.A_CR_prob_unw = self.get_prob(self.A_CRls_mask, self.A_CRhs_mask, self.A_CR_weights)
 
          print(".. predicting weights in A_SR\n")
          self.A_SR_weights = self.bdt_prediction(self.A_SRls_mask)
@@ -496,10 +521,10 @@ class Signal():
       for j in range(1,1000):
          p += 2*(-1)**(j-1)*np.exp(-2*j**2*z**2)
       
-      ks =  ks_2samp_weighted(self.dat_mX_V_SRls, self.dat_mX_V_SRhs, weights1=self.V_SR_weights, weights2=np.ones_like(self.dat_mX_V_SRhs))
+      # ks =  ks_2samp_weighted(self.dat_mX_V_SRls, self.dat_mX_V_SRhs, weights1=self.V_SR_weights, weights2=np.ones_like(self.dat_mX_V_SRhs))
       
    #   print("CALCULATED PROBABILITY",p)
-      print("V_SR KS test max",round(ks,3))
+      # print("V_SR KS test max",round(ks,3))
 
    def ks_test(self, ls_mask, hs_mask, weights, BDT=True):
       ksresults = [] 
