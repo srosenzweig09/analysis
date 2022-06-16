@@ -111,10 +111,10 @@ mBins = np.linspace(minMX,maxMX,nbins)
 root = 'root://cmseos.fnal.gov/'
 if args.bias: 
    jets = 'bias'
-   tag = 'dHHH_pairs'
+   tag = 'bias'
 elif args.btag : 
    jets = 'btag'
-   tag = 'dHHH_pairs_maxbtag'
+   tag = 'btag'
 else:
    raise "Please provide --btag or --bias!"
 sys_dir = f'/store/user/srosenzw/sixb/sixb_ntuples/Summer2018UL/{tag}/NMSSM/'
