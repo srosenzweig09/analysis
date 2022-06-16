@@ -8,6 +8,8 @@ parser = ArgumentParser(description='Command line parser of model options and ta
 parser.add_argument('--data', dest='data', action='store_true', default=False)
 parser.add_argument('--bias', dest='bias', action='store_true', default=False)
 parser.add_argument('--btag', dest='btag', action='store_true', default=False)
+parser.add_argument('--nocuts', dest='nocuts', action='store_true', default=False)
+parser.add_argument('--presel', dest='presel', action='store_true', default=False)
 
 args = parser.parse_args()
 
@@ -16,7 +18,7 @@ root = 'root://cmseos.fnal.gov'
 error_text = "File exists\n\nError in <TFileMerger::OutputFile>: cannot open the MERGER output file \nhadd error opening target file"
 
 def hadd_NMSSM(tag):
-   outdir=f'/store/user/srosenzw/sixb/sixb_ntuples/Summer2018UL/{tag}/NMSSM/'
+   outdir=f'/store/user/srosenzw/sixb/ntuples/Summer2018UL/{tag}/'
    cmd = f'xrdfs {root} ls -u {outdir}'
    output = subprocess.check_output(shlex.split(cmd))
    output = output.decode("utf-8").split('\n')
@@ -25,7 +27,7 @@ def hadd_NMSSM(tag):
       print(line)
       if 'NMSSM_XYH_YToHH' not in line: continue
       sample = line.split('/')[-1]
-      print(sample)
+      # print(sample)
       match = re.search('/store/', line)
       start = match.start()
       end = match.end()
@@ -45,25 +47,6 @@ def hadd_NMSSM(tag):
          print("[INFO] Successfully hadded!")
       print()
 
-# def hadd_NMSSM_syst(variation):
-#    # variation should be 'up' or 'down'
-#    outdir=f'/store/user/srosenzw/sixb/sixb_ntuples/Summer2018UL/{args.tag}/NMSSM/syst/{variation}/'
-#    cmd = f'xrdfs {root} ls -u {outdir}'
-#    output = subprocess.check_output(shlex.split(cmd))
-#    output = output.decode("utf-8").split('\n')
-
-#    for line in output:
-#       if 'NMSSM_XYH_YToHH' not in line: continue
-#       match = re.search('/store/', line)
-#       start = match.start()
-#       end = match.end()
-#       cmd = f'xrdfs {root} ls -u {line[start:]}/output'
-#       output = subprocess.check_output(shlex.split(cmd))
-#       output = output.decode("utf-8").split('\n')
-#       infiles = ' '.join(output)
-#       cmd = f'hadd {root}/{line[start:]}/ntuple.root {infiles}'
-#       subprocess.run(shlex.split(cmd))
-
 def hadd_data():
    outdir=f'/store/user/srosenzw/sixb/sixb_ntuples/Summer2018UL/{args.tag}/JetHT_Run2018_full'
    cmd = f'xrdfs {root} ls -u {outdir}/output'
@@ -74,5 +57,7 @@ def hadd_data():
    subprocess.run(shlex.split(cmd))
 
 if args.data: hadd_data()
-if args.bias: hadd_NMSSM('bias')
-if args.btag: hadd_NMSSM('btag')
+if args.bias: hadd_NMSSM('bias/NMSSM')
+if args.btag: hadd_NMSSM('btag/NMSSM')
+if args.nocuts: hadd_NMSSM('NMSSM_nocuts')
+if args.presel: hadd_NMSSM('NMSSM_presel')
