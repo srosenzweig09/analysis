@@ -1,3 +1,7 @@
+    """
+
+    """
+
 print("---------------------------------")
 print("STARTING PROGRAM")
 print("---------------------------------")
@@ -35,37 +39,6 @@ def getROOTCanvas(h_title, bin_values, outFile):
     fout.cd()
     ROOT_hist.Write()
     fout.Close()
-
-def getROOTCanvas_VR(h_title, bin_values, outFile):
-   h1_title = h_title[0]
-   h2_title = h_title[1]
-   assert(h1_title == "h_obs")
-   assert(h2_title == "h_est")
-   h1_bin_vals = bin_values[0]
-   h2_bin_vals = bin_values[1]
-   # print("h1_bin_vals",h1_bin_vals)
-   # print("h2_bin_vals",h2_bin_vals)
-   print(f".. generating root hist for VR")
-   canvas = ROOT.TCanvas('c1','c1', 600, 600)
-   canvas.SetFrameLineWidth(3)
-
-   h1 = ROOT.TH1D(h1_title,";m_{X} [GeV];Events",len(h1_bin_vals),array('d',list(mBins)))
-   h2 = ROOT.TH1D(h2_title,";m_{X} [GeV];Events",len(h2_bin_vals),array('d',list(mBins)))
-
-   for i,(vals1,vals2) in enumerate(zip(h1_bin_vals,h2_bin_vals)):
-      h1.SetBinContent(i+1, vals1)
-      h2.SetBinContent(i+1, vals2)
-
-   h1.Draw("hist")
-   h2.Draw("hist same")
-   # h1.SetMarkerStyle(20)
-   # h1.SetMarkerSize(1)
-   h1.SetLineWidth(1)
-   h2.SetLineWidth(2)
-   h1.SetLineColor(1)
-   h2.SetLineColor(38)
-
-#    print(h1.KolmogorovTest(h2))
 
 ## ------------------------------------------------------------------------------------
 ## Implement command line parser
@@ -235,8 +208,6 @@ if args.plot:
    fig.suptitle("Validation Signal Region")
    axs, n_target, n_model = Ratio([dat_mX_V_SRhs, dat_mX_V_SRls], weights=[None, V_SR_weights*ratio], bins=mBins, axs=axs, labels=['Target', 'Model'], xlabel=r"M$_\mathrm{X}$ [GeV]", density=True, ratio_ylabel='Target/Model')
    fig.savefig(f"plots/model_VSR.pdf", bbox_inches='tight')
-
-   # getROOTCanvas_VR(["h_obs", "h_est"], [n_target, n_model], f"{outDir}/data_VR")
 
    ratio = len(dat_mX_A_CRhs)/sum(datTree.A_CR_weights)
    fig, axs = plt.subplots(nrows=2, ncols=1, gridspec_kw={'height_ratios':[4,1]})
