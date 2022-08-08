@@ -40,6 +40,7 @@ class Signal():
 
    def __init__(self, filename, treename='sixBtree', year=2018, presel=False):
       if 'NMSSM' in filename:
+         if 'presel' in filename: presel=True
          self.filename = re.search('NMSSM_.+/', filename).group()[:-1]
       tree = uproot.open(f"{filename}:{treename}")
       self.tree = tree
@@ -136,6 +137,8 @@ class Signal():
       HY1 = HY1_b1 + HY1_b2
       HY2 = HY2_b1 + HY2_b2
 
+      Y = HY1 + HY2
+
       self.HX_dr = HX_b1.deltaR(HX_b2)
       self.HY1_dr = HY1_b1.deltaR(HY1_b2)
       self.HY2_dr = HY2_b1.deltaR(HY2_b2)
@@ -149,12 +152,18 @@ class Signal():
       self.HY2_HX_dPhi = HY2.deltaPhi(HX)
 
       self.HX_HY1_dR = HX.deltaR(HY1)
+      self.HX_HY2_dR = HY2.deltaR(HX)
       self.HY1_HY2_dR = HY1.deltaR(HY2)
-      self.HY2_HX_dR = HY2.deltaR(HX)
+      
+      self.Y_HX_dR = Y.deltaR(HX)
 
       self.HX_costheta = HX.cosTheta
       self.HY1_costheta = HY1.cosTheta
       self.HY2_costheta = HY2.cosTheta
+
+      self.HX_HY1_dR = HX.deltaR(HY1)
+      self.HY1_HY2_dR = HY2.deltaR(HY1)
+      self.HY2_HX_dR = HX.deltaR(HY2)
 
       X = HX + HY1 + HY2
       self.X_m = X.m
@@ -600,3 +609,14 @@ class Signal():
          p_unweighted.append(p_unw)
 
       return p_weighted, p_unweighted
+
+
+def presels(tree, pt=20, eta=2.5, jetid=6, puid=6):
+   pt_mask = ak.sum(tree.jet_pt > pt, axis=1) >= 6
+   eta_mask = ak.sum(abs(tree.jet_eta) < eta, axis=1) >= 6
+   jetid_mask = ak.sum(tree.jet_id == jetid, axis=1) >= 6
+   pt_under50 = tree.jet_pt < 50
+   puid_mask = ak.sum(tree.jet_puid[pt_under50] == puid, axis=1) + ak.sum(~pt_under50, axis=1) >= 6
+
+   presel_mask = pt_mask & eta_mask & jetid_mask & puid_mask
+   return tree[presel_mask]
