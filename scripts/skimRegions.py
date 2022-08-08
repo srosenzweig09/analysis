@@ -15,6 +15,7 @@ from utils.analysis import Signal
 from utils.plotter import Hist, Ratio
 
 def getROOTCanvas(h_title, bin_values, outFile):
+    """Builds the canvas, draws the histogram, and saves to ROOT file"""
     print(f".. generating root hist for {h_title}")
     canvas = ROOT.TCanvas('c1','c1', 600, 600)
     canvas.SetFrameLineWidth(3)
@@ -64,7 +65,7 @@ def getROOTCanvas_VR(h_title, bin_values, outFile):
    h1.SetLineColor(1)
    h2.SetLineColor(38)
 
-   print(h1.KolmogorovTest(h2))
+#    print(h1.KolmogorovTest(h2))
 
 ## ------------------------------------------------------------------------------------
 ## Implement command line parser
@@ -78,12 +79,10 @@ parser.add_argument('--testing', dest='testing', action='store_true', default=Fa
 parser.add_argument('--plot', dest='plot', action='store_true', default=False)
 
 # jets
-parser.add_argument('--bias', dest='bias', action='store_true', default=False)
 parser.add_argument('--btag', dest='btag', action='store_true', default=False)
 
 # region shapes
 parser.add_argument('--rectangular', dest='rectangular', help='', action='store_true', default=False)
-parser.add_argument('--spherical', dest='spherical', help='', action='store_true', default=True)
 
 # bdt parameters
 parser.add_argument('--Nestimators', dest='N')
@@ -99,22 +98,19 @@ parser.add_argument('--no-MCstats', dest='MCstats', action='store_false', defaul
 
 args = parser.parse_args()
 
-if args.bias: jets = 'bias'
-elif args.btag: jets = 'btag'
-else: raise("Must provide --bias or --btag")
+jets = 'bias'
+if args.btag: jets = 'btag'
 
 ### ------------------------------------------------------------------------------------
 ## Implement config parser
 
 print(".. parsing config file")
 
-if args.spherical and args.rectangular: args.rectangular = False
+region_type = 'sphere'
+cfg = f'config/sphereConfig_{jets}.cfg'
 if args.rectangular: 
    region_type = 'rect'
    cfg = f'config/rectConfig.cfg'
-elif args.spherical: 
-   region_type = 'sphere'
-   cfg = f'config/sphereConfig_{jets}.cfg'
 
 config = ConfigParser()
 config.optionxform = str
@@ -167,11 +163,9 @@ datTree = Signal(datFileName)
 if args.rectangular:
     print("\n ---RECTANGULAR---")
     datTree.rectangular_region(config)
-elif args.spherical:
+else:
     print("\n ----SPHERICAL----")
     datTree.spherical_region(config)
-else:
-    raise AttributeError("No mass region definition!")
 
 dat_mX_V_CRls = datTree.dat_mX_V_CRls
 dat_mX_V_CRhs = datTree.dat_mX_V_CRhs
@@ -261,7 +255,13 @@ if args.plot:
 # ax.set_title("BDT Estimation of Data Yield in Validation Region")
 
 fig, ax = plt.subplots()
-n_dat_SRhs_pred = Hist(dat_mX_A_SRls, weights=A_SR_weights, bins=mBins, ax=ax, label='Estimation')
+
+n_dat_VRhs_obs = Hist(dat_mX_V_SRhs, bins=mBins, ax=ax, label='V_SR')
+
+V_SR_weights = V_SR_weights * n_dat_VRhs_obs.sum() / V_SR_weights[(dat_mX_V_SRls >= mBins[0]) & (dat_mX_V_SRls < mBins[-1])].sum()
+n_dat_VRhs_pred = Hist(dat_mX_V_SRls, weights=V_SR_weights, bins=mBins, ax=ax, label='V_SR')
+
+n_dat_SRhs_pred = Hist(dat_mX_A_SRls, weights=A_SR_weights, bins=mBins, ax=ax, label='A_SR')
 
 ### ------------------------------------------------------------------------------------
 ## signal region estimate
@@ -269,8 +269,18 @@ n_dat_SRhs_pred = Hist(dat_mX_A_SRls, weights=A_SR_weights, bins=mBins, ax=ax, l
 ROOT.gROOT.SetBatch(True)
 
 print(f"Estimated data = {n_dat_SRhs_pred.sum()}")
-getROOTCanvas("data", n_dat_SRhs_pred, f"{outDir}/data")
-print(f"Data ROOT file saved to {outDir}/data.root")
+getROOTCanvas("sr expected data", n_dat_SRhs_pred, f"{outDir}/a_sr/data")
+print(f"ASR ROOT file saved to {outDir}/a_sr/data.root")
+
+vr_exp_out = f"{outDir}/v_sr/data_exp"
+getROOTCanvas("data", n_dat_VRhs_pred, vr_exp_out)
+print(f"VSR ROOT file saved to {vr_exp_out}")
+
+vr_obs_out = f"{outDir}/v_sr/data_obs"
+getROOTCanvas("data", n_dat_VRhs_obs, vr_obs_out)
+print(f"VSR ROOT file saved to {vr_obs_out}")
+
+
 
 # print()
 # print("PLEASE RUN THE FOLLOWING COMMAND:")

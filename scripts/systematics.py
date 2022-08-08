@@ -12,18 +12,15 @@ from utils.analysis import Signal
 
 parser = ArgumentParser(description='Command line parser of model options and tags')
 parser.add_argument('--rectangular', dest='rectangular', help='', action='store_true', default=False)
-parser.add_argument('--spherical', dest='spherical', help='', action='store_true', default=True)
-parser.add_argument('--bias', dest='bias', help='', action='store_true', default=False)
 parser.add_argument('--btag', dest='btag', help='', action='store_true', default=False)
+parser.add_argument('--vr', dest='vr', help='', action='store_true', default=False)
 args = parser.parse_args()
 
+cfg = 'config/sphereConfig_bias.cfg'
+method = 'sphere'
 if args.rectangular: 
    cfg = 'config/rectConfig.cfg'
-   region_type = 'rect'
-   args.spherical = False
-if args.spherical: 
-   cfg = 'config/sphereConfig.cfg'
-   region_type = 'sphere'
+   method = 'rect'
 
 def getROOTCanvas(h_title, bin_values, outFile, scale=1):
     print(f".. generating root hist for {h_title}")
@@ -46,15 +43,15 @@ def getROOTCanvas(h_title, bin_values, outFile, scale=1):
     ROOT_hist.Write()
     fout.Close()
 
-def writeSystHist(systematic, sample, variation, region_type='sphere'):
+def writeSystHist(systematic, sample, variation, method='sphere'):
    file = root + sys_dir + f'syst/{systematic}/{variation}/{sample}'
    tree = Signal(file)
 
    print(".. getting SR")
-   sr_mask = get_SR(tree, region_type)
+   mask = get_region(tree, method)
    # scale = tree_up.scale
    print(".. getting X_m")
-   X_m = tree.X_m[sr_mask]
+   X_m = tree.X_m[mask]
    print(".. building np hist")
    n,e = np.histogram(X_m.to_numpy(), bins=mBins)
    n = n * tree.scale
@@ -76,10 +73,10 @@ def writeSystHist(systematic, sample, variation, region_type='sphere'):
    ROOT_hist.Write()
 
 def writeNominalHist(root, sys_dir, sample):
-   file = root + sys_dir + sample
-   tree = Signal(file)
-   sr_mask = get_SR(tree, region_type)
-   X_m = tree.X_m[sr_mask]
+   fname = root + sys_dir + sample
+   tree = Signal(fname)
+   mask = get_region(tree, method)
+   X_m = tree.X_m[mask]
    n,e = np.histogram(X_m.to_numpy(), bins=mBins)
    n = n * tree.scale
 
@@ -91,13 +88,18 @@ def writeNominalHist(root, sys_dir, sample):
    ROOT_hist.Draw("hist")
    ROOT_hist.Write()
 
-def get_SR(tree, region):
-   if region == 'rect': 
+def get_region(tree, region):
+   if method == 'rect': 
       tree.rectangular_region(config)
-      return tree.SRhs_mask
-   elif region == 'sphere': 
+
+      if region == 'v_sr': return tree.V_SRhs_mask
+      else: return tree.A_SRhs_mask
+
+   if method == 'sphere': 
       tree.spherical_region(config)
-      return tree.A_SRhs_mask
+      
+      if region == 'v_sr': return tree.V_SRhs_mask
+      else: return tree.A_SRhs_mask
       
 config = ConfigParser()
 config.optionxform = str
@@ -109,16 +111,14 @@ nbins = int(config['plot']['nbins'])
 mBins = np.linspace(minMX,maxMX,nbins)
 
 root = 'root://cmseos.fnal.gov/'
-if args.bias: 
-   jets = 'bias'
-   tag = 'bias'
-elif args.btag : 
+jets = 'bias'
+tag = 'bias'
+if args.btag:
    jets = 'btag'
    tag = 'btag'
-else:
-   raise "Please provide --btag or --bias!"
-sys_dir = f'/store/user/srosenzw/sixb/sixb_ntuples/Summer2018UL/{tag}/NMSSM/'
-cmd = f'eos {root} ls {sys_dir}syst/'
+
+sys_dir = f'/store/user/srosenzw/sixb/ntuples/Summer2018UL/{tag}/NMSSM/'
+cmd = f'eos {root} ls {sys_dir}syst'
 output = subprocess.check_output(shlex.split(cmd))
 systematics = output.decode("utf-8").split('\n')[:-1]
 if systematics[-1] == '{systematic}': systematics = systematics[:-1]
@@ -128,17 +128,23 @@ output = subprocess.check_output(shlex.split(cmd))
 samples = output.decode("utf-8").split('\n')[:-1]
 samples = [f"{sample}/ntuple.root" for sample in samples if 'NMSSM' in sample]
 
+# sys.exit()
+
 # skip = False
 for i,sample in enumerate(samples):
-   print(f"[SAMPLE] Processing: {sample}")
    # if 'NMSSM_XYH_YToHH_6b_MX_1000_MY_800' in sample: skip = False
+   if 'NMSSM_XYH_YToHH_6b_MX_700_MY_400' not in sample: continue
+   print(f"[SAMPLE] Processing: {sample}")
+   # sys.exit()
    # if skip: continue
 
    text = re.search('MX_.*/', sample).group()[:-1].split('_')
    mx = int(text[1])
    my = int(text[3])
 
-   outDir = f"combine/{jets}_{region_type}"
+   region = 'a_sr'
+   if args.vr: region = 'v_sr'
+   outDir = f"combine/{jets}_{method}/{region}"
    outFile = f'{outDir}/MX_{mx}_MY_{my}'
 
    canvas = ROOT.TCanvas('c1','c1', 600, 600)
