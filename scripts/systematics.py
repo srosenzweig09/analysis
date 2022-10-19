@@ -13,35 +13,16 @@ from utils.analysis import Signal
 parser = ArgumentParser(description='Command line parser of model options and tags')
 parser.add_argument('--rectangular', dest='rectangular', help='', action='store_true', default=False)
 parser.add_argument('--btag', dest='btag', help='', action='store_true', default=False)
+parser.add_argument('--gnn', dest='gnn', help='', action='store_true', default=False)
 parser.add_argument('--vr', dest='vr', help='', action='store_true', default=False)
+parser.add_argument('--nominal', dest='nominal', help='', action='store_true', default=False)
 args = parser.parse_args()
 
-cfg = 'config/sphereConfig_bias.cfg'
+cfg = 'config/bias_config.cfg'
 method = 'sphere'
 if args.rectangular: 
    cfg = 'config/rectConfig.cfg'
    method = 'rect'
-
-def getROOTCanvas(h_title, bin_values, outFile, scale=1):
-    print(f".. generating root hist for {h_title}")
-    canvas = ROOT.TCanvas('c1','c1', 600, 600)
-    canvas.SetFrameLineWidth(3)
-
-    ROOT_hist = ROOT.TH1D(h_title,";m_{X} [GeV];Events",len(bin_values),array('d',list(mBins)))
-
-    for i,(bin_vals) in enumerate(bin_values):
-        ROOT_hist.SetBinContent(i+1, bin_vals)
-
-    ROOT_hist.Draw("hist")
-    canvas.Draw()
-    ROOT.gStyle.SetOptStat(0)
-
-    canvas.Print(f"{outFile}.pdf)","Title:Signal Region");
-
-    fout = ROOT.TFile(f"{outFile}.root","recreate")
-    fout.cd()
-    ROOT_hist.Write()
-    fout.Close()
 
 def writeSystHist(systematic, sample, variation, method='sphere'):
    file = root + sys_dir + f'syst/{systematic}/{variation}/{sample}'
@@ -62,7 +43,7 @@ def writeSystHist(systematic, sample, variation, method='sphere'):
    h_title = f"signal_{systematic}{variation.capitalize()}"
 
    print(".. creating ROOT hist")
-   ROOT_hist = ROOT.TH1D(h_title,";m_{X} [GeV];Events",nbins-1,array('d',list(mBins)))
+   ROOT_hist = ROOT.TH1D(h_title,";m_{X} [GeV];Events",nbins,array('d',list(mBins)))
 
    print(".. setting bin content")
    for i,val in enumerate(n):
@@ -81,7 +62,7 @@ def writeNominalHist(root, sys_dir, sample):
    n = n * tree.scale
 
    h_title = f"signal"
-   ROOT_hist = ROOT.TH1D(h_title,";m_{X} [GeV];Events",nbins-1,array('d',list(mBins)))
+   ROOT_hist = ROOT.TH1D(h_title,";m_{X} [GeV];Events",nbins,array('d',list(mBins)))
    for i,(val) in enumerate(n):
       ROOT_hist.SetBinContent(i+1, val)
 
@@ -107,8 +88,14 @@ config.read(cfg)
 
 minMX = int(config['plot']['minMX'])
 maxMX = int(config['plot']['maxMX'])
-nbins = int(config['plot']['nbins'])
-mBins = np.linspace(minMX,maxMX,nbins)
+if config['plot']['style'] == 'linspace':
+   nedges = int(config['plot']['nedges'])
+   mBins = np.linspace(minMX,maxMX,nedges)
+if config['plot']['style'] == 'arange':
+   step = int(config['plot']['steps'])
+   mBins = np.arange(minMX,maxMX,step)
+   nedges = len(mBins)
+nbins = nedges - 1
 
 root = 'root://cmseos.fnal.gov/'
 jets = 'bias'
@@ -116,6 +103,9 @@ tag = 'bias'
 if args.btag:
    jets = 'btag'
    tag = 'btag'
+if args.gnn:
+   jets = 'gnn'
+   tag = 'gnn'
 
 sys_dir = f'/store/user/srosenzw/sixb/ntuples/Summer2018UL/{tag}/NMSSM/'
 cmd = f'eos {root} ls {sys_dir}syst'
@@ -133,7 +123,7 @@ samples = [f"{sample}/ntuple.root" for sample in samples if 'NMSSM' in sample]
 # skip = False
 for i,sample in enumerate(samples):
    # if 'NMSSM_XYH_YToHH_6b_MX_1000_MY_800' in sample: skip = False
-   if 'NMSSM_XYH_YToHH_6b_MX_700_MY_400' not in sample: continue
+   # if 'NMSSM_XYH_YToHH_6b_MX_700_MY_400' not in sample: continue
    print(f"[SAMPLE] Processing: {sample}")
    # sys.exit()
    # if skip: continue
@@ -147,7 +137,8 @@ for i,sample in enumerate(samples):
    outDir = f"combine/{jets}_{method}/{region}"
    outFile = f'{outDir}/MX_{mx}_MY_{my}'
 
-   canvas = ROOT.TCanvas('c1','c1', 600, 600)
+   # numbered to avoid annoying message about canvas with same name
+   canvas = ROOT.TCanvas(f'c{i}',f'c{i}', 600, 600)
    canvas.SetFrameLineWidth(3)
    canvas.Draw()
 
@@ -155,6 +146,7 @@ for i,sample in enumerate(samples):
    fout.cd()
 
    writeNominalHist(root, sys_dir, sample)
+   if args.nominal: continue
 
    for systematic in systematics:
       print(f"[SYSTEMATIC] Processing: {systematic}")
