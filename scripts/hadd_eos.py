@@ -1,15 +1,29 @@
 #!/usr/bin/env python
 
+"""
+python scripts/hadd_eos.py --tag <tag> --sample <sample>
+
+<sample> :
+         data
+         NMSSM
+         mc_bkg
+<tag> :
+         bias
+         btag
+         dnn
+         gnn
+         nocuts
+         presel
+"""
+
 import re, shlex, subprocess, sys
 from argparse import ArgumentParser
+import sys
 
 parser = ArgumentParser(description='Command line parser of model options and tags')
 
-parser.add_argument('--data', dest='data', action='store_true', default=False)
-parser.add_argument('--bias', dest='bias', action='store_true', default=False)
-parser.add_argument('--btag', dest='btag', action='store_true', default=False)
-parser.add_argument('--nocuts', dest='nocuts', action='store_true', default=False)
-parser.add_argument('--presel', dest='presel', action='store_true', default=False)
+parser.add_argument('--sample', dest='sample', required=True)
+parser.add_argument('--tag', dest='tag', required=True)
 
 args = parser.parse_args()
 
@@ -17,8 +31,8 @@ root = 'root://cmseos.fnal.gov'
 
 error_text = "File exists\n\nError in <TFileMerger::OutputFile>: cannot open the MERGER output file \nhadd error opening target file"
 
-def hadd_NMSSM(tag):
-   outdir=f'/store/user/srosenzw/sixb/ntuples/Summer2018UL/{tag}/'
+def hadd_NMSSM():
+   outdir=f'/store/user/srosenzw/sixb/ntuples/Summer2018UL/{args.tag}/'
    cmd = f'xrdfs {root} ls -u {outdir}'
    output = subprocess.check_output(shlex.split(cmd))
    output = output.decode("utf-8").split('\n')
@@ -26,6 +40,9 @@ def hadd_NMSSM(tag):
    for line in output:
       print(line)
       if 'NMSSM_XYH_YToHH' not in line: continue
+      # if '10M' in line: continue
+      # if '2M' in line: continue
+      # if '100k' in line: continue
       sample = line.split('/')[-1]
       # print(sample)
       match = re.search('/store/', line)
@@ -35,7 +52,7 @@ def hadd_NMSSM(tag):
       output = subprocess.check_output(shlex.split(cmd))
       output = output.decode("utf-8").split('\n')
       infiles = ' '.join(output)
-      cmd = f'hadd {root}/{line[start:]}/ntuple.root {infiles}'
+      cmd = f'hadd -f {root}/{line[start:]}/ntuple.root {infiles}'
       proc = subprocess.Popen(shlex.split(cmd),stdout=subprocess.PIPE, stderr=subprocess.PIPE)
       (stdout, stderr) = proc.communicate()
 
@@ -56,8 +73,24 @@ def hadd_data():
    cmd = f'hadd {root}/{outdir}/ntuple.root {infiles}'
    subprocess.run(shlex.split(cmd))
 
-if args.data: hadd_data()
-if args.bias: hadd_NMSSM('bias/NMSSM')
-if args.btag: hadd_NMSSM('btag/NMSSM')
-if args.nocuts: hadd_NMSSM('NMSSM_nocuts')
-if args.presel: hadd_NMSSM('NMSSM_presel')
+def hadd_qcd_ttbar():
+   outdir=f'/store/user/srosenzw/sixb/ntuples/Summer2018UL/{args.tag}/QCD'
+
+   cmd = f'xrdfs {root} ls -u {outdir}'
+   subdirs = subprocess.check_output(shlex.split(cmd))
+   subdirs = subdirs.decode("utf-8").split('\n')
+   for subdir in subdirs: 
+      print(subdir.split('//')[2])
+      cmd = f'xrdfs {root} ls -u /{subdir}'
+      output = subprocess.check_output(shlex.split(cmd))
+      output = output.decode("utf-8").split('\n')
+      print(output)
+   # subdirs = ' '.join(subdirs)
+   # print(subdirs)
+   # cmd = f'hadd {root}/{outdir}/ntuple.root {infiles}'
+   # subprocess.run(shlex.split(cmd))
+
+if args.sample == 'data': hadd_data()
+if args.sample =='mc_bkg': hadd_qcd_ttbar()
+if args.sample == 'NMSSM': hadd_NMSSM()
+# if args.dnn: hadd_NMSSM('dnn')
