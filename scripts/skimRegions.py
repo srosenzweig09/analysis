@@ -1,7 +1,3 @@
-    """
-
-    """
-
 print("---------------------------------")
 print("STARTING PROGRAM")
 print("---------------------------------")
@@ -58,12 +54,12 @@ parser.add_argument('--btag', dest='btag', action='store_true', default=False)
 parser.add_argument('--rectangular', dest='rectangular', help='', action='store_true', default=False)
 
 # bdt parameters
-parser.add_argument('--Nestimators', dest='N')
-parser.add_argument('--learningRate', dest='lr')
-parser.add_argument('--maxDepth', dest='depth')
-parser.add_argument('--minLeaves', dest='minLeaves')
-parser.add_argument('--GBsubsample', dest='gbsub')
-parser.add_argument('--randomState', dest='rand')
+parser.add_argument('--Nestimators', dest='N', type=int)
+parser.add_argument('--learningRate', dest='lr', type=float)
+parser.add_argument('--maxDepth', dest='depth', type=int)
+parser.add_argument('--minLeaves', dest='minLeaves', type=int)
+parser.add_argument('--GBsubsample', dest='gbsub', type=float)
+parser.add_argument('--randomState', dest='rand', default=2020, type=int)
 
 # stats parameters
 parser.add_argument('--no-stats', dest='no_stats', action='store_true', default=False)
@@ -80,7 +76,7 @@ if args.btag: jets = 'btag'
 print(".. parsing config file")
 
 region_type = 'sphere'
-cfg = f'config/sphereConfig_{jets}.cfg'
+cfg = f'config/{jets}_config.cfg'
 if args.rectangular: 
    region_type = 'rect'
    cfg = f'config/rectConfig.cfg'
@@ -94,8 +90,13 @@ data = config['file']['data']
 
 minMX = int(config['plot']['minMX'])
 maxMX = int(config['plot']['maxMX'])
-nbins = int(config['plot']['nbins'])
-mBins = np.linspace(minMX,maxMX,nbins)
+if config['plot']['style'] == 'linspace':
+   nbins = int(config['plot']['nbins'])
+   mBins = np.linspace(minMX,maxMX,nbins)
+if config['plot']['style'] == 'arange':
+   step = int(config['plot']['steps'])
+   mBins = np.arange(minMX,maxMX,step)
+
 
 indir = f"root://cmseos.fnal.gov/{base}"
 outDir = f"combine/{jets}_{region_type}"
@@ -106,24 +107,24 @@ datFileName = f"{indir}{data}"
 ### ------------------------------------------------------------------------------------
 ## Set BDT parameters
 
-BDT_dict = {
-    'Nestimators' : args.N,
-    'learningRate' : args.lr,
-    'maxDepth' : args.depth,
-    'minLeaves' : args.minLeaves,
-    'GBsubsample' : args.gbsub,
-    'randomState' : args.rand
-}
+# BDT_dict = {
+#     'Nestimators' : args.N,
+#     'learningRate' : args.lr,
+#     'maxDepth' : args.depth,
+#     'minLeaves' : args.minLeaves,
+#     'GBsubsample' : args.gbsub,
+#     'randomState' : args.rand
+# }
 
-overwrite_log = []
-for hyper in BDT_dict:
-    if BDT_dict[hyper] is not None:
-        config['BDT'][hyper] = BDT_dict[hyper]
-        overwrite_log.append(f"Overwriting [{hyper}={BDT_dict[hyper]}] from config file with command line argument.")
-if len(overwrite_log) > 0: overwrite_log.insert(0, '')
-for line in overwrite_log:
-    print(overwrite_log)
-print()
+# overwrite_log = []
+# for hyper in BDT_dict:
+#     if BDT_dict[hyper] is not None:
+#         config['BDT'][hyper] = BDT_dict[hyper]
+#         overwrite_log.append(f"Overwriting [{hyper}={BDT_dict[hyper]}] from config file with command line argument.")
+# if len(overwrite_log) > 0: overwrite_log.insert(0, '')
+# for line in overwrite_log:
+#     print(overwrite_log)
+# print()
 
 # datacardDir = f"{combineDir}datacards/{jets}_{region_type}"
 # print(datacardDir)
@@ -240,15 +241,15 @@ n_dat_SRhs_pred = Hist(dat_mX_A_SRls, weights=A_SR_weights, bins=mBins, ax=ax, l
 ROOT.gROOT.SetBatch(True)
 
 print(f"Estimated data = {n_dat_SRhs_pred.sum()}")
-getROOTCanvas("sr expected data", n_dat_SRhs_pred, f"{outDir}/a_sr/data")
+getROOTCanvas("data_exp", n_dat_SRhs_pred, f"{outDir}/a_sr/data")
 print(f"ASR ROOT file saved to {outDir}/a_sr/data.root")
 
 vr_exp_out = f"{outDir}/v_sr/data_exp"
-getROOTCanvas("data", n_dat_VRhs_pred, vr_exp_out)
+getROOTCanvas("data_exp", n_dat_VRhs_pred, vr_exp_out)
 print(f"VSR ROOT file saved to {vr_exp_out}")
 
 vr_obs_out = f"{outDir}/v_sr/data_obs"
-getROOTCanvas("data", n_dat_VRhs_obs, vr_obs_out)
+getROOTCanvas("data_obs", n_dat_VRhs_obs, vr_obs_out)
 print(f"VSR ROOT file saved to {vr_obs_out}")
 
 
