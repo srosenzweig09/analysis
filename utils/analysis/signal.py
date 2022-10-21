@@ -8,7 +8,9 @@ Classes:
 from cmath import nan
 from utils import *
 from utils.varUtils import *
-from utils.plotter import latexTitle
+from utils.plotter import latexTitle, Hist
+from utils.useCMSstyle import *
+plt.style.use(CMS)
 from .particle import Particle
 
 # Standard library imports
@@ -49,314 +51,6 @@ def ROOTHist(n, mass_name, title):
       ROOT_hist.Draw("hist")
       ROOT_hist.Write()
       fout.Close()
-
-class DataTraining():
-   def __init__(self, config, b_cut=0.55, gnn_cut=0.76):
-      data_tree_ar = uproot.open("/uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_6_19_patch2/src/sixB/analysis/sixBanalysis/data_ar.root:sixBtree")
-      data_tree_vr = uproot.open("/uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_6_19_patch2/src/sixB/analysis/sixBanalysis/data_vr.root:sixBtree")
-
-      Nestimators  = int(config['BDT']['Nestimators'])
-      learningRate = float(config['BDT']['learningRate'])
-      maxDepth     = int(config['BDT']['maxDepth'])
-      minLeaves    = int(config['BDT']['minLeaves'])
-      GBsubsample  = float(config['BDT']['GBsubsample'])
-      randomState  = int(config['BDT']['randomState'])
-      variables = config['BDT']['variables']
-      if isinstance(variables, str):
-         variables = variables.split(", ")
-
-      data_gnn_score_ar = ak.sort(data_tree_ar['jet_gnn_score'].array(), ascending=False, axis=1)[:,:6]
-      data_gnn_score_vr = ak.sort(data_tree_vr['jet_gnn_score'].array(), ascending=False, axis=1)[:,:6]
-
-      data_gnn_avg_ar = ak.sum(data_gnn_score_ar, axis=1) / 6
-      data_gnn_avg_vr = ak.sum(data_gnn_score_vr, axis=1) / 6
-
-      asr_gnn_mask = data_gnn_avg_ar > 0.75
-      asr_mask = data_tree_ar['bkg_mask'].array() # already accounts for cut on average btag score
-      acr_mask = ~asr_mask & asr_gnn_mask
-      asr_mask = asr_mask & asr_gnn_mask
-
-      # analysis region
-      data_avg_btag_ar = data_tree_ar['jet_avg_btag'].array()
-      asr_avg_b = data_avg_btag_ar[asr_mask]
-      acr_avg_b = data_avg_btag_ar[acr_mask]
-
-      acr_ls_mask = (acr_avg_b < b_cut)
-      acr_hs_mask = (acr_avg_b > b_cut)
-
-      # validation region
-      data_avg_btag_vr = data_tree_vr['jet_avg_btag'].array()
-
-      vr_gnn_mask = data_gnn_avg_vr > 0.75
-      vsr_mask = data_tree_vr['v_sr_mask'].array() & vr_gnn_mask
-      vsr_avg_b = data_avg_btag_vr[vsr_mask]
-      vsr_ls_mask = (vsr_avg_b < b_cut)
-      vsr_hs_mask = (vsr_avg_b > b_cut)
-
-      vcr_mask = data_tree_vr['v_cr_mask'].array() & vr_gnn_mask
-      vcr_avg_b = data_avg_btag_vr[vcr_mask]
-      vcr_ls_mask = (vcr_avg_b < b_cut)
-      vcr_hs_mask = (vcr_avg_b > b_cut)
-
-      asr_X_m = data_tree_ar['X_m'].array()[asr_mask]
-      acr_X_m = data_tree_ar['X_m'].array()[acr_mask]
-      vsr_X_m = data_tree_vr['X_m'].array()[vsr_mask]
-      vcr_X_m = data_tree_vr['X_m'].array()[vcr_mask]
-
-      asr_ls_X_m = data_tree_ar['X_m'].array()[asr_mask] # low score by construction
-
-      acr_ls_X_m = data_tree_ar['X_m'].array()[acr_mask][acr_ls_mask]
-      vsr_ls_X_m = data_tree_vr['X_m'].array()[vsr_mask][vsr_ls_mask]
-      vcr_ls_X_m = data_tree_vr['X_m'].array()[vcr_mask][vcr_ls_mask]
-
-      acr_hs_X_m = data_tree_ar['X_m'].array()[acr_mask][acr_hs_mask]
-      vsr_hs_X_m = data_tree_vr['X_m'].array()[vsr_mask][vsr_hs_mask]
-      vcr_hs_X_m = data_tree_vr['X_m'].array()[vcr_mask][vcr_hs_mask]
-
-      acr_TF = sum(acr_hs_mask)/sum(acr_ls_mask)
-      vcr_TF = sum(vcr_hs_mask)/sum(vcr_ls_mask)
-
-      acr_ls_weights = np.ones(ak.sum(acr_ls_mask))*acr_TF
-      acr_hs_weights = np.ones(ak.sum([acr_hs_mask]))
-      vcr_ls_weights = np.ones(ak.sum(vcr_ls_mask))*vcr_TF
-      vcr_hs_weights = np.ones(ak.sum(vcr_hs_mask))
-
-      acr_ls_features = {}
-      acr_hs_features = {}
-      asr_ls_features = {}
-      vcr_ls_features = {}
-      vcr_hs_features = {}
-      vsr_ls_features = {}
-      vsr_hs_features = {}
-      for var in variables:
-         acr_ls_features[var] = abs(data_tree_ar[var].array())[acr_ls_mask]
-         acr_hs_features[var] = abs(data_tree_ar[var].array())[acr_hs_mask]
-         asr_ls_features[var] = abs(data_tree_ar[var].array())[asr_mask]
-         vcr_ls_features[var] = abs(data_tree_vr[var].array()[vcr_ls_mask])
-         vcr_hs_features[var] = abs(data_tree_vr[var].array()[vcr_hs_mask])
-         vsr_ls_features[var] = abs(data_tree_vr[var].array())[vsr_ls_mask]
-         vsr_hs_features[var] = abs(data_tree_vr[var].array())[vsr_hs_mask]
-      acr_ls_df = pd.DataFrame(acr_ls_features)
-      acr_hs_df = pd.DataFrame(acr_hs_features)
-      asr_ls_df = pd.DataFrame(asr_ls_features)
-      vcr_ls_df = pd.DataFrame(vcr_ls_features)
-      vcr_hs_df = pd.DataFrame(vcr_hs_features)
-      vsr_ls_df = pd.DataFrame(vsr_ls_features)
-      vsr_hs_df = pd.DataFrame(vsr_hs_features)
-
-      acr_reweighter_base = reweight.GBReweighter(
-         n_estimators=Nestimators, 
-         learning_rate=learningRate, 
-         max_depth=maxDepth, 
-         min_samples_leaf=minLeaves,
-         gb_args={'subsample': GBsubsample})
-
-      acr_reweighter = reweight.FoldingReweighter(acr_reweighter_base, random_state=randomState, n_folds=2, verbose=False)
-      acr_reweighter.fit(acr_ls_df,acr_hs_df,acr_ls_weights,acr_hs_weights)
-
-      asr_initial_weights = np.ones(ak.sum(asr_mask))*acr_TF
-      acr_initial_weights = np.ones(ak.sum(acr_ls_mask))*acr_TF
-      vsr_initial_weights = np.ones(ak.sum(vsr_ls_mask))*vcr_TF
-
-      asr_weights_pred = acr_reweighter.predict_weights(asr_ls_df,asr_initial_weights,lambda x: np.mean(x, axis=0))
-      acr_weights_pred = acr_reweighter.predict_weights(acr_ls_df,acr_initial_weights,lambda x: np.mean(x, axis=0))
-
-      n_acr_hs, _ = np.histogram(
-         acr_hs_X_m.to_numpy(), 
-         bins=m_bins
-         )
-      
-      n_acr_hs_pred, _ = np.histogram(
-         acr_ls_X_m.to_numpy(),
-         bins=m_bins,
-         weights=acr_weights_pred
-      )
-
-      acr_TF_bvb = n_acr_hs / n_acr_hs_pred
-
-      n_asr_hs_pred, _ = np.histogram(
-         asr_X_m.to_numpy(),
-         bins=m_bins,
-         weights=asr_weights_pred
-      )
-
-      n_asr_hs_pred, _ = np.histogram(
-         x_X_m,
-         bins=m_bins,
-         weights=n_asr_hs_pred*acr_TF_bvb
-      )
-
-      ROOTHist(n_asr_hs_pred, 'data', 'data')
-
-      vcr_reweighter_base = reweight.GBReweighter(
-         n_estimators=Nestimators, 
-         learning_rate=learningRate, 
-         max_depth=maxDepth, 
-         min_samples_leaf=minLeaves,
-         gb_args={'subsample': GBsubsample})
-
-      vcr_reweighter = reweight.FoldingReweighter(vcr_reweighter_base, random_state=randomState, n_folds=2, verbose=False)
-      vcr_reweighter.fit(vcr_ls_df,vcr_hs_df,vcr_ls_weights,vcr_hs_weights)
-
-      vsr_weights_pred = vcr_reweighter.predict_weights(vsr_ls_df,vsr_initial_weights,lambda x: np.mean(x, axis=0))
-      vcr_weights_pred = vcr_reweighter.predict_weights(vcr_ls_df,np.ones(ak.sum(vcr_ls_mask))*vcr_TF,lambda x: np.mean(x, axis=0))
-
-      n_vcrls, _ = np.histogram(
-         vcr_ls_X_m.to_numpy(),
-         bins=m_bins
-      )
-
-      n_vcrhs, _ = np.histogram(
-         vcr_hs_X_m.to_numpy(),
-         bins=m_bins
-      )
-
-      n_vcrhs_pred, _ = np.histogram(
-         vcr_ls_X_m.to_numpy(),
-         bins=m_bins,
-         weights=vcr_weights_pred
-      )
-      vcr_TF_bvb = np.nan_to_num(n_vcrhs / n_vcrhs_pred, 0)
-
-      n_vsrhs, _ = np.histogram(
-         vsr_hs_X_m.to_numpy(),
-         bins=m_bins
-      )
-
-      n_vsrhs_pred, _ = np.histogram(
-         vsr_ls_X_m.to_numpy(),
-         bins=m_bins,
-         weights=vsr_weights_pred
-      )
-
-      n_vsrhs_pred, _ = np.histogram(
-         x_X_m,
-         bins=m_bins,
-         weights=n_vsrhs_pred*vcr_TF_bvb
-      )
-
-      s_asrhs_pred, _ = np.histogram(
-         asr_ls_X_m.to_numpy(),
-         bins=m_bins,
-         weights=asr_weights_pred**2
-      )
-
-      s_asrhs_pred, _ = np.histogram(
-         x_X_m,
-         bins=m_bins,
-         weights=s_asrhs_pred*vcr_TF_bvb
-      )
-
-      s_vsrhs_pred, _ = np.histogram(
-         vsr_ls_X_m.to_numpy(),
-         bins=m_bins,
-         weights=vsr_weights_pred**2
-      )
-
-      s_vsrhs_pred, _ = np.histogram(
-         x_X_m,
-         bins=m_bins,
-         weights=s_vsrhs_pred*vcr_TF_bvb
-      )
-
-
-      n_vcr_ls = n_vcrls.sum()
-      n_vcr_hs = n_vcrhs.sum()
-
-      n_vsr_pred = n_vsrhs_pred.sum()
-      n_asr_pred = n_asr_hs_pred.sum()
-
-      s_vcr_ls = 1 / np.sqrt(n_vcr_ls)
-      s_vcr_hs = 1 / np.sqrt(n_vcr_hs)
-      s_vsr_pred = 1 / np.sqrt(ak.sum(s_vsrhs_pred))
-      s_asr_pred = 1 / np.sqrt(ak.sum(s_asrhs_pred))
-
-      self.bkg_vrpred = round(1 + np.where(s_vsr_pred/n_vsr_pred > s_asr_pred/n_asr_pred, np.sqrt((s_vsr_pred/n_vsr_pred)**2 - (s_asr_pred/n_asr_pred)**2), 0), 2)
-
-      self.cr_tf = 1 + np.sqrt(1/n_vcr_hs + 1/n_vcr_ls)
-
-      self.vr_prec = 1 + np.sqrt(1/n_vsr_pred*100**2 - 1/n_asr_pred*100**2)
-
-
-
-
-
-class GNNSelection():
-   _var_keys = ['n_jet', 'jet_pt', 'jet_eta', 'jet_phi', 'jet_m', 'jet_btag', 'jet_avg_btag', 'asr_mask', 'acr_mask', 'X_m', 'jet_signalId', 'jet_gnn_score']
-
-   _eos_base = '/eos/uscms/store/user/srosenzw/sixb/ntuples/Summer2018UL/NMSSM_presel'
-
-   _root_base = '/uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_6_19_patch2/src/sixB/analysis/sixBanalysis/gnn'
-
-   def __init__(self, filename, year=2018, b_cut=0.55, gnn_cut=0.76):
-
-      MX_ind = re.search('MX_', filename)
-      MY_ind = re.search('MY_', filename)
-
-      self.mass_name = filename[MX_ind.start():]
-
-      MX = int(filename[MX_ind.end():MY_ind.start()-1])
-      MY = int(filename[MY_ind.end():])
-
-      eos_file = f"{self._eos_base}/{filename}/ntuple.root"
-      gnn_file = f"{self._root_base}/{self.mass_name}.root"
-
-      tree = uproot.open(f"{gnn_file}:sixBtree")
-      cutflow = uproot.open(f"{eos_file}:h_cutflow")
-      cutflow = cutflow.to_numpy()[0]
-      total = cutflow[0]
-      xsec = 0.3 # pb
-
-      nevents = len(tree['n_jet'].array())
-      cutflow = np.append(cutflow, nevents)
-      self.scale = lumiMap[2018][0] * xsec / total
-      self.cutflow = round(cutflow * self.scale)
-
-      self.tree = tree
-
-      for k in self._var_keys:
-            setattr(self, k, tree[k].array())
-
-      self.jet_gnn_score = ak.sort(tree['jet_gnn_score'].array(), ascending=False, axis=1)[:,:6]
-      self.avg_gnn = ak.sum(self.jet_gnn_score, axis=1) / 6
-
-      self.gnn_mask = self.avg_gnn > gnn_cut
-      self.btag_mask = self.jet_avg_btag > b_cut
-      self.asr_mask = self.asr_mask & self.gnn_mask & self.btag_mask
-
-      n_sr_hs, _ = np.histogram(
-         self.X_m[self.asr_mask],
-         bins=m_bins,
-         weights=np.ones_like(self.X_m[self.asr_mask])*self.scale
-      )
-
-      ROOTHist(n_sr_hs, self.mass_name, 'signal')
-
-      self.get_limits()
-
-   def keys(self):
-      return self.tree.keys()
-
-   def get_limits(self):
-      import pyhf
-      pyhf.set_backend("jax")
-      h_bkg = uproot.open("ml/gnn/data.root:data")
-      h_sig = uproot.open(f"ml/gnn/{self.mass_name}.root:signal")
-
-      norm = 2*np.sqrt(np.sum(h_bkg.errors()**2))/h_sig.counts().sum()
-      w = pyhf.simplemodels.uncorrelated_background(
-         signal=(norm*h_sig.counts()).tolist(), bkg=h_bkg.counts().tolist(), bkg_uncertainty=h_bkg.errors().tolist()
-      )
-      data = h_bkg.counts().tolist()+w.config.auxdata
-
-      poi = np.linspace(0,5,11)
-      level = 0.05
-
-      obs_limit, exp_limit = pyhf.infer.intervals.upperlimit(
-               data, w, poi, level=level,
-            )
-      obs_limit, exp_limit = norm*obs_limit, [ norm*lim for lim in exp_limit ]
-      self.exp_limit = np.array(exp_limit)*300 # fb
 
 class Signal():
    """A class for handling TTrees from recent skims, which output a single branch for each b jet kinematic. (Older skims output an array of jet kinematics.)
@@ -408,7 +102,7 @@ class Signal():
       else:
          self.scale = 1
          self._isdata = True
-         self.cutflow = cutflow = uproot.open(f"{filename}:h_cutflow_unweighted").to_numpy()[0]
+         self.cutflow = uproot.open(f"{filename}:h_cutflow_unweighted").to_numpy()[0]
 
       for k, v in tree.items():
          if 'jet' in k or 'gen' in k:
@@ -512,57 +206,86 @@ class Signal():
       X = HX + H1 + H2
       self.X_m = X.m
 
-   def rectangular_region(self, config):
-      """Defines rectangular region masks."""
-      SR_edge = float(config['rectangular']['maxSR'])
-      VR_edge = float(config['rectangular']['maxVR'])
-      CR_edge = float(config['rectangular']['maxCR'])
-      if CR_edge == -1: CR_edge = 9999
+   def hist(self, var, bins, label=None, ax=None, title=True, **kwargs):
+   
+      if ax is None: fig, ax = plt.subplots()
 
-      score_cut = float(config['score']['threshold'])
+      if isinstance(var, list):
+         if 'colors' not in kwargs.keys(): 
+            colors = [None]*len(var)
+         else: colors = kwargs['colors']
+         if 'styles' not in kwargs.keys(): 
+            styles = [None]*len(var)
+         else: styles = kwargs['styles']
 
-      self.SR_edge = SR_edge
-      self.VR_edge = VR_edge
-      self.CR_edge = CR_edge
-
-      higgs = ['HX_m', 'H1_m', 'H2_m']
-      Dm_cand = np.column_stack(([abs(self.get(mH,'np') - 125) for mH in higgs]))
-      SR_mask = ak.all(Dm_cand <= SR_edge, axis=1) # SR
-      VR_mask = ak.all(Dm_cand > SR_edge, axis=1) & ak.all(Dm_cand <= VR_edge, axis=1) # VR
-      CR_mask = ak.all(Dm_cand > VR_edge, axis=1) & ak.all(Dm_cand <= CR_edge, axis=1) # CR
-
-      ls_mask = self.btag_avg < score_cut # ls
-      hs_mask = self.btag_avg >= score_cut # hs
-
-      self.V_CRls_mask = CR_mask & ls_mask
-      self.V_CRhs_mask = CR_mask & hs_mask
-      self.V_SRls_mask = VR_mask & ls_mask
-      self.V_SRhs_mask = VR_mask & hs_mask
-      self.A_CRls_mask = np.zeros_like(CR_mask)
-      self.A_CRhs_mask = np.zeros_like(CR_mask)
-      self.A_SRls_mask = SR_mask & ls_mask
-      self.A_SRhs_mask = SR_mask & hs_mask
-
-      if self._isdata:
-         print(f"   SR_edge   {int(SR_edge)}")
-         print(f"   VR_edge   {int(VR_edge)}")
-         print(f"   CR_edge   {int(CR_edge)}")
-         print(" -----------------")
-         print()
-         
-         # blinded_mask = VR_mask | CR_mask
-         self.dat_mX_V_CRls = self.np('X_m')[self.V_CRls_mask]
-         self.dat_mX_V_CRhs = self.np('X_m')[self.V_CRhs_mask]
-         self.dat_mX_V_SRls = self.np('X_m')[self.V_SRls_mask]
-         self.dat_mX_V_SRhs = self.np('X_m')[self.V_SRhs_mask]
-         self.dat_mX_A_CRls = np.zeros_like(self.np('X_m'))
-         self.dat_mX_A_CRhs = np.zeros_like(self.np('X_m'))
-         self.dat_mX_A_SRls = self.np('X_m')[self.A_SRls_mask]
-         # self.dat_mX_blinded = self.np('X_m')[blinded_mask]
+         for arr,lbl,c,s in zip(var,label,colors,styles):
+            if isinstance(arr, str): arr = self.get(arr)
+            Hist(arr, bins=bins, label=lbl, ax=ax, weights=self.scale, color=c, linestyle=s)
       else:
-         return self.np('X_m')[self.SRhs_mask]
+         Hist(self.get(var), bins=bins, ax=ax, label=label, weights=self.scale)
+         ax.legend()
+      
+      if title:
+         ax.set_title(self.sample)
+      
+      ax.set_ylabel('AU')
 
-      self._rect_region_bool = True
+      return ax
+
+
+   
+
+   # def rectangular_region(self, config):
+   #    """Defines rectangular region masks."""
+   #    SR_edge = float(config['rectangular']['maxSR'])
+   #    VR_edge = float(config['rectangular']['maxVR'])
+   #    CR_edge = float(config['rectangular']['maxCR'])
+   #    if CR_edge == -1: CR_edge = 9999
+
+   #    score_cut = float(config['score']['threshold'])
+
+   #    self.SR_edge = SR_edge
+   #    self.VR_edge = VR_edge
+   #    self.CR_edge = CR_edge
+
+   #    higgs = ['HX_m', 'H1_m', 'H2_m']
+   #    Dm_cand = np.column_stack(([abs(self.get(mH,'np') - 125) for mH in higgs]))
+   #    SR_mask = ak.all(Dm_cand <= SR_edge, axis=1) # SR
+   #    VR_mask = ak.all(Dm_cand > SR_edge, axis=1) & ak.all(Dm_cand <= VR_edge, axis=1) # VR
+   #    CR_mask = ak.all(Dm_cand > VR_edge, axis=1) & ak.all(Dm_cand <= CR_edge, axis=1) # CR
+
+   #    ls_mask = self.btag_avg < score_cut # ls
+   #    hs_mask = self.btag_avg >= score_cut # hs
+
+   #    self.V_CRls_mask = CR_mask & ls_mask
+   #    self.V_CRhs_mask = CR_mask & hs_mask
+   #    self.V_SRls_mask = VR_mask & ls_mask
+   #    self.V_SRhs_mask = VR_mask & hs_mask
+   #    self.A_CRls_mask = np.zeros_like(CR_mask)
+   #    self.A_CRhs_mask = np.zeros_like(CR_mask)
+   #    self.A_SRls_mask = SR_mask & ls_mask
+   #    self.A_SRhs_mask = SR_mask & hs_mask
+
+   #    if self._isdata:
+   #       print(f"   SR_edge   {int(SR_edge)}")
+   #       print(f"   VR_edge   {int(VR_edge)}")
+   #       print(f"   CR_edge   {int(CR_edge)}")
+   #       print(" -----------------")
+   #       print()
+         
+   #       # blinded_mask = VR_mask | CR_mask
+   #       self.dat_mX_V_CRls = self.np('X_m')[self.V_CRls_mask]
+   #       self.dat_mX_V_CRhs = self.np('X_m')[self.V_CRhs_mask]
+   #       self.dat_mX_V_SRls = self.np('X_m')[self.V_SRls_mask]
+   #       self.dat_mX_V_SRhs = self.np('X_m')[self.V_SRhs_mask]
+   #       self.dat_mX_A_CRls = np.zeros_like(self.np('X_m'))
+   #       self.dat_mX_A_CRhs = np.zeros_like(self.np('X_m'))
+   #       self.dat_mX_A_SRls = self.np('X_m')[self.A_SRls_mask]
+   #       # self.dat_mX_blinded = self.np('X_m')[blinded_mask]
+   #    else:
+   #       return self.np('X_m')[self.SRhs_mask]
+
+   #    self._rect_region_bool = True
 
    def spherical_region(self, config):
       if isinstance(config, str):
@@ -967,6 +690,313 @@ def presels(tree, pt=20, eta=2.5, jetid=6, puid=6):
 
 
 
+class DataTraining():
+   def __init__(self, config, b_cut=0.55, gnn_cut=0.76):
+      data_tree_ar = uproot.open("/uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_6_19_patch2/src/sixB/analysis/sixBanalysis/data_ar.root:sixBtree")
+      data_tree_vr = uproot.open("/uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_6_19_patch2/src/sixB/analysis/sixBanalysis/data_vr.root:sixBtree")
+
+      Nestimators  = int(config['BDT']['Nestimators'])
+      learningRate = float(config['BDT']['learningRate'])
+      maxDepth     = int(config['BDT']['maxDepth'])
+      minLeaves    = int(config['BDT']['minLeaves'])
+      GBsubsample  = float(config['BDT']['GBsubsample'])
+      randomState  = int(config['BDT']['randomState'])
+      variables = config['BDT']['variables']
+      if isinstance(variables, str):
+         variables = variables.split(", ")
+
+      data_gnn_score_ar = ak.sort(data_tree_ar['jet_gnn_score'].array(), ascending=False, axis=1)[:,:6]
+      data_gnn_score_vr = ak.sort(data_tree_vr['jet_gnn_score'].array(), ascending=False, axis=1)[:,:6]
+
+      data_gnn_avg_ar = ak.sum(data_gnn_score_ar, axis=1) / 6
+      data_gnn_avg_vr = ak.sum(data_gnn_score_vr, axis=1) / 6
+
+      asr_gnn_mask = data_gnn_avg_ar > 0.75
+      asr_mask = data_tree_ar['bkg_mask'].array() # already accounts for cut on average btag score
+      acr_mask = ~asr_mask & asr_gnn_mask
+      asr_mask = asr_mask & asr_gnn_mask
+
+      # analysis region
+      data_avg_btag_ar = data_tree_ar['jet_avg_btag'].array()
+      asr_avg_b = data_avg_btag_ar[asr_mask]
+      acr_avg_b = data_avg_btag_ar[acr_mask]
+
+      acr_ls_mask = (acr_avg_b < b_cut)
+      acr_hs_mask = (acr_avg_b > b_cut)
+
+      # validation region
+      data_avg_btag_vr = data_tree_vr['jet_avg_btag'].array()
+
+      vr_gnn_mask = data_gnn_avg_vr > 0.75
+      vsr_mask = data_tree_vr['v_sr_mask'].array() & vr_gnn_mask
+      vsr_avg_b = data_avg_btag_vr[vsr_mask]
+      vsr_ls_mask = (vsr_avg_b < b_cut)
+      vsr_hs_mask = (vsr_avg_b > b_cut)
+
+      vcr_mask = data_tree_vr['v_cr_mask'].array() & vr_gnn_mask
+      vcr_avg_b = data_avg_btag_vr[vcr_mask]
+      vcr_ls_mask = (vcr_avg_b < b_cut)
+      vcr_hs_mask = (vcr_avg_b > b_cut)
+
+      asr_X_m = data_tree_ar['X_m'].array()[asr_mask]
+      acr_X_m = data_tree_ar['X_m'].array()[acr_mask]
+      vsr_X_m = data_tree_vr['X_m'].array()[vsr_mask]
+      vcr_X_m = data_tree_vr['X_m'].array()[vcr_mask]
+
+      asr_ls_X_m = data_tree_ar['X_m'].array()[asr_mask] # low score by construction
+
+      acr_ls_X_m = data_tree_ar['X_m'].array()[acr_mask][acr_ls_mask]
+      vsr_ls_X_m = data_tree_vr['X_m'].array()[vsr_mask][vsr_ls_mask]
+      vcr_ls_X_m = data_tree_vr['X_m'].array()[vcr_mask][vcr_ls_mask]
+
+      acr_hs_X_m = data_tree_ar['X_m'].array()[acr_mask][acr_hs_mask]
+      vsr_hs_X_m = data_tree_vr['X_m'].array()[vsr_mask][vsr_hs_mask]
+      vcr_hs_X_m = data_tree_vr['X_m'].array()[vcr_mask][vcr_hs_mask]
+
+      acr_TF = sum(acr_hs_mask)/sum(acr_ls_mask)
+      vcr_TF = sum(vcr_hs_mask)/sum(vcr_ls_mask)
+
+      acr_ls_weights = np.ones(ak.sum(acr_ls_mask))*acr_TF
+      acr_hs_weights = np.ones(ak.sum([acr_hs_mask]))
+      vcr_ls_weights = np.ones(ak.sum(vcr_ls_mask))*vcr_TF
+      vcr_hs_weights = np.ones(ak.sum(vcr_hs_mask))
+
+      acr_ls_features = {}
+      acr_hs_features = {}
+      asr_ls_features = {}
+      vcr_ls_features = {}
+      vcr_hs_features = {}
+      vsr_ls_features = {}
+      vsr_hs_features = {}
+      for var in variables:
+         acr_ls_features[var] = abs(data_tree_ar[var].array())[acr_ls_mask]
+         acr_hs_features[var] = abs(data_tree_ar[var].array())[acr_hs_mask]
+         asr_ls_features[var] = abs(data_tree_ar[var].array())[asr_mask]
+         vcr_ls_features[var] = abs(data_tree_vr[var].array()[vcr_ls_mask])
+         vcr_hs_features[var] = abs(data_tree_vr[var].array()[vcr_hs_mask])
+         vsr_ls_features[var] = abs(data_tree_vr[var].array())[vsr_ls_mask]
+         vsr_hs_features[var] = abs(data_tree_vr[var].array())[vsr_hs_mask]
+      acr_ls_df = pd.DataFrame(acr_ls_features)
+      acr_hs_df = pd.DataFrame(acr_hs_features)
+      asr_ls_df = pd.DataFrame(asr_ls_features)
+      vcr_ls_df = pd.DataFrame(vcr_ls_features)
+      vcr_hs_df = pd.DataFrame(vcr_hs_features)
+      vsr_ls_df = pd.DataFrame(vsr_ls_features)
+      vsr_hs_df = pd.DataFrame(vsr_hs_features)
+
+      acr_reweighter_base = reweight.GBReweighter(
+         n_estimators=Nestimators, 
+         learning_rate=learningRate, 
+         max_depth=maxDepth, 
+         min_samples_leaf=minLeaves,
+         gb_args={'subsample': GBsubsample})
+
+      acr_reweighter = reweight.FoldingReweighter(acr_reweighter_base, random_state=randomState, n_folds=2, verbose=False)
+      acr_reweighter.fit(acr_ls_df,acr_hs_df,acr_ls_weights,acr_hs_weights)
+
+      asr_initial_weights = np.ones(ak.sum(asr_mask))*acr_TF
+      acr_initial_weights = np.ones(ak.sum(acr_ls_mask))*acr_TF
+      vsr_initial_weights = np.ones(ak.sum(vsr_ls_mask))*vcr_TF
+
+      asr_weights_pred = acr_reweighter.predict_weights(asr_ls_df,asr_initial_weights,lambda x: np.mean(x, axis=0))
+      acr_weights_pred = acr_reweighter.predict_weights(acr_ls_df,acr_initial_weights,lambda x: np.mean(x, axis=0))
+
+      n_acr_hs, _ = np.histogram(
+         acr_hs_X_m.to_numpy(), 
+         bins=m_bins
+         )
+      
+      n_acr_hs_pred, _ = np.histogram(
+         acr_ls_X_m.to_numpy(),
+         bins=m_bins,
+         weights=acr_weights_pred
+      )
+
+      acr_TF_bvb = n_acr_hs / n_acr_hs_pred
+
+      n_asr_hs_pred, _ = np.histogram(
+         asr_X_m.to_numpy(),
+         bins=m_bins,
+         weights=asr_weights_pred
+      )
+
+      n_asr_hs_pred, _ = np.histogram(
+         x_X_m,
+         bins=m_bins,
+         weights=n_asr_hs_pred*acr_TF_bvb
+      )
+
+      ROOTHist(n_asr_hs_pred, 'data', 'data')
+
+      vcr_reweighter_base = reweight.GBReweighter(
+         n_estimators=Nestimators, 
+         learning_rate=learningRate, 
+         max_depth=maxDepth, 
+         min_samples_leaf=minLeaves,
+         gb_args={'subsample': GBsubsample})
+
+      vcr_reweighter = reweight.FoldingReweighter(vcr_reweighter_base, random_state=randomState, n_folds=2, verbose=False)
+      vcr_reweighter.fit(vcr_ls_df,vcr_hs_df,vcr_ls_weights,vcr_hs_weights)
+
+      vsr_weights_pred = vcr_reweighter.predict_weights(vsr_ls_df,vsr_initial_weights,lambda x: np.mean(x, axis=0))
+      vcr_weights_pred = vcr_reweighter.predict_weights(vcr_ls_df,np.ones(ak.sum(vcr_ls_mask))*vcr_TF,lambda x: np.mean(x, axis=0))
+
+      n_vcrls, _ = np.histogram(
+         vcr_ls_X_m.to_numpy(),
+         bins=m_bins
+      )
+
+      n_vcrhs, _ = np.histogram(
+         vcr_hs_X_m.to_numpy(),
+         bins=m_bins
+      )
+
+      n_vcrhs_pred, _ = np.histogram(
+         vcr_ls_X_m.to_numpy(),
+         bins=m_bins,
+         weights=vcr_weights_pred
+      )
+      vcr_TF_bvb = np.nan_to_num(n_vcrhs / n_vcrhs_pred, 0)
+
+      n_vsrhs, _ = np.histogram(
+         vsr_hs_X_m.to_numpy(),
+         bins=m_bins
+      )
+
+      n_vsrhs_pred, _ = np.histogram(
+         vsr_ls_X_m.to_numpy(),
+         bins=m_bins,
+         weights=vsr_weights_pred
+      )
+
+      n_vsrhs_pred, _ = np.histogram(
+         x_X_m,
+         bins=m_bins,
+         weights=n_vsrhs_pred*vcr_TF_bvb
+      )
+
+      s_asrhs_pred, _ = np.histogram(
+         asr_ls_X_m.to_numpy(),
+         bins=m_bins,
+         weights=asr_weights_pred**2
+      )
+
+      s_asrhs_pred, _ = np.histogram(
+         x_X_m,
+         bins=m_bins,
+         weights=s_asrhs_pred*vcr_TF_bvb
+      )
+
+      s_vsrhs_pred, _ = np.histogram(
+         vsr_ls_X_m.to_numpy(),
+         bins=m_bins,
+         weights=vsr_weights_pred**2
+      )
+
+      s_vsrhs_pred, _ = np.histogram(
+         x_X_m,
+         bins=m_bins,
+         weights=s_vsrhs_pred*vcr_TF_bvb
+      )
+
+
+      n_vcr_ls = n_vcrls.sum()
+      n_vcr_hs = n_vcrhs.sum()
+
+      n_vsr_pred = n_vsrhs_pred.sum()
+      n_asr_pred = n_asr_hs_pred.sum()
+
+      s_vcr_ls = 1 / np.sqrt(n_vcr_ls)
+      s_vcr_hs = 1 / np.sqrt(n_vcr_hs)
+      s_vsr_pred = 1 / np.sqrt(ak.sum(s_vsrhs_pred))
+      s_asr_pred = 1 / np.sqrt(ak.sum(s_asrhs_pred))
+
+      self.bkg_vrpred = round(1 + np.where(s_vsr_pred/n_vsr_pred > s_asr_pred/n_asr_pred, np.sqrt((s_vsr_pred/n_vsr_pred)**2 - (s_asr_pred/n_asr_pred)**2), 0), 2)
+
+      self.cr_tf = 1 + np.sqrt(1/n_vcr_hs + 1/n_vcr_ls)
+
+      self.vr_prec = 1 + np.sqrt(1/n_vsr_pred*100**2 - 1/n_asr_pred*100**2)
+
+
+
+
+
+class GNNSelection():
+   _var_keys = ['n_jet', 'jet_pt', 'jet_eta', 'jet_phi', 'jet_m', 'jet_btag', 'jet_avg_btag', 'asr_mask', 'acr_mask', 'X_m', 'jet_signalId', 'jet_gnn_score']
+
+   _eos_base = '/eos/uscms/store/user/srosenzw/sixb/ntuples/Summer2018UL/NMSSM_presel'
+
+   _root_base = '/uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_6_19_patch2/src/sixB/analysis/sixBanalysis/gnn'
+
+   def __init__(self, filename, year=2018, b_cut=0.55, gnn_cut=0.76):
+
+      MX_ind = re.search('MX_', filename)
+      MY_ind = re.search('MY_', filename)
+
+      self.mass_name = filename[MX_ind.start():]
+
+      MX = int(filename[MX_ind.end():MY_ind.start()-1])
+      MY = int(filename[MY_ind.end():])
+
+      eos_file = f"{self._eos_base}/{filename}/ntuple.root"
+      gnn_file = f"{self._root_base}/{self.mass_name}.root"
+
+      tree = uproot.open(f"{gnn_file}:sixBtree")
+      cutflow = uproot.open(f"{eos_file}:h_cutflow")
+      cutflow = cutflow.to_numpy()[0]
+      total = cutflow[0]
+      xsec = 0.3 # pb
+
+      nevents = len(tree['n_jet'].array())
+      cutflow = np.append(cutflow, nevents)
+      self.scale = lumiMap[2018][0] * xsec / total
+      self.cutflow = round(cutflow * self.scale)
+
+      self.tree = tree
+
+      for k in self._var_keys:
+            setattr(self, k, tree[k].array())
+
+      self.jet_gnn_score = ak.sort(tree['jet_gnn_score'].array(), ascending=False, axis=1)[:,:6]
+      self.avg_gnn = ak.sum(self.jet_gnn_score, axis=1) / 6
+
+      self.gnn_mask = self.avg_gnn > gnn_cut
+      self.btag_mask = self.jet_avg_btag > b_cut
+      self.asr_mask = self.asr_mask & self.gnn_mask & self.btag_mask
+
+      n_sr_hs, _ = np.histogram(
+         self.X_m[self.asr_mask],
+         bins=m_bins,
+         weights=np.ones_like(self.X_m[self.asr_mask])*self.scale
+      )
+
+      ROOTHist(n_sr_hs, self.mass_name, 'signal')
+
+      self.get_limits()
+
+   def keys(self):
+      return self.tree.keys()
+
+   def get_limits(self):
+      import pyhf
+      pyhf.set_backend("jax")
+      h_bkg = uproot.open("ml/gnn/data.root:data")
+      h_sig = uproot.open(f"ml/gnn/{self.mass_name}.root:signal")
+
+      norm = 2*np.sqrt(np.sum(h_bkg.errors()**2))/h_sig.counts().sum()
+      w = pyhf.simplemodels.uncorrelated_background(
+         signal=(norm*h_sig.counts()).tolist(), bkg=h_bkg.counts().tolist(), bkg_uncertainty=h_bkg.errors().tolist()
+      )
+      data = h_bkg.counts().tolist()+w.config.auxdata
+
+      poi = np.linspace(0,5,11)
+      level = 0.05
+
+      obs_limit, exp_limit = pyhf.infer.intervals.upperlimit(
+               data, w, poi, level=level,
+            )
+      obs_limit, exp_limit = norm*obs_limit, [ norm*lim for lim in exp_limit ]
+      self.exp_limit = np.array(exp_limit)*300 # fb
 
 
 
@@ -975,4 +1005,17 @@ def presels(tree, pt=20, eta=2.5, jetid=6, puid=6):
 class Data():
 
    def __init__(self, filename, treename='sixBtree', year=2018, b_cutflow=False):
+      tree = uproot.open(f"{filename}:{treename}")
+      self.tree = tree
+      self.cutflow = uproot.open(f"{filename}:h_cutflow_unweighted").to_numpy()[0]
+      self.nevents = len(tree['Run'].array())
 
+      for k, v in tree.items():
+         if 'jet' in k or 'gen' in k:
+            setattr(self, k, v.array())
+      self.jet_higgsIdx = (self.jet_signalId + 2) // 2
+
+      jets = ['HX_b1_', 'HX_b2_', 'H1_b1_', 'H1_b2_', 'H2_b1_', 'H2_b2_']
+      self.btag_avg = np.column_stack(([self.get(jet + 'btag').to_numpy() for jet in jets])).sum(axis=1)/6
+
+      self.initialize_vars()
