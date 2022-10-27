@@ -26,10 +26,13 @@ def get_NMSSM(mx, my, run='Summer2018UL', jets='bias'):
    return f"{base}/{run}/{jets}/NMSSM/NMSSM_XYH_YToHH_6b_MX_{mx}_MY_{my}/ntuple.root"
 
 def get_presel(mx=700, my=400, run='Summer2018UL'):
-   return f"{base}/{run}/NMSSM_presel/NMSSM_XYH_YToHH_6b_MX_{mx}_MY_{my}/ntuple.root"
+   return f"{base}/{run}/NMSSM_cutflow_studies/presel/NMSSM_XYH_YToHH_6b_MX_{mx}_MY_{my}/ntuple.root"
+
+def get_trigger(mx=700, my=400, run='Summer2018UL'):
+   return f"{base}/{run}/NMSSM_trigger/NMSSM_XYH_YToHH_6b_MX_{mx}_MY_{my}/ntuple.root"
 
 def get_nocuts(mx=700, my=400, run='Summer2018UL', study='nocuts'):
-   return f"{base}/{run}/NMSSM_{study}/NMSSM_XYH_YToHH_6b_MX_{mx}_MY_{my}/ntuple.root"
+   return f"{base}/{run}/NMSSM_nocuts/NMSSM_XYH_YToHH_6b_MX_{mx}_MY_{my}/ntuple.root"
 
 def get_data(run='Summer2018UL', jets='bias', btag=False):
    if btag: jets = jets + '_maxbtag'
@@ -79,31 +82,38 @@ def get_signal_list(run='Summer2018UL', jets='bias'):
 #       mxmy_loc  = f'{self.base}/NMSSM/{mxmy_name}/ntuple.root'
 #       return getattr(self, mxmy_name)
 
-# QCD_bEn_Ht_100to200   = f"{base}/QCD/QCD_bEnriched_HT100to200_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
-# QCD_bEn_Ht_200to300   = f"{base}/QCD/QCD_bEnriched_HT200to300_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
-# QCD_bEn_Ht_300to500   = f"{base}/QCD/QCD_bEnriched_HT300to500_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
-# QCD_bEn_Ht_500to700   = f"{base}/QCD/QCD_bEnriched_HT500to700_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
-# QCD_bEn_Ht_700to1000  = f"{base}/QCD/QCD_bEnriched_HT700to1000_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
-# QCD_bEn_Ht_1000to1500 = f"{base}/QCD/QCD_bEnriched_HT1000to1500_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
-# QCD_bEn_Ht_1500to2000 = f"{base}/QCD/QCD_bEnriched_HT1500to2000_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
-# QCD_bEn_Ht_2000toInf  = f"{base}/QCD/QCD_bEnriched_HT2000toInf_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
+def get_qcd_list(selection, run='Summer2018UL'):
+   QCD_bEn_Ht_100to200   = f"{base}/{run}/{selection}/QCD/QCD_bEnriched_HT100to200_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
+   QCD_bEn_Ht_200to300   = f"{base}/{run}/{selection}/QCD/QCD_bEnriched_HT200to300_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
+   QCD_bEn_Ht_300to500   = f"{base}/{run}/{selection}/QCD/QCD_bEnriched_HT300to500_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
+   QCD_bEn_Ht_500to700   = f"{base}/{run}/{selection}/QCD/QCD_bEnriched_HT500to700_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
+   QCD_bEn_Ht_700to1000  = f"{base}/{run}/{selection}/QCD/QCD_bEnriched_HT700to1000_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
+   QCD_bEn_Ht_1000to1500 = f"{base}/{run}/{selection}/QCD/QCD_bEnriched_HT1000to1500_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
+   QCD_bEn_Ht_1500to2000 = f"{base}/{run}/{selection}/QCD/QCD_bEnriched_HT1500to2000_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
+   QCD_bEn_Ht_2000toInf  = f"{base}/{run}/{selection}/QCD/QCD_bEnriched_HT2000toInf_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
 
-# QCD_bEn_List = [QCD_bEn_Ht_100to200,QCD_bEn_Ht_200to300,QCD_bEn_Ht_300to500, QCD_bEn_Ht_500to700, QCD_bEn_Ht_700to1000, QCD_bEn_Ht_1000to1500,QCD_bEn_Ht_1500to2000,QCD_bEn_Ht_2000toInf]
+   QCD_bEn_List = [QCD_bEn_Ht_100to200,QCD_bEn_Ht_200to300,QCD_bEn_Ht_300to500, QCD_bEn_Ht_500to700, QCD_bEn_Ht_700to1000, QCD_bEn_Ht_1000to1500,QCD_bEn_Ht_1500to2000,QCD_bEn_Ht_2000toInf]
 
-# QCD_bGf_Ht_100to200   = f"{base}/QCD/QCD_HT100to200_BGenFilter_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
-# QCD_bGf_Ht_200to300   = f"{base}/QCD/QCD_HT200to300_BGenFilter_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
-# QCD_bGf_Ht_300to500   = f"{base}/QCD/QCD_HT300to500_BGenFilter_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
-# QCD_bGf_Ht_500to700   = f"{base}/QCD/QCD_HT500to700_BGenFilter_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
-# QCD_bGf_Ht_700to1000  = f"{base}/QCD/QCD_HT700to1000_BGenFilter_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
-# QCD_bGf_Ht_1000to1500 = f"{base}/QCD/QCD_HT1000to1500_BGenFilter_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
-# QCD_bGf_Ht_1500to2000 = f"{base}/QCD/QCD_HT1500to2000_BGenFilter_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
-# QCD_bGf_Ht_2000toInf  = f"{base}/QCD/QCD_HT2000toInf_BGenFilter_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
+   QCD_bGf_Ht_100to200   = f"{base}/{run}/{selection}/QCD/QCD_HT100to200_BGenFilter_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
+   QCD_bGf_Ht_200to300   = f"{base}/{run}/{selection}/QCD/QCD_HT200to300_BGenFilter_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
+   QCD_bGf_Ht_300to500   = f"{base}/{run}/{selection}/QCD/QCD_HT300to500_BGenFilter_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
+   QCD_bGf_Ht_500to700   = f"{base}/{run}/{selection}/QCD/QCD_HT500to700_BGenFilter_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
+   QCD_bGf_Ht_700to1000  = f"{base}/{run}/{selection}/QCD/QCD_HT700to1000_BGenFilter_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
+   QCD_bGf_Ht_1000to1500 = f"{base}/{run}/{selection}/QCD/QCD_HT1000to1500_BGenFilter_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
+   QCD_bGf_Ht_1500to2000 = f"{base}/{run}/{selection}/QCD/QCD_HT1500to2000_BGenFilter_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
+   QCD_bGf_Ht_2000toInf  = f"{base}/{run}/{selection}/QCD/QCD_HT2000toInf_BGenFilter_TuneCP5_13TeV-madgraph-pythia8/ntuple.root"
 
-# QCD_bGf_List = [QCD_bGf_Ht_100to200,QCD_bGf_Ht_200to300, QCD_bGf_Ht_300to500, QCD_bGf_Ht_500to700, QCD_bGf_Ht_700to1000, QCD_bGf_Ht_1000to1500,QCD_bGf_Ht_1500to2000,QCD_bGf_Ht_2000toInf]
+   QCD_bGf_List = [QCD_bGf_Ht_100to200,QCD_bGf_Ht_200to300, QCD_bGf_Ht_300to500, QCD_bGf_Ht_500to700, QCD_bGf_Ht_700to1000, QCD_bGf_Ht_1000to1500,QCD_bGf_Ht_1500to2000,QCD_bGf_Ht_2000toInf]
 
-# QCD_B_List = QCD_bEn_List + QCD_bGf_List
+   QCD_B_List = QCD_bEn_List + QCD_bGf_List
+   return QCD_B_List
 
-# TTJets = f"{base}/TTJets/TTJets/ntuple.root"
+def get_ttbar(selection, run='Summer2018UL'):
+   TTJets = f"{base}/{run}/{selection}/TTJets/TTJets/ntuple.root"
+   return TTJets
+
+def get_qcd_ttbar(selection, run='Summer2018UL'):
+   return get_qcd_list(selection, run) + [get_ttbar(selection, run)]
 
 
 # studies = "/eos/uscms/store/user/srosenzw/sixb/studies"
