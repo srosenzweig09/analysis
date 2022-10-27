@@ -7,6 +7,7 @@ This script works as a wrapper for 1D and 2D histograms.
 # from tkinter import Y
 from . import *
 from .useCMSstyle import *
+plt.style.use(CMS)
 from .varUtils import *
 
 from awkward import flatten
@@ -120,7 +121,7 @@ plot_dict = {
 }
 
 
-def Hist(x, scale=1, legend_loc='best', weights=False, density=True, ax=None, patches=False, qcd=False, exp=0, dec=2, **kwargs):
+def Hist(x, scale=1, legend_loc='best', weights=None, density=True, ax=None, patches=False, qcd=False, exp=0, dec=2, **kwargs):
     """
     This function is a wrapper for matplotlib.pyplot.hist that allows me to generate histograms quickly and consistently.
     It also helps deal with background trees, which are typically given as lists of samples.
@@ -133,16 +134,21 @@ def Hist(x, scale=1, legend_loc='best', weights=False, density=True, ax=None, pa
     if isinstance(x, Array): 
       try: x = flatten(x).to_numpy()
       except: x = x.to_numpy()
+
     if isinstance(x, list):
       for arr in x:
          if isinstance(x, Array): 
             try: x = flatten(x).to_numpy()
             except: x = x.to_numpy()
+
     if isinstance(weights, Array): weights = weights.to_numpy() 
+
     if ax is None: fig, ax = plt.subplots()
-    if not weights: 
+    
+    if weights is None: 
       weights = np.ones_like(x)
    #  else: density = False
+    
     if isinstance(weights, float): 
       weights = np.ones_like(x) * weights
       density = False
