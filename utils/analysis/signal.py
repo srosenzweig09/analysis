@@ -97,7 +97,7 @@ class Signal():
          self.scale = self.lumi*xsec/total
          self.cutflow = (cutflow.to_numpy()[0]*self.scale).astype(int)
          self.cutflow_norm = (cutflow.to_numpy()[0]/cutflow.to_numpy()[0][0]).astype(int)
-         self.mXmY = self.sample.replace('$','').replace('_','').replace('= ','_').replace(', ','_').replace(' GeV','')
+         self.mxmy = self.sample.replace('$','').replace('_','').replace('= ','_').replace(', ','_').replace(' GeV','')
          self._isdata = False
       else:
          self.scale = 1
@@ -107,8 +107,10 @@ class Signal():
       for k, v in tree.items():
          if 'jet' in k or 'gen' in k:
             setattr(self, k, v.array())
-      self.jet_higgsIdx = (self.jet_signalId + 2) // 2
+      self.jet_higgsIdx = (self.jet_signalId) // 2
       
+      if 'dnn' in filename: self.evt_score = tree['b_6j_score'].array()
+
       if not presel and not gen:
          # self.tree['jet_higgsIdx'] = self.jet_higgsIdx
          jets = ['HX_b1_', 'HX_b2_', 'H1_b1_', 'H1_b2_', 'H2_b1_', 'H2_b2_']
@@ -148,12 +150,20 @@ class Signal():
 
    def initialize_vars(self):
       """Initialize variables that don't exist in the original ROOT tree."""
-      HX_b1  = Particle(self, 'HX_b1')
-      HX_b2  = Particle(self, 'HX_b2')
+      HX_b1 = Particle(self, 'HX_b1')
+      HX_b2 = Particle(self, 'HX_b2')
       H1_b1 = Particle(self, 'H1_b1')
       H1_b2 = Particle(self, 'H1_b2')
       H2_b1 = Particle(self, 'H2_b1')
       H2_b2 = Particle(self, 'H2_b2')
+
+      HX = Particle(self, 'HX')
+      H1 = Particle(self, 'H1')
+      H2 = Particle(self, 'H2')
+
+      Y = Particle(self, 'Y')
+
+      X = Particle(self, 'X')
 
       bs = [HX_b1, HX_b2, H1_b1, H1_b2, H2_b1, H2_b2]
       pair1 = [HX_b1]*5 + [HX_b2]*4 + [H1_b1]*3 + [H1_b2]*2 + [H2_b1]
@@ -171,11 +181,11 @@ class Signal():
 
       self.pt6bsum = HX_b1.pt + HX_b2.pt + H1_b1.pt + H1_b2.pt + H2_b1.pt + H2_b2.pt
 
-      HX = HX_b1 + HX_b2
-      H1 = H1_b1 + H1_b2
-      H2 = H2_b1 + H2_b2
+      # HX = HX_b1 + HX_b2
+      # H1 = H1_b1 + H1_b2
+      # H2 = H2_b1 + H2_b2
 
-      Y = H1 + H2
+      # Y = H1 + H2
 
       self.HX_dr = HX_b1.deltaR(HX_b2)
       self.H1_dr = H1_b1.deltaR(H1_b2)
@@ -203,10 +213,10 @@ class Signal():
       self.H1_H2_dr = H2.deltaR(H1)
       self.H2_HX_dr = HX.deltaR(H2)
 
-      X = HX + H1 + H2
+      # X = HX + H1 + H2
       self.X_m = X.m
 
-   def hist(self, var, bins, label=None, ax=None, title=True, **kwargs):
+   def hist(self, var, bins, label=None, ax=None, title=True, lines=None, **kwargs):
    
       if ax is None: fig, ax = plt.subplots()
 
@@ -218,19 +228,40 @@ class Signal():
             styles = [None]*len(var)
          else: styles = kwargs['styles']
 
+         n_max = 0
+         n_all = []
          for arr,lbl,c,s in zip(var,label,colors,styles):
             if isinstance(arr, str): arr = self.get(arr)
-            Hist(arr, bins=bins, label=lbl, ax=ax, weights=self.scale, color=c, linestyle=s)
-      else:
-         Hist(self.get(var), bins=bins, ax=ax, label=label, weights=self.scale)
+            n = Hist(arr, bins=bins, label=lbl, ax=ax, weights=self.scale, color=c, linestyle=s)
+            n_all.append(n)
+            if n.max() > n_max: n_max = n.max()
          ax.legend()
+         return n_all
+      elif isinstance(var, str):
+         var = self.get(var)
+      
+      if label is not None:
+         n = Hist(var, bins=bins, ax=ax, weights=self.scale, label=label)
+      else:
+         n = Hist(var, bins=bins, ax=ax, weights=self.scale)
+      n_max = n.max()
+
+      if isinstance(lines, list):
+         for val in lines:
+            ax.plot([val,val],[0, n_max], 'gray', '--', alpha=0.5)
+      # print(np.around(n))
       
       if title:
          ax.set_title(self.sample)
+
+      if np.issubdtype(njet_bins.dtype, int):
+         ax.tick_params(axis='x', which='minor', color='white')
+         ax.xaxis.set_ticks(bins)
+         # ax.xaxis.set_tick_params(which='minor', bottom=False)
       
       ax.set_ylabel('AU')
 
-      return ax
+      return n
 
 
    
@@ -999,7 +1030,39 @@ class GNNSelection():
       self.exp_limit = np.array(exp_limit)*300 # fb
 
 
+class SixB():
 
+   def __init__(self, filename, treename='sixBtree', year=2018, presel=False, gen=False, b_cutflow=False):
+      print(filename)
+      self.filename = re.search('NMSSM_.+/', filename).group()[:-1]
+      tree = uproot.open(f"{filename}:{treename}")
+      self.tree = tree
+      self.nevents = len(tree['Run'].array())
+
+      cutflow = uproot.open(f"{filename}:h_cutflow_unweighted")
+      # save total number of events for scaling purposes
+      total = cutflow.to_numpy()[0][0]
+      self.scaled_total = total
+      samp, xsec = next( ((key,value) for key,value in xsecMap.items() if key in filename),("unk",1) )
+      self.sample = latexTitle(filename)
+      self.xsec = xsec
+      self.lumi = lumiMap[year][0]
+      self.scale = self.lumi*xsec/total
+      self.cutflow = (cutflow.to_numpy()[0]*self.scale).astype(int)
+      self.cutflow_norm = (cutflow.to_numpy()[0]/cutflow.to_numpy()[0][0]).astype(int)
+      self.mxmy = self.sample.replace('$','').replace('_','').replace('= ','_').replace(', ','_').replace(' GeV','')
+
+      pattern = re.compile('H.+_') # Search for any keys beginning with an 'H' and followed somewhere by a '_'
+      for k, v in tree.items():
+         if re.match(pattern, k):
+               setattr(self, k, v.array())
+
+
+      def tree_keys(self):
+         return self.tree.keys()
+
+      def keys(self):
+         return getattr(self, )
 
 
 class Data():
