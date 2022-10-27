@@ -16,6 +16,9 @@
 # VSCode Settings
 *.code-workspace
 
+# ML Workspace (Weaver)
+weaver-multiH/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
