@@ -34,7 +34,8 @@ class Particle():
 
     def initialize_from_tree(self, tree, particle_name):
         self.pt = tree.get(particle_name + '_pt')
-        # self.ptRegressed = tree.get(particle_name + '_ptRegressed')
+        if 'b' in particle_name and 'gen' not in particle_name:
+            self.pt = tree.get(particle_name + '_ptRegressed')
         self.eta = tree.get(particle_name + '_eta')
         self.phi = tree.get(particle_name + '_phi')
         self.m = tree.get(particle_name + '_m')
