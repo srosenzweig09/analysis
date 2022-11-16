@@ -73,7 +73,11 @@ class Signal():
          if 'presel' in filename: presel=True
          if 'gen' in filename: gen=True
          print(filename)
-         self.filename = re.search('NMSSM_.+/', filename).group()[:-1]
+         # print(filename.replace('_1M', ''))
+         # if '_1M' in filename: self.filename = filename.replace('_1M', '')
+         mx = re.search('MX_.+MY', filename).group().split('_')[1]
+         my = re.search('MY.+/', filename).group().split('_')[1].split('/')[0]
+         # self.filename = re.search('NMSSM_.+/', filename).group()[:-1]
       tree = uproot.open(f"{filename}:{treename}")
       self.tree = tree
 
@@ -91,7 +95,8 @@ class Signal():
          total = cutflow.to_numpy()[0][0]
          self.scaled_total = total
          samp, xsec = next( ((key,value) for key,value in xsecMap.items() if key in filename),("unk",1) )
-         self.sample = latexTitle(filename)
+         self.sample = latexTitle(mx,my)
+         # self.sample = latexTitle(self.filename)
          self.xsec = xsec
          self.lumi = lumiMap[year][0]
          self.scale = self.lumi*xsec/total
@@ -105,21 +110,21 @@ class Signal():
          self.cutflow = uproot.open(f"{filename}:h_cutflow_unweighted").to_numpy()[0]
 
       for k, v in tree.items():
-         if 'jet' in k or 'gen' in k:
+         if 'jet' in k or 'gen' in k or 'Y' in k or 'X' in k:
             setattr(self, k, v.array())
       self.jet_higgsIdx = (self.jet_signalId) // 2
       
       if 'dnn' in filename: self.evt_score = tree['b_6j_score'].array()
 
-      if not presel and not gen:
+      # if not presel and not gen:
          # self.tree['jet_higgsIdx'] = self.jet_higgsIdx
-         jets = ['HX_b1_', 'HX_b2_', 'H1_b1_', 'H1_b2_', 'H2_b1_', 'H2_b2_']
-         try: self.btag_avg = np.column_stack(([self.get(jet + 'DeepJet').to_numpy() for jet in jets])).sum(axis=1)/6
-         except: self.btag_avg = np.column_stack(([self.get(jet + 'btag').to_numpy() for jet in jets])).sum(axis=1)/6
+         # jets = ['HX_b1_', 'HX_b2_', 'H1_b1_', 'H1_b2_', 'H2_b1_', 'H2_b2_']
+         # try: self.btag_avg = np.column_stack(([self.get(jet + 'DeepJet').to_numpy() for jet in jets])).sum(axis=1)/6
+         # except: self.btag_avg = np.column_stack(([self.get(jet + 'btag').to_numpy() for jet in jets])).sum(axis=1)/6
 
-         self.btag_avg2 = np.column_stack(([self.get(jet + 'btag').to_numpy()**2 for jet in jets])).sum(axis=1)/6
+         # self.btag_avg2 = np.column_stack(([self.get(jet + 'btag').to_numpy()**2 for jet in jets])).sum(axis=1)/6
 
-         self.initialize_vars()
+      self.initialize_vars()
         
    def norm(self, nevents):
       return int(nevents*self.scale)
@@ -135,12 +140,13 @@ class Signal():
       """Returns the key.
       Use case: Sometimes keys are accessed directly, e.g. tree.key, but other times, the key may be accessed from a list of keys, e.g. tree.get(['key']). This function handles the latter case.
       """
-      if key in self.tree.keys():
-         return self.tree[key].array(library=library)
-      else:
+      try:
          arr = getattr(self, key)
          if library=='np' and not isinstance(arr, np.ndarray): arr = arr.to_numpy()
          return arr
+      except:
+         if key in self.tree.keys():
+            return self.tree[key].array(library=library)
     
    def np(self, key):
       """Returns the key as a numpy array."""
@@ -150,6 +156,52 @@ class Signal():
 
    def initialize_vars(self):
       """Initialize variables that don't exist in the original ROOT tree."""
+
+      sixbs_in_event = ak.sum(self.jet_signalId > -1, axis=1) == 6
+
+      matched_HX_b1 = Particle(kin_dict={
+         'pt' : self.jet_ptRegressed[self.jet_signalId == 0][sixbs_in_event],
+         'eta' : self.jet_eta[self.jet_signalId == 0][sixbs_in_event],
+         'phi' : self.jet_phi[self.jet_signalId == 0][sixbs_in_event],
+         'm' : self.jet_m[self.jet_signalId == 0][sixbs_in_event],
+      })
+      matched_HX_b2 = Particle(kin_dict={
+         'pt' : self.jet_ptRegressed[self.jet_signalId == 1][sixbs_in_event],
+         'eta' : self.jet_eta[self.jet_signalId == 1][sixbs_in_event],
+         'phi' : self.jet_phi[self.jet_signalId == 1][sixbs_in_event],
+         'm' : self.jet_m[self.jet_signalId == 1][sixbs_in_event],
+      })
+      matched_H1_b1 = Particle(kin_dict={
+         'pt' : self.jet_ptRegressed[self.jet_signalId == 2][sixbs_in_event],
+         'eta' : self.jet_eta[self.jet_signalId == 2][sixbs_in_event],
+         'phi' : self.jet_phi[self.jet_signalId == 2][sixbs_in_event],
+         'm' : self.jet_m[self.jet_signalId == 2][sixbs_in_event],
+      })
+      matched_H1_b2 = Particle(kin_dict={
+         'pt' : self.jet_ptRegressed[self.jet_signalId == 3][sixbs_in_event],
+         'eta' : self.jet_eta[self.jet_signalId == 3][sixbs_in_event],
+         'phi' : self.jet_phi[self.jet_signalId == 3][sixbs_in_event],
+         'm' : self.jet_m[self.jet_signalId == 3][sixbs_in_event],
+      })
+      matched_H2_b1 = Particle(kin_dict={
+         'pt' : self.jet_ptRegressed[self.jet_signalId == 4][sixbs_in_event],
+         'eta' : self.jet_eta[self.jet_signalId == 4][sixbs_in_event],
+         'phi' : self.jet_phi[self.jet_signalId == 4][sixbs_in_event],
+         'm' : self.jet_m[self.jet_signalId == 4][sixbs_in_event],
+      })
+      matched_H2_b2 = Particle(kin_dict={
+         'pt' : self.jet_ptRegressed[self.jet_signalId == 5][sixbs_in_event],
+         'eta' : self.jet_eta[self.jet_signalId == 5][sixbs_in_event],
+         'phi' : self.jet_phi[self.jet_signalId == 5][sixbs_in_event],
+         'm' : self.jet_m[self.jet_signalId == 5][sixbs_in_event],
+      })
+
+      self.matched_HX = matched_HX_b1 + matched_HX_b2
+      self.matched_H1 = matched_H1_b1 + matched_H1_b2
+      self.matched_H2 = matched_H2_b1 + matched_H2_b2
+
+
+
       HX_b1 = Particle(self, 'HX_b1')
       HX_b2 = Particle(self, 'HX_b2')
       H1_b1 = Particle(self, 'H1_b1')
@@ -181,12 +233,6 @@ class Signal():
 
       self.pt6bsum = HX_b1.pt + HX_b2.pt + H1_b1.pt + H1_b2.pt + H2_b1.pt + H2_b2.pt
 
-      # HX = HX_b1 + HX_b2
-      # H1 = H1_b1 + H1_b2
-      # H2 = H2_b1 + H2_b2
-
-      # Y = H1 + H2
-
       self.HX_dr = HX_b1.deltaR(HX_b2)
       self.H1_dr = H1_b1.deltaR(H1_b2)
       self.H2_dr = H2_b1.deltaR(H2_b2)
@@ -216,7 +262,16 @@ class Signal():
       # X = HX + H1 + H2
       self.X_m = X.m
 
-   def hist(self, var, bins, label=None, ax=None, title=True, lines=None, **kwargs):
+      self.avg_btag = np.average(np.column_stack((
+         self.HX_b1_btag.to_numpy(),
+         self.HX_b2_btag.to_numpy(),
+         self.H1_b1_btag.to_numpy(),
+         self.H1_b2_btag.to_numpy(),
+         self.H2_b1_btag.to_numpy(),
+         self.H2_b2_btag.to_numpy(),
+      )), axis=1)
+
+   def hist(self, var, bins, label=None, ax=None, title=True, lines=None, density=False, **kwargs):
    
       if ax is None: fig, ax = plt.subplots()
 
@@ -232,7 +287,7 @@ class Signal():
          n_all = []
          for arr,lbl,c,s in zip(var,label,colors,styles):
             if isinstance(arr, str): arr = self.get(arr)
-            n = Hist(arr, bins=bins, label=lbl, ax=ax, weights=self.scale, color=c, linestyle=s)
+            n = Hist(arr, bins=bins, label=lbl, ax=ax, weights=self.scale, color=c, linestyle=s, density=density)
             n_all.append(n)
             if n.max() > n_max: n_max = n.max()
          ax.legend()
@@ -241,9 +296,9 @@ class Signal():
          var = self.get(var)
       
       if label is not None:
-         n = Hist(var, bins=bins, ax=ax, weights=self.scale, label=label)
+         n = Hist(var, bins=bins, ax=ax, weights=self.scale, label=label, density=density)
       else:
-         n = Hist(var, bins=bins, ax=ax, weights=self.scale)
+         n = Hist(var, bins=bins, ax=ax, weights=self.scale, density=density)
       n_max = n.max()
 
       if isinstance(lines, list):
@@ -254,7 +309,7 @@ class Signal():
       if title:
          ax.set_title(self.sample)
 
-      if np.issubdtype(njet_bins.dtype, int):
+      if np.issubdtype(bins.dtype, int):
          ax.tick_params(axis='x', which='minor', color='white')
          ax.xaxis.set_ticks(bins)
          # ax.xaxis.set_tick_params(which='minor', bottom=False)
@@ -393,90 +448,90 @@ class Signal():
       
       self._sphere_region_bool = True
 
-   def region_yield(self, definition='rect', normalized=False, config=None, SR_hs_est=None, circ_region=None):
-      """Prints original or normalized estimation region yields."""
+   # def region_yield(self, definition='rect', normalized=False, config=None, SR_hs_est=None, circ_region=None):
+   #    """Prints original or normalized estimation region yields."""
 
-      if definition == 'rect':
-         if not self._rect_region_bool: self.rectangular_region(config)
+   #    if definition == 'rect':
+   #       if not self._rect_region_bool: self.rectangular_region(config)
 
-         CRls_yield = int(ak.sum(self.CRls_mask)*self.scale)
-         CRhs_yield = int(ak.sum(self.CRhs_mask)*self.scale)
-         VRls_yield = int(ak.sum(self.VRls_mask)*self.scale)
-         VRhs_yield = int(ak.sum(self.VRhs_mask)*self.scale)
-         SRls_yield = int(ak.sum(self.SRls_mask)*self.scale)
-         SRhs_yield = int(ak.sum(self.SRhs_mask)*self.scale)
+   #       CRls_yield = int(ak.sum(self.CRls_mask)*self.scale)
+   #       CRhs_yield = int(ak.sum(self.CRhs_mask)*self.scale)
+   #       VRls_yield = int(ak.sum(self.VRls_mask)*self.scale)
+   #       VRhs_yield = int(ak.sum(self.VRhs_mask)*self.scale)
+   #       SRls_yield = int(ak.sum(self.SRls_mask)*self.scale)
+   #       SRhs_yield = int(ak.sum(self.SRhs_mask)*self.scale)
 
-         if self._isdata:
-               SRhs_yield = 0
-         if SR_hs_est is not None:
-               SRhs_yield = int(SR_hs_est)
+   #       if self._isdata:
+   #             SRhs_yield = 0
+   #       if SR_hs_est is not None:
+   #             SRhs_yield = int(SR_hs_est)
 
-         if normalized:
-               total = CRls_yield + CRhs_yield + VRls_yield + VRhs_yield + SRls_yield + SRhs_yield
-               CRls_yield = int((CRls_yield / total)*100)
-               CRhs_yield = int((CRhs_yield / total)*100)
-               VRls_yield = int((VRls_yield / total)*100)
-               VRhs_yield = int((VRhs_yield / total)*100)
-               SRls_yield = int((SRls_yield / total)*100)
-               SRhs_yield = int((SRhs_yield / total)*100)
+   #       if normalized:
+   #             total = CRls_yield + CRhs_yield + VRls_yield + VRhs_yield + SRls_yield + SRhs_yield
+   #             CRls_yield = int((CRls_yield / total)*100)
+   #             CRhs_yield = int((CRhs_yield / total)*100)
+   #             VRls_yield = int((VRls_yield / total)*100)
+   #             VRhs_yield = int((VRhs_yield / total)*100)
+   #             SRls_yield = int((SRls_yield / total)*100)
+   #             SRhs_yield = int((SRhs_yield / total)*100)
          
-         yields = [CRls_yield, CRhs_yield, VRls_yield, VRhs_yield, SRls_yield, SRhs_yield]
-         cols = ['CR low-avg', 'CR high-avg', 'VR low-avg', 'VR high-avg', 'SR low-avg', 'SR high-avg']
-         data = {col:[value] for col,value in zip(cols,yields)}
+   #       yields = [CRls_yield, CRhs_yield, VRls_yield, VRhs_yield, SRls_yield, SRhs_yield]
+   #       cols = ['CR low-avg', 'CR high-avg', 'VR low-avg', 'VR high-avg', 'SR low-avg', 'SR high-avg']
+   #       data = {col:[value] for col,value in zip(cols,yields)}
 
-         df = pd.DataFrame(data=data, columns=cols)
-         pd.set_option('display.colheader_justify', 'center')
-         print(df.to_string(index=False))
-      elif definition == 'sphere':
-         if not self._sphere_region_bool: self.spherical_region(config)
+   #       df = pd.DataFrame(data=data, columns=cols)
+   #       pd.set_option('display.colheader_justify', 'center')
+   #       print(df.to_string(index=False))
+   #    elif definition == 'sphere':
+   #       if not self._sphere_region_bool: self.spherical_region(config)
 
-         A_CRls_yield = int(ak.sum(self.A_CRls_mask)*self.scale)
-         A_CRhs_yield = int(ak.sum(self.A_CRhs_mask)*self.scale)
-         A_SRls_yield = int(ak.sum(self.A_SRls_mask)*self.scale)
-         A_SRhs_yield = int(ak.sum(self.A_SRhs_mask)*self.scale)
+   #       A_CRls_yield = int(ak.sum(self.A_CRls_mask)*self.scale)
+   #       A_CRhs_yield = int(ak.sum(self.A_CRhs_mask)*self.scale)
+   #       A_SRls_yield = int(ak.sum(self.A_SRls_mask)*self.scale)
+   #       A_SRhs_yield = int(ak.sum(self.A_SRhs_mask)*self.scale)
 
-         V_CRls_yield = int(ak.sum(self.V_CRls_mask)*self.scale)
-         V_CRhs_yield = int(ak.sum(self.V_CRhs_mask)*self.scale)
-         V_SRls_yield = int(ak.sum(self.V_SRls_mask)*self.scale)
-         V_SRhs_yield = int(ak.sum(self.V_SRhs_mask)*self.scale)
+   #       V_CRls_yield = int(ak.sum(self.V_CRls_mask)*self.scale)
+   #       V_CRhs_yield = int(ak.sum(self.V_CRhs_mask)*self.scale)
+   #       V_SRls_yield = int(ak.sum(self.V_SRls_mask)*self.scale)
+   #       V_SRhs_yield = int(ak.sum(self.V_SRhs_mask)*self.scale)
 
-         if self._isdata:
-               A_SRhs_yield = 0
-         pred = False
-         if SR_hs_est is not None:
-               pred = True
-               if circ_region == 'AR':
-                  A_SRhs_yield = SR_hs_est
-               elif circ_region == 'VR':
-                  V_SRhs_yield = SR_hs_est
+   #       if self._isdata:
+   #             A_SRhs_yield = 0
+   #       pred = False
+   #       if SR_hs_est is not None:
+   #             pred = True
+   #             if circ_region == 'AR':
+   #                A_SRhs_yield = SR_hs_est
+   #             elif circ_region == 'VR':
+   #                V_SRhs_yield = SR_hs_est
 
-         A_total = A_CRls_yield + A_CRhs_yield + A_SRls_yield + A_SRhs_yield
-         V_total = V_CRls_yield + V_CRhs_yield + V_SRls_yield + V_SRhs_yield
+   #       A_total = A_CRls_yield + A_CRhs_yield + A_SRls_yield + A_SRhs_yield
+   #       V_total = V_CRls_yield + V_CRhs_yield + V_SRls_yield + V_SRhs_yield
 
-         if normalized:
-               A_CRls_yield = A_CRls_yield / A_total
-               A_CRhs_yield = A_CRhs_yield / A_total
-               A_SRls_yield = A_SRls_yield / A_total
-               A_SRhs_yield = A_SRhs_yield / A_total
+   #       if normalized:
+   #             A_CRls_yield = A_CRls_yield / A_total
+   #             A_CRhs_yield = A_CRhs_yield / A_total
+   #             A_SRls_yield = A_SRls_yield / A_total
+   #             A_SRhs_yield = A_SRhs_yield / A_total
 
-               V_CRls_yield = V_CRls_yield / V_total
-               V_CRhs_yield = V_CRhs_yield / V_total
-               V_SRls_yield = V_SRls_yield / V_total
-               V_SRhs_yield = V_SRhs_yield / V_total
+   #             V_CRls_yield = V_CRls_yield / V_total
+   #             V_CRhs_yield = V_CRhs_yield / V_total
+   #             V_SRls_yield = V_SRls_yield / V_total
+   #             V_SRhs_yield = V_SRhs_yield / V_total
 
-         regions = np.repeat(['Analysis Region', 'Validation Region'],4)
-         cols = np.tile(['CR low-avg', 'CR high-avg', 'SR low-avg', 'SR high-avg'],2)
-         if pred: cols[3], cols[7] = 'SR high-avg (predicted)', 'SR high-avg (predicted)'
-         yields = [A_CRls_yield, A_CRhs_yield, A_SRls_yield, A_SRhs_yield, V_CRls_yield, V_CRhs_yield, V_SRls_yield, V_SRhs_yield]
-         yields = [int(value) for value in yields]
+   #       regions = np.repeat(['Analysis Region', 'Validation Region'],4)
+   #       cols = np.tile(['CR low-avg', 'CR high-avg', 'SR low-avg', 'SR high-avg'],2)
+   #       if pred: cols[3], cols[7] = 'SR high-avg (predicted)', 'SR high-avg (predicted)'
+   #       yields = [A_CRls_yield, A_CRhs_yield, A_SRls_yield, A_SRhs_yield, V_CRls_yield, V_CRhs_yield, V_SRls_yield, V_SRhs_yield]
+   #       yields = [int(value) for value in yields]
 
-         index = [(region, col) for region,col in zip(regions,cols)]
+   #       index = [(region, col) for region,col in zip(regions,cols)]
 
-         index = pd.MultiIndex.from_tuples(index)
+   #       index = pd.MultiIndex.from_tuples(index)
 
-         yields = pd.Series(yields, index=index)
-         print("\nPrinting yields.")
-         print(yields)
+   #       yields = pd.Series(yields, index=index)
+   #       print("\nPrinting yields.")
+   #       print(yields)
 
    def get_df(self, mask, variables):
       features = {}
@@ -709,246 +764,15 @@ class Signal():
       return p_weighted, p_unweighted
 
 
-def presels(tree, pt=20, eta=2.5, jetid=6, puid=6):
-   pt_mask = ak.sum(tree.jet_pt > pt, axis=1) >= 6
-   eta_mask = ak.sum(abs(tree.jet_eta) < eta, axis=1) >= 6
-   jetid_mask = ak.sum(tree.jet_id == jetid, axis=1) >= 6
-   pt_under50 = tree.jet_pt < 50
-   puid_mask = ak.sum(tree.jet_puid[pt_under50] == puid, axis=1) + ak.sum(~pt_under50, axis=1) >= 6
+# def presels(tree, pt=20, eta=2.5, jetid=6, puid=6):
+#    pt_mask = ak.sum(tree.jet_pt > pt, axis=1) >= 6
+#    eta_mask = ak.sum(abs(tree.jet_eta) < eta, axis=1) >= 6
+#    jetid_mask = ak.sum(tree.jet_id == jetid, axis=1) >= 6
+#    pt_under50 = tree.jet_pt < 50
+#    puid_mask = ak.sum(tree.jet_puid[pt_under50] == puid, axis=1) + ak.sum(~pt_under50, axis=1) >= 6
 
-   presel_mask = pt_mask & eta_mask & jetid_mask & puid_mask
-   return tree[presel_mask]
-
-
-
-class DataTraining():
-   def __init__(self, config, b_cut=0.55, gnn_cut=0.76):
-      data_tree_ar = uproot.open("/uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_6_19_patch2/src/sixB/analysis/sixBanalysis/data_ar.root:sixBtree")
-      data_tree_vr = uproot.open("/uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_6_19_patch2/src/sixB/analysis/sixBanalysis/data_vr.root:sixBtree")
-
-      Nestimators  = int(config['BDT']['Nestimators'])
-      learningRate = float(config['BDT']['learningRate'])
-      maxDepth     = int(config['BDT']['maxDepth'])
-      minLeaves    = int(config['BDT']['minLeaves'])
-      GBsubsample  = float(config['BDT']['GBsubsample'])
-      randomState  = int(config['BDT']['randomState'])
-      variables = config['BDT']['variables']
-      if isinstance(variables, str):
-         variables = variables.split(", ")
-
-      data_gnn_score_ar = ak.sort(data_tree_ar['jet_gnn_score'].array(), ascending=False, axis=1)[:,:6]
-      data_gnn_score_vr = ak.sort(data_tree_vr['jet_gnn_score'].array(), ascending=False, axis=1)[:,:6]
-
-      data_gnn_avg_ar = ak.sum(data_gnn_score_ar, axis=1) / 6
-      data_gnn_avg_vr = ak.sum(data_gnn_score_vr, axis=1) / 6
-
-      asr_gnn_mask = data_gnn_avg_ar > 0.75
-      asr_mask = data_tree_ar['bkg_mask'].array() # already accounts for cut on average btag score
-      acr_mask = ~asr_mask & asr_gnn_mask
-      asr_mask = asr_mask & asr_gnn_mask
-
-      # analysis region
-      data_avg_btag_ar = data_tree_ar['jet_avg_btag'].array()
-      asr_avg_b = data_avg_btag_ar[asr_mask]
-      acr_avg_b = data_avg_btag_ar[acr_mask]
-
-      acr_ls_mask = (acr_avg_b < b_cut)
-      acr_hs_mask = (acr_avg_b > b_cut)
-
-      # validation region
-      data_avg_btag_vr = data_tree_vr['jet_avg_btag'].array()
-
-      vr_gnn_mask = data_gnn_avg_vr > 0.75
-      vsr_mask = data_tree_vr['v_sr_mask'].array() & vr_gnn_mask
-      vsr_avg_b = data_avg_btag_vr[vsr_mask]
-      vsr_ls_mask = (vsr_avg_b < b_cut)
-      vsr_hs_mask = (vsr_avg_b > b_cut)
-
-      vcr_mask = data_tree_vr['v_cr_mask'].array() & vr_gnn_mask
-      vcr_avg_b = data_avg_btag_vr[vcr_mask]
-      vcr_ls_mask = (vcr_avg_b < b_cut)
-      vcr_hs_mask = (vcr_avg_b > b_cut)
-
-      asr_X_m = data_tree_ar['X_m'].array()[asr_mask]
-      acr_X_m = data_tree_ar['X_m'].array()[acr_mask]
-      vsr_X_m = data_tree_vr['X_m'].array()[vsr_mask]
-      vcr_X_m = data_tree_vr['X_m'].array()[vcr_mask]
-
-      asr_ls_X_m = data_tree_ar['X_m'].array()[asr_mask] # low score by construction
-
-      acr_ls_X_m = data_tree_ar['X_m'].array()[acr_mask][acr_ls_mask]
-      vsr_ls_X_m = data_tree_vr['X_m'].array()[vsr_mask][vsr_ls_mask]
-      vcr_ls_X_m = data_tree_vr['X_m'].array()[vcr_mask][vcr_ls_mask]
-
-      acr_hs_X_m = data_tree_ar['X_m'].array()[acr_mask][acr_hs_mask]
-      vsr_hs_X_m = data_tree_vr['X_m'].array()[vsr_mask][vsr_hs_mask]
-      vcr_hs_X_m = data_tree_vr['X_m'].array()[vcr_mask][vcr_hs_mask]
-
-      acr_TF = sum(acr_hs_mask)/sum(acr_ls_mask)
-      vcr_TF = sum(vcr_hs_mask)/sum(vcr_ls_mask)
-
-      acr_ls_weights = np.ones(ak.sum(acr_ls_mask))*acr_TF
-      acr_hs_weights = np.ones(ak.sum([acr_hs_mask]))
-      vcr_ls_weights = np.ones(ak.sum(vcr_ls_mask))*vcr_TF
-      vcr_hs_weights = np.ones(ak.sum(vcr_hs_mask))
-
-      acr_ls_features = {}
-      acr_hs_features = {}
-      asr_ls_features = {}
-      vcr_ls_features = {}
-      vcr_hs_features = {}
-      vsr_ls_features = {}
-      vsr_hs_features = {}
-      for var in variables:
-         acr_ls_features[var] = abs(data_tree_ar[var].array())[acr_ls_mask]
-         acr_hs_features[var] = abs(data_tree_ar[var].array())[acr_hs_mask]
-         asr_ls_features[var] = abs(data_tree_ar[var].array())[asr_mask]
-         vcr_ls_features[var] = abs(data_tree_vr[var].array()[vcr_ls_mask])
-         vcr_hs_features[var] = abs(data_tree_vr[var].array()[vcr_hs_mask])
-         vsr_ls_features[var] = abs(data_tree_vr[var].array())[vsr_ls_mask]
-         vsr_hs_features[var] = abs(data_tree_vr[var].array())[vsr_hs_mask]
-      acr_ls_df = pd.DataFrame(acr_ls_features)
-      acr_hs_df = pd.DataFrame(acr_hs_features)
-      asr_ls_df = pd.DataFrame(asr_ls_features)
-      vcr_ls_df = pd.DataFrame(vcr_ls_features)
-      vcr_hs_df = pd.DataFrame(vcr_hs_features)
-      vsr_ls_df = pd.DataFrame(vsr_ls_features)
-      vsr_hs_df = pd.DataFrame(vsr_hs_features)
-
-      acr_reweighter_base = reweight.GBReweighter(
-         n_estimators=Nestimators, 
-         learning_rate=learningRate, 
-         max_depth=maxDepth, 
-         min_samples_leaf=minLeaves,
-         gb_args={'subsample': GBsubsample})
-
-      acr_reweighter = reweight.FoldingReweighter(acr_reweighter_base, random_state=randomState, n_folds=2, verbose=False)
-      acr_reweighter.fit(acr_ls_df,acr_hs_df,acr_ls_weights,acr_hs_weights)
-
-      asr_initial_weights = np.ones(ak.sum(asr_mask))*acr_TF
-      acr_initial_weights = np.ones(ak.sum(acr_ls_mask))*acr_TF
-      vsr_initial_weights = np.ones(ak.sum(vsr_ls_mask))*vcr_TF
-
-      asr_weights_pred = acr_reweighter.predict_weights(asr_ls_df,asr_initial_weights,lambda x: np.mean(x, axis=0))
-      acr_weights_pred = acr_reweighter.predict_weights(acr_ls_df,acr_initial_weights,lambda x: np.mean(x, axis=0))
-
-      n_acr_hs, _ = np.histogram(
-         acr_hs_X_m.to_numpy(), 
-         bins=m_bins
-         )
-      
-      n_acr_hs_pred, _ = np.histogram(
-         acr_ls_X_m.to_numpy(),
-         bins=m_bins,
-         weights=acr_weights_pred
-      )
-
-      acr_TF_bvb = n_acr_hs / n_acr_hs_pred
-
-      n_asr_hs_pred, _ = np.histogram(
-         asr_X_m.to_numpy(),
-         bins=m_bins,
-         weights=asr_weights_pred
-      )
-
-      n_asr_hs_pred, _ = np.histogram(
-         x_X_m,
-         bins=m_bins,
-         weights=n_asr_hs_pred*acr_TF_bvb
-      )
-
-      ROOTHist(n_asr_hs_pred, 'data', 'data')
-
-      vcr_reweighter_base = reweight.GBReweighter(
-         n_estimators=Nestimators, 
-         learning_rate=learningRate, 
-         max_depth=maxDepth, 
-         min_samples_leaf=minLeaves,
-         gb_args={'subsample': GBsubsample})
-
-      vcr_reweighter = reweight.FoldingReweighter(vcr_reweighter_base, random_state=randomState, n_folds=2, verbose=False)
-      vcr_reweighter.fit(vcr_ls_df,vcr_hs_df,vcr_ls_weights,vcr_hs_weights)
-
-      vsr_weights_pred = vcr_reweighter.predict_weights(vsr_ls_df,vsr_initial_weights,lambda x: np.mean(x, axis=0))
-      vcr_weights_pred = vcr_reweighter.predict_weights(vcr_ls_df,np.ones(ak.sum(vcr_ls_mask))*vcr_TF,lambda x: np.mean(x, axis=0))
-
-      n_vcrls, _ = np.histogram(
-         vcr_ls_X_m.to_numpy(),
-         bins=m_bins
-      )
-
-      n_vcrhs, _ = np.histogram(
-         vcr_hs_X_m.to_numpy(),
-         bins=m_bins
-      )
-
-      n_vcrhs_pred, _ = np.histogram(
-         vcr_ls_X_m.to_numpy(),
-         bins=m_bins,
-         weights=vcr_weights_pred
-      )
-      vcr_TF_bvb = np.nan_to_num(n_vcrhs / n_vcrhs_pred, 0)
-
-      n_vsrhs, _ = np.histogram(
-         vsr_hs_X_m.to_numpy(),
-         bins=m_bins
-      )
-
-      n_vsrhs_pred, _ = np.histogram(
-         vsr_ls_X_m.to_numpy(),
-         bins=m_bins,
-         weights=vsr_weights_pred
-      )
-
-      n_vsrhs_pred, _ = np.histogram(
-         x_X_m,
-         bins=m_bins,
-         weights=n_vsrhs_pred*vcr_TF_bvb
-      )
-
-      s_asrhs_pred, _ = np.histogram(
-         asr_ls_X_m.to_numpy(),
-         bins=m_bins,
-         weights=asr_weights_pred**2
-      )
-
-      s_asrhs_pred, _ = np.histogram(
-         x_X_m,
-         bins=m_bins,
-         weights=s_asrhs_pred*vcr_TF_bvb
-      )
-
-      s_vsrhs_pred, _ = np.histogram(
-         vsr_ls_X_m.to_numpy(),
-         bins=m_bins,
-         weights=vsr_weights_pred**2
-      )
-
-      s_vsrhs_pred, _ = np.histogram(
-         x_X_m,
-         bins=m_bins,
-         weights=s_vsrhs_pred*vcr_TF_bvb
-      )
-
-
-      n_vcr_ls = n_vcrls.sum()
-      n_vcr_hs = n_vcrhs.sum()
-
-      n_vsr_pred = n_vsrhs_pred.sum()
-      n_asr_pred = n_asr_hs_pred.sum()
-
-      s_vcr_ls = 1 / np.sqrt(n_vcr_ls)
-      s_vcr_hs = 1 / np.sqrt(n_vcr_hs)
-      s_vsr_pred = 1 / np.sqrt(ak.sum(s_vsrhs_pred))
-      s_asr_pred = 1 / np.sqrt(ak.sum(s_asrhs_pred))
-
-      self.bkg_vrpred = round(1 + np.where(s_vsr_pred/n_vsr_pred > s_asr_pred/n_asr_pred, np.sqrt((s_vsr_pred/n_vsr_pred)**2 - (s_asr_pred/n_asr_pred)**2), 0), 2)
-
-      self.cr_tf = 1 + np.sqrt(1/n_vcr_hs + 1/n_vcr_ls)
-
-      self.vr_prec = 1 + np.sqrt(1/n_vsr_pred*100**2 - 1/n_asr_pred*100**2)
-
-
+#    presel_mask = pt_mask & eta_mask & jetid_mask & puid_mask
+#    return tree[presel_mask]
 
 
 
@@ -986,7 +810,7 @@ class GNNSelection():
       self.tree = tree
 
       for k in self._var_keys:
-            setattr(self, k, tree[k].array())
+         setattr(self, k, tree[k].array())
 
       self.jet_gnn_score = ak.sort(tree['jet_gnn_score'].array(), ascending=False, axis=1)[:,:6]
       self.avg_gnn = ak.sum(self.jet_gnn_score, axis=1) / 6
@@ -1030,55 +854,437 @@ class GNNSelection():
       self.exp_limit = np.array(exp_limit)*300 # fb
 
 
-class SixB():
 
-   def __init__(self, filename, treename='sixBtree', year=2018, presel=False, gen=False, b_cutflow=False):
-      print(filename)
-      self.filename = re.search('NMSSM_.+/', filename).group()[:-1]
+
+
+
+
+
+from configparser import ConfigParser
+# Parent Class
+class Tree():
+
+   def __init__(self, filename, treename='sixBtree', cfg_file=None, year=2018, selection='3322'):
+
       tree = uproot.open(f"{filename}:{treename}")
       self.tree = tree
-      self.nevents = len(tree['Run'].array())
-
       cutflow = uproot.open(f"{filename}:h_cutflow_unweighted")
-      # save total number of events for scaling purposes
-      total = cutflow.to_numpy()[0][0]
-      self.scaled_total = total
-      samp, xsec = next( ((key,value) for key,value in xsecMap.items() if key in filename),("unk",1) )
-      self.sample = latexTitle(filename)
-      self.xsec = xsec
-      self.lumi = lumiMap[year][0]
-      self.scale = self.lumi*xsec/total
+      self.nevents = int(cutflow.to_numpy()[0][-1])
+      self.total = int(cutflow.to_numpy()[0][0])
+      self.scale = 1
+
       self.cutflow = (cutflow.to_numpy()[0]*self.scale).astype(int)
-      self.cutflow_norm = (cutflow.to_numpy()[0]/cutflow.to_numpy()[0][0]).astype(int)
-      self.mxmy = self.sample.replace('$','').replace('_','').replace('= ','_').replace(', ','_').replace(' GeV','')
+      self.cutflow_norm = (cutflow.to_numpy()[0]/cutflow.to_numpy()[0][0]*100).astype(int)
+
+      self.initialize_vars(selection)
+
+      self.cfg = cfg_file
+
+      self.spherical_region()
+
+   def keys(self):
+      return self.tree.keys()
+
+   def find_key(self, start):
+      for key in self.keys():
+         if start in key : print(key)
+
+   def get(self, key, library='ak'):
+      """Returns the key.
+      Use case: Sometimes keys are accessed directly, e.g. tree.key, but other times, the key may be accessed from a list of keys, e.g. tree.get(['key']). This function handles the latter case.
+      """
+      try: 
+         getattr(self, key)
+         if library=='np' and not isinstance(arr, np.ndarray): arr = arr.to_numpy()
+      except:
+         return self.tree[key].array(library=library)
+    
+   def np(self, key):
+      """Returns the key as a numpy array."""
+      np_arr = self.get(key, library='np')
+      if not isinstance(np_arr, np.ndarray): np_arr = np_arr.to_numpy()
+      return np_arr
+
+   def initialize_vars(self, selection):
+      """Initialize variables that don't exist in the original ROOT tree."""
+
+      # allow for various b tag cuts
+      jet_btag = self.tree['jet_btag'].array()
+      self.btag_mask = ak.count(jet_btag, axis=1) > 0
+      for i,s in enumerate(selection):
+         btag_cut = jet_btagWP[int(s)]
+         jet_pass_criteria = jet_btag[:,i] > btag_cut
+         self.btag_mask = self.btag_mask & jet_pass_criteria
 
       pattern = re.compile('H.+_') # Search for any keys beginning with an 'H' and followed somewhere by a '_'
-      for k, v in tree.items():
-         if re.match(pattern, k):
-               setattr(self, k, v.array())
+      for k, v in self.tree.items():
+         if re.match(pattern, k) or 'jet' in k or 'Y' in k or 'X' in k:
+            setattr(self, k, v.array()[self.btag_mask])
+
+      HX_b1 = Particle(self, 'HX_b1')
+      HX_b2 = Particle(self, 'HX_b2')
+      H1_b1 = Particle(self, 'H1_b1')
+      H1_b2 = Particle(self, 'H1_b2')
+      H2_b1 = Particle(self, 'H2_b1')
+      H2_b2 = Particle(self, 'H2_b2')
+
+      HX = Particle(self, 'HX')
+      H1 = Particle(self, 'H1')
+      H2 = Particle(self, 'H2')
+
+      Y = Particle(self, 'Y')
+
+      X = Particle(self, 'X')
+
+      bs = [HX_b1, HX_b2, H1_b1, H1_b2, H2_b1, H2_b2]
+      pair1 = [HX_b1]*5 + [HX_b2]*4 + [H1_b1]*3 + [H1_b2]*2 + [H2_b1]
+      pair2 = bs[1:] + bs[2:] + bs[3:] + bs[4:] + [bs[-1]]
+
+      dR6b = []
+      dEta6b = []
+      for b1, b2 in zip(pair1, pair2):
+         dR6b.append(b1.deltaR(b2).to_numpy())
+         dEta6b.append(abs(b1.deltaEta(b2).to_numpy()))
+      dR6b = np.column_stack(dR6b)
+      dEta6b = np.column_stack(dEta6b)
+      self.dR6bmin = dR6b.min(axis=1)
+      self.dEta6bmax = dEta6b.max(axis=1)
+
+      self.pt6bsum = HX_b1.pt + HX_b2.pt + H1_b1.pt + H1_b2.pt + H2_b1.pt + H2_b2.pt
+
+      self.HX_dr = HX_b1.deltaR(HX_b2)
+      self.H1_dr = H1_b1.deltaR(H1_b2)
+      self.H2_dr = H2_b1.deltaR(H2_b2)
+
+      self.HX_H1_dEta = HX.deltaEta(H1)
+      self.H1_H2_dEta = H1.deltaEta(H2)
+      self.H2_HX_dEta = H2.deltaEta(HX)
+
+      self.HX_H1_dPhi = HX.deltaPhi(H1)
+      self.H1_H2_dPhi = H1.deltaPhi(H2)
+      self.H2_HX_dPhi = H2.deltaPhi(HX)
+
+      self.HX_H1_dr = HX.deltaR(H1)
+      self.HX_H2_dr = H2.deltaR(HX)
+      self.H1_H2_dr = H1.deltaR(H2)
+      
+      self.Y_HX_dr = Y.deltaR(HX)
+
+      self.HX_costheta = np.cos(HX.P4.theta)
+      self.H1_costheta = np.cos(H1.P4.theta)
+      self.H2_costheta = np.cos(H2.P4.theta)
+
+      self.HX_H1_dr = HX.deltaR(H1)
+      self.H1_H2_dr = H2.deltaR(H1)
+      self.H2_HX_dr = HX.deltaR(H2)
+
+      # X = HX + H1 + H2
+      self.X_m = X.m
+
+      self.btag_avg = np.average(np.column_stack((
+         self.HX_b1_btag.to_numpy(),
+         self.HX_b2_btag.to_numpy(),
+         self.H1_b1_btag.to_numpy(),
+         self.H1_b2_btag.to_numpy(),
+         self.H2_b1_btag.to_numpy(),
+         self.H2_b2_btag.to_numpy(),
+      )), axis=1)
+
+   def spherical_region(self):
+
+      self.config = ConfigParser()
+      self.config.optionxform = str
+      self.config.read(self.cfg)
+      self.config = self.config
+
+      minMX = int(self.config['plot']['minMX'])
+      maxMX = int(self.config['plot']['maxMX'])
+      if self.config['plot']['style'] == 'linspace':
+         nbins = int(self.config['plot']['nbins'])
+         self.mBins = np.linspace(minMX,maxMX,nbins)
+      if self.config['plot']['style'] == 'arange':
+         step = int(self.config['plot']['steps'])
+         self.mBins = np.arange(minMX,maxMX,step)
+
+      self.x_mBins = (self.mBins[:-1] + self.mBins[1:])/2
+
+      """Defines spherical estimation region masks."""
+      self.AR_center = float(self.config['spherical']['ARcenter'])
+      self.SR_edge   = float(self.config['spherical']['rInner'])
+      self.CR_edge   = float(self.config['spherical']['rOuter'])
+
+      self.VR_center = int(self.AR_center + (self.SR_edge + self.CR_edge)/np.sqrt(2))
+
+      higgs = ['HX_m', 'H1_m', 'H2_m']
+
+      deltaM = np.column_stack(([getattr(self, mH).to_numpy() - self.AR_center for mH in higgs]))
+      deltaM = deltaM * deltaM
+      deltaM = deltaM.sum(axis=1)
+      AR_deltaM = np.sqrt(deltaM)
+      self.A_SR_mask = AR_deltaM <= self.SR_edge # Analysis SR
+      if self._is_signal: self.A_SR_avgbtag = self.btag_avg[self.A_SR_mask]
+      self.A_CR_mask = (AR_deltaM > self.SR_edge) & (AR_deltaM <= self.CR_edge) # Analysis CR
+      if not self._is_signal: self.A_CR_avgbtag = self.btag_avg[self.A_CR_mask]
+
+      VR_deltaM = np.column_stack(([abs(getattr(self, mH).to_numpy() - self.VR_center) for mH in higgs]))
+      VR_deltaM = VR_deltaM * VR_deltaM
+      VR_deltaM = VR_deltaM.sum(axis=1)
+      VR_deltaM = np.sqrt(VR_deltaM)
+      self.V_SR_mask = VR_deltaM <= self.SR_edge # Validation SR
+      self.V_CR_mask = (VR_deltaM > self.SR_edge) & (VR_deltaM <= self.CR_edge) # Validation CR
+
+      score_cut = float(self.config['score']['threshold'])
+      self.ls_mask = self.btag_avg < score_cut # ls
+      self.hs_mask = self.btag_avg >= score_cut # hs
 
 
-      def tree_keys(self):
-         return self.tree.keys()
+      # b_cut = float(config['score']['n'])
+      # self.nloose_b = ak.sum(self.get('jet_btag') > 0.0490, axis=1)
+      # self.nmedium_b = ak.sum(self.get('jet_btag') > 0.2783, axis=1)
+      # ls_mask = self.nmedium_b < b_cut # ls
+      # hs_mask = self.nmedium_b >= b_cut # hs
 
-      def keys(self):
-         return getattr(self, )
+      self.A_CRls_mask = self.A_CR_mask & self.ls_mask
+      self.A_CRhs_mask = self.A_CR_mask & self.hs_mask
+      self.A_SRls_mask = self.A_SR_mask & self.ls_mask
+      self.A_SRhs_mask = self.A_SR_mask & self.hs_mask
+      if ~self._is_signal:
+         self.blind_mask = ~self.A_SRhs_mask
+         self.A_SRhs_mask = np.zeros_like(self.A_SR_mask)
+      # else: self.A_CR_avgbtag = self.btag_avg[self.V_CR_mask]
+
+      self.V_CRls_mask = self.V_CR_mask & self.ls_mask
+      self.V_CRhs_mask = self.V_CR_mask & self.hs_mask
+      self.V_SRls_mask = self.V_SR_mask & self.ls_mask
+      self.V_SRhs_mask = self.V_SR_mask & self.hs_mask
 
 
-class Data():
+class SixB(Tree):
 
-   def __init__(self, filename, treename='sixBtree', year=2018, b_cutflow=False):
-      tree = uproot.open(f"{filename}:{treename}")
-      self.tree = tree
-      self.cutflow = uproot.open(f"{filename}:h_cutflow_unweighted").to_numpy()[0]
-      self.nevents = len(tree['Run'].array())
+   _is_signal = True
 
-      for k, v in tree.items():
-         if 'jet' in k or 'gen' in k:
+   def __init__(self, filename, config, treename='sixBtree', year=2018):
+      super().__init__(filename, treename, config, year)
+
+      print(filename)
+      mx = re.search('MX_.+MY', filename).group().split('_')[1]
+      my = re.search('MY_.+/', filename).group().split('_')[1]
+      # self.filename = re.search('NMSSM_.+/', filename).group()[:-1]
+      self.sample = latexTitle(mx,my)
+      self.mxmy = self.sample.replace('$','').replace('_','').replace('= ','_').replace(', ','_').replace(' GeV','')
+
+      samp, xsec = next( ((key,value) for key,value in xsecMap.items() if key in filename),("unk",1) )
+      self.xsec = xsec
+      self.lumi = lumiMap[year][0]
+      self.scale = self.lumi*xsec/self.nevents
+
+      for k, v in self.tree.items():
+         if 'gen' in k:
             setattr(self, k, v.array())
-      self.jet_higgsIdx = (self.jet_signalId + 2) // 2
+      
+      self.jet_higgsIdx = (self.jet_signalId) // 2
+      # self.avg_btag = 
 
-      jets = ['HX_b1_', 'HX_b2_', 'H1_b1_', 'H1_b2_', 'H2_b1_', 'H2_b2_']
-      self.btag_avg = np.column_stack(([self.get(jet + 'btag').to_numpy() for jet in jets])).sum(axis=1)/6
+   def get_m_avgb_hist(self):
+      m_bins = np.linspace(50,200,100)
+      max_score = 1 + 1e-6
+      score_bins = np.linspace(0,max_score,100)
 
-      self.initialize_vars()
+      fig, ax = plt.subplots()
+
+      n, xe, ye, im = Hist2d(self.HX_m, self.btag_avg, bins=(m_bins, score_bins), ax=ax)
+      ax.set_xlabel(r"{H_X} mass [GeV]")
+      ax.set_ylabel("Average b tag score of six jets")
+
+      fig.colorbar(im, ax=ax)
+
+      return fig, ax
+
+   def sr_hist(self):
+      fig, ax = plt.subplots()
+      n = Hist(self.X_m[self.A_SRls_mask], bins=self.mBins, ax=ax, density=False, weights=self.scale)
+      ax.set_xlabel(r"M$_\mathrm{X}$ [GeV]")
+      ax.set_ylabel("AU")
+      return n
+
+
+class Data(Tree):
+
+   _is_signal = False
+
+   def __init__(self, filename, config, treename='sixBtree', year=2018):
+      super().__init__(filename, treename, config, year)
+
+      self.Nestimators  = int(self.config['BDT']['Nestimators'])
+      self.learningRate = float(self.config['BDT']['learningRate'])
+      self.maxDepth     = int(self.config['BDT']['maxDepth'])
+      self.minLeaves    = int(self.config['BDT']['minLeaves'])
+      self.GBsubsample  = float(self.config['BDT']['GBsubsample'])
+      self.randomState  = int(self.config['BDT']['randomState'])
+      variables = self.config['BDT']['variables']
+      if isinstance(variables, str):
+         variables = variables.split(", ")
+      self.variables = variables
+
+   def get_df(self, mask, variables):
+      features = {}
+      for var in variables:
+         features[var] = abs(getattr(self, var)[mask])
+      df = pd.DataFrame(features)
+      return df
+
+   def train_ar(self):
+      print(".. initializing transfer factor")
+      self.AR_TF = sum(self.A_CRhs_mask)/sum(self.A_CRls_mask)
+      ls_weights = np.ones(ak.sum(self.A_CRls_mask))*self.AR_TF
+      hs_weights = np.ones(ak.sum([self.A_CRhs_mask]))
+
+      print(".. initializing dataframes of variables")
+      AR_df_ls = self.get_df(self.A_CRls_mask, self.variables)
+      AR_df_hs = self.get_df(self.A_CRhs_mask, self.variables)
+
+      np.random.seed(self.randomState) #Fix any random seed using numpy arrays
+      print(".. calling reweight.GBReweighter")
+      reweighter_base = reweight.GBReweighter(
+         n_estimators=self.Nestimators, 
+         learning_rate=self.learningRate, 
+         max_depth=self.maxDepth, 
+         min_samples_leaf=self.minLeaves,
+         gb_args={'subsample': self.GBsubsample})
+
+      print(".. calling reweight.FoldingReweighter")
+      reweighter = reweight.FoldingReweighter(reweighter_base, random_state=self.randomState, n_folds=2, verbose=False)
+
+      print(".. calling reweighter.fit for AR")
+      reweighter.fit(AR_df_ls,AR_df_hs,ls_weights,hs_weights)
+      self.AR_reweighter = reweighter
+
+      print(".. predicting AR hs weights")
+      AR_df_ls = self.get_df(self.A_SRls_mask, self.variables)
+      initial_weights = np.ones(ak.sum(self.A_SRls_mask))*self.AR_TF
+
+      self.AR_ls_weights = self.AR_reweighter.predict_weights(AR_df_ls,initial_weights,lambda x: np.mean(x, axis=0))
+
+   def train_vr(self):
+      
+      print(".. initializing transfer factor")
+      self.VR_TF = sum(self.V_CRhs_mask)/sum(self.V_CRls_mask)
+      ls_weights = np.ones(ak.sum(self.V_CRls_mask))*self.VR_TF
+      hs_weights = np.ones(ak.sum([self.V_CRhs_mask]))
+
+      print(".. initializing dataframes of variables")
+      df_ls = self.get_df(self.V_CRls_mask, self.variables)
+      df_hs = self.get_df(self.V_CRhs_mask, self.variables)
+
+      np.random.seed(self.randomState) #Fix any random seed using numpy arrays
+      print(".. calling reweight.GBReweighter")
+      reweighter_base = reweight.GBReweighter(
+         n_estimators=self.Nestimators, 
+         learning_rate=self.learningRate, 
+         max_depth=self.maxDepth, 
+         min_samples_leaf=self.minLeaves,
+         gb_args={'subsample': self.GBsubsample})
+
+      print(".. calling reweight.FoldingReweighter")
+      reweighter = reweight.FoldingReweighter(reweighter_base, random_state=self.randomState, n_folds=2, verbose=False)
+
+      print(".. calling reweighter.fit")
+      reweighter.fit(df_ls,df_hs,ls_weights,hs_weights)
+      self.VR_reweighter = reweighter
+
+      print(".. predicting VR hs weights")
+      V_cr_df_ls = self.get_df(self.V_CRls_mask, self.variables)
+      V_cr_initial_weights = np.ones(ak.sum(self.V_CRls_mask))*self.VR_TF
+      self.V_CR_ls_weights = self.VR_reweighter.predict_weights(V_cr_df_ls,V_cr_initial_weights,lambda x: np.mean(x, axis=0))
+
+      V_sr_df_ls = self.get_df(self.V_SRls_mask, self.variables)
+      V_sr_initial_weights = np.ones(ak.sum(self.V_SRls_mask))*self.VR_TF
+      self.V_SR_ls_weights = self.VR_reweighter.predict_weights(V_sr_df_ls,V_sr_initial_weights,lambda x: np.mean(x, axis=0))
+
+   def train(self):
+      self.config.read(self.cfg)
+      print(".. training in validation region")
+      self.train_vr()
+      print(".. training in analysis region")
+      self.train_ar()
+
+   def vr_hist(self, ls_mask, hs_mask, weights, density=False, vcr=False):
+      # ratio = ak.sum(self.V_CRls_mask) / ak.sum(self.V_CRhs_mask) 
+      ratio = 1
+      # fig, axs = plt.subplots()
+
+      fig, axs = plt.subplots(nrows=2, ncols=1, gridspec_kw={'height_ratios':[4,1]})
+
+      # fig.suptitle("Validation Control Region")
+      
+      n_ls = np.histogram(self.X_m[ls_mask], bins=self.mBins)[0]
+      n_hs = np.histogram(self.X_m[hs_mask], bins=self.mBins)[0]
+      # print(n_ls.sum(), n_hs.sum(), weights.sum())
+      # print(np.histogram(self.X_m[ls_mask], bins=self.mBins, weights=weights)[0])
+      # print(weights, weights.shape)
+      n_model, n_target = Ratio([self.X_m[ls_mask], self.X_m[hs_mask]], weights=[weights*ratio, None], bins=self.mBins, density=density, axs=axs, labels=['Model', 'Data'], xlabel=r"M$_\mathrm{X}$ [GeV]", ratio_ylabel='Ratio')
+      # print(n_target, n_model)
+
+      axs[0].set_ylabel('Events')
+
+      if vcr: 
+         self.bin_ratios = np.nan_to_num(n_hs / n_ls)
+         # print("bin ratios",self.bin_ratios)
+      # else: 
+      #    print(n_ls.sum(), n_hs.sum(), weights.sum(), (n_ls*self.bin_ratios).sum())
+      return fig, axs, n_target, n_model
+
+   def v_sr_hist(self):
+      return self.vr_hist(self.V_SRls_mask, self.V_SRhs_mask, self.V_SR_ls_weights, density=False)
+   
+   def v_cr_hist(self):
+      return self.vr_hist(self.V_CRls_mask, self.V_CRhs_mask, self.V_CR_ls_weights, density=False, vcr=True)
+
+      # fig.savefig(f"plots/model_VCR.pdf", bbox_inches='tight')
+
+   def sr_hist(self):
+      from matplotlib.lines import Line2D
+      from matplotlib.patches import Patch
+
+      fig, axs = plt.subplots(nrows=2,  gridspec_kw={'height_ratios':[4,1]})
+
+      n_model_SR_hs = Hist(self.X_m[self.A_SRls_mask], weights=self.AR_ls_weights, bins=self.mBins, ax=axs[0], label='A_SR', density=False)
+
+      model_uncertainty = np.sqrt(n_model_SR_hs)
+
+      sumw2 = []
+      err = []
+      for i,n_nominal in enumerate(n_model_SR_hs):#, model_uncertainty_up, model_uncertainty_down)):
+         low_x = self.X_m[self.A_SRls_mask] > self.mBins[i]
+         high_x = self.X_m[self.A_SRls_mask] <= self.mBins[i+1]
+         weights = np.sum(self.AR_ls_weights[low_x & high_x]**2)
+         sumw2.append(weights)
+         weights = np.sqrt(weights)
+         err.append(weights)
+         model_uncertainty_up = n_nominal + weights
+         model_uncertainty_down = n_nominal - weights
+
+         axs[0].fill_between([self.mBins[i], self.mBins[i+1]], model_uncertainty_down, model_uncertainty_up, color='C0', alpha=0.25)
+         ratio_up = model_uncertainty_up / n_nominal
+         ratio_down = model_uncertainty_down / n_nominal
+         # print(ratio_down)
+         axs[1].fill_between([self.mBins[i], self.mBins[i+1]], ratio_down, ratio_up, color='C0', alpha=0.25)
+
+      self.sumw2 = np.array((sumw2))
+      self.err = np.array((err))
+
+      model_nominal = Line2D([0], [0], color='C0', lw=2, label='Bkg Model')
+
+      handles = [model_nominal, Patch(facecolor='C0', alpha=0.25, label='Bkg Uncertainty')]
+      
+      axs[0].legend(handles=handles)
+
+      axs[0].set_ylabel('Events')
+      axs[1].set_ylabel('Uncertainty')
+
+      axs[1].plot([self.mBins[0], self.mBins[-1]], [1,1], color='gray', linestyle='--')
+      axs[1].set_xlabel(r"$M_X$ [GeV]")
+      
+      return fig, axs, n_model_SR_hs
+
+
