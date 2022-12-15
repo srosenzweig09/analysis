@@ -16,11 +16,12 @@ class Model:
     self.h_data = h_bkg if h_data is None else h_data
 
     # self.norm = 2*np.sqrt(np.sum(h_bkg.error**2))/h_sig.stats.nevents
-    self.norm = 1
+    self.norm = 2*np.sqrt(np.sum(sumw2**2))/np.sum(h_sig)
+    # self.norm = 1
 
     self.w = pyhf.simplemodels.uncorrelated_background(
       # signal=(self.norm*h_sig.histo).tolist(), bkg=h_bkg.histo.tolist(), bkg_uncertainty=h_bkg.error.tolist()
-      signal=h_sig.tolist(), bkg=h_bkg.tolist(), bkg_uncertainty=sumw2.tolist()
+      signal=(self.norm*h_sig).tolist(), bkg=h_bkg.tolist(), bkg_uncertainty=sumw2.tolist()
     )
     # self.data = self.h_data.histo.tolist()+self.w.config.auxdata
     self.data = self.h_data.tolist()+self.w.config.auxdata
