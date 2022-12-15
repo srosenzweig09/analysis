@@ -15,36 +15,37 @@ class Particle():
         elif particle is not None:
             self.initialize_from_particle(particle)
         elif kin_dict is not None:
-            self.initialize_from_kinematics(
-                kin_dict['pt'],
-                kin_dict['eta'],
-                kin_dict['phi'],
-                kin_dict['m']
-            )
+            self.initialize_from_kinematics(kin_dict)
+
         self.P4 = self.get_vector()
-        
         self.theta = self.P4.theta
         self.costheta = np.cos(self.theta)
 
-    def initialize_from_kinematics(self, pt, eta, phi, m):
-        self.pt = pt
-        self.eta = eta
-        self.phi = phi
-        self.m = m
+    def initialize_from_kinematics(self, kin_dict):
+        self.pt = kin_dict['pt']
+        self.eta = kin_dict['eta']
+        self.phi = kin_dict['phi']
+        self.m = kin_dict['m']
+        try: self.btag = kin_dict['btag']
+        except: pass
 
     def initialize_from_tree(self, tree, particle_name):
-        self.pt = tree.get(particle_name + '_pt')
-        if 'b' in particle_name and 'gen' not in particle_name:
-            self.pt = tree.get(particle_name + '_ptRegressed')
-        self.eta = tree.get(particle_name + '_eta')
-        self.phi = tree.get(particle_name + '_phi')
-        self.m = tree.get(particle_name + '_m')
+        try: self.pt = getattr(tree, particle_name + '_ptRegressed')
+        except: self.pt = getattr(tree, particle_name + '_pt')
+        # if 'b' in particle_name and 'gen' not in particle_name:
+        self.eta = getattr(tree, particle_name + '_eta')
+        self.phi = getattr(tree, particle_name + '_phi')
+        self.m = getattr(tree, particle_name + '_m')
+        try: self.btag = getattr(tree, particle_name + '_btag')
+        except: pass
 
     def initialize_from_particle(self, particle):
         self.pt = particle.pt
         self.eta = particle.eta
         self.phi = particle.phi
         self.m = particle.m
+        try: self.btag = particle.btag
+        except: pass
 
     def get_vector(self):
         p4 = vector.obj(
@@ -54,6 +55,9 @@ class Particle():
             m   = self.m
         )
         return p4
+
+    def set_btag(self, score):
+        self.btag = score
 
     def __add__(self, another_particle):
         particle1 = self.P4
