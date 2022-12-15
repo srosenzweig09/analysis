@@ -52,36 +52,35 @@ class Tree():
         """
 
         if type(filename) != list:
-            self.single_init(filename, treename, year, training=training, exploration=exploration, signal=signal)
+            self.single_init(filename, treename, year)
         else:
             self.multi_init(filename, treename, year)
 
-    def single_init(self, filename, treename, year, training, exploration, signal):
+    def single_init(self, filename, treename, year):
         """Opens a single file into a TTree"""
         tree = uproot.open(f"{filename}:{treename}")
         self.tree = tree
 
-        if not exploration:
-            for k, v in tree.items():
-                if ('t6' in k) or ('score' in k) or ('nn' in k): 
-                    setattr(self, k, v.array())
-                    used_key = k
-        else:            
-            for k, v in tree.items():
-                if (k.startswith('jet_') or (k.startswith('gen_'))):
-                    setattr(self, k, v.array())
-                    used_key = k
+        # if not exploration:
+        #     for k, v in tree.items():
+        #         if ('t6' in k) or ('score' in k) or ('nn' in k): 
+        #             setattr(self, k, v.array())
+        #             used_key = k
+        # else:            
+        for k, v in tree.items():
+            if (k.startswith('jet_') or (k.startswith('H_'))):
+                setattr(self, k, v.array())
+                used_key = k
 
         self.nevents = len(tree[used_key].array())
 
-        if training: return
-        cutflow = uproot.open(f"{filename}:h_cutflow")
+        cutflow = uproot.open(f"{filename}:h_cutflow_unweighted")
         # save total number of events for scaling purposes
         total = cutflow.to_numpy()[0][0]
         _, xsec = next( ((key,value) for key,value in xsecMap.items() if key in filename),("unk",1) )
-        if signal: 
-            self.sample = latexTitle(filename)
-            self.mXmY = self.sample.replace('$','').replace('_','').replace('= ','_').replace(', ','_').replace(' GeV','')
+        # if signal: 
+        #     self.sample = latexTitle(filename)
+        #     self.mXmY = self.sample.replace('$','').replace('_','').replace('= ','_').replace(', ','_').replace(' GeV','')
         self.xsec = xsec
         self.lumi = lumiMap[year][0]
         self.scale = self.lumi*xsec/total
@@ -131,11 +130,12 @@ class Tree():
         self.weighted_n = np.asarray(self.nevents)*self.scale
 
         for k in tree.keys():
-            leaves = []
-            for samp in self.sample:
-                arr = getattr(getattr(self, samp), k)
-                leaves.append(arr)
-            setattr(self, k, leaves)
+            if 'jet' in k:
+                leaves = []
+                for samp in self.sample:
+                    arr = getattr(getattr(self, samp), k)
+                    leaves.append(arr)
+                setattr(self, k, leaves)
 
     def get_hist_weights(self, key, bins):
         if self.is_bkgd: 
@@ -148,7 +148,7 @@ class Tree():
                 n_i, b = np.histogram(branch, bins)
                 centers = (b[1:] + b[:-1])/2
                 n += n_i*scale
-            return n, b, centers
+            return n#, b, centers
         else: 
             branch = ak.flatten(getattr(self, key)).to_numpy()
             n, b = np.histogram(branch, bins)
@@ -159,7 +159,10 @@ class Tree():
             # new_bins = np.linspace(branch.min(), bins[max_bin], 100)
             # n, b = np.histogram(branch, new_bins)
             # centers = (b[1:] + b[:-1])/2
-        return n*self.scale, b, centers
+        return n*self.scale#, b, centers
+
+    # def hist(self):
+
 
     def keys(self):
         print(self.tree.keys())
