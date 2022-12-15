@@ -75,6 +75,9 @@ class Tree():
 
    def __init__(self, filename, treename='sixBtree', cfg_file=None, year=2018, selection='3322'):
 
+      self.filename = filename
+      self.treename = treename
+
       with uproot.open(f"{filename}:{treename}") as tree:
          pattern = re.compile('H.+_') # Search for any keys beginning with an 'H' and followed somewhere by a '_'
          for k, v in tree.items():
@@ -96,8 +99,11 @@ class Tree():
 
       self.spherical_region()
 
+   # def keys(self):
+      # return self.tree.keys()
+   
    def keys(self):
-      return self.tree.keys()
+      return uproot.open(f"{self.filename}:{self.treename}").keys()
 
    def find_key(self, start):
       for key in self.keys():
