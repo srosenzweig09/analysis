@@ -53,13 +53,13 @@ def fig_ax_ratio():
    """Returns fig, axs for ratio plot."""
    return plt.subplots(nrows=2, ncols=1, figsize=(8,8), gridspec_kw={'height_ratios':[4,1]})
 
-def latexTitle(descriptor):
-    ind = -2
-    if 'output' in descriptor: ind = -3
-    mass_point = descriptor.split("/")[ind]
-    mX = mass_point.split('_')[ind-1]
-    mY = mass_point.split('_')[ind+1]
-    return r"$M_X=$ " + mX + r" GeV, $M_Y=$ " + mY + " GeV"
+def latexTitle(mx,my):
+   #  ind = -2
+   #  if 'output' in descriptor: ind = -3
+   #  mass_point = descriptor.split("/")[ind]
+   #  mX = mass_point.split('_')[ind-1]
+   #  mY = mass_point.split('_')[ind+1]
+    return r"$M_X=$ " + str(mx) + r" GeV, $M_Y=$ " + str(my) + " GeV"
 
 
 def change_cmap_bkg_to_white(colormap, arr=False, n=256):
@@ -80,22 +80,28 @@ def Hist2d(x, y, bins, log=False, density=False, **kwargs):
    if 'ax' in kwargs.keys():
       ax = kwargs['ax']
    else:
-      fig, ax = plt.subplots(figsize=(10, 8))
+      fig, ax = plt.subplots(figsize=(12, 10))
       
    if 'cmap' in kwargs.keys():
       cmap = kwargs['cmap']
       kwargs.pop('cmap')
    else: cmap = r_cmap
 
+   try: x = ak.flatten(x)
+   except: pass
+   try: y = ak.flatten(y)
+   except: pass
+
    if isinstance(x, Array): x = x.to_numpy()
    if isinstance(y, Array): y = y.to_numpy()
+
 
    if log:
       n, xe, ye, im = ax.hist2d(
          x, y, bins=bins, norm=colors.LogNorm(), cmap=cmap)
    elif density:
       n, xe, ye, im = ax.hist2d(
-         x, y, bins=bins, cmap=cmap)
+         x, y, bins=bins, cmap=cmap, density=True)
          # x, y, bins=bins, density=True, cmap=cmap)
    else:
       n, xe, ye, im = ax.hist2d(x, y, bins=bins, cmap=cmap)
@@ -121,7 +127,7 @@ plot_dict = {
 }
 
 
-def Hist(x, scale=1, legend_loc='best', weights=None, density=True, ax=None, patches=False, qcd=False, exp=0, dec=2, **kwargs):
+def Hist(x, scale=1, legend_loc='best', weights=None, density=False, ax=None, patches=False, qcd=False, exp=0, dec=2, **kwargs):
     """
     This function is a wrapper for matplotlib.pyplot.hist that allows me to generate histograms quickly and consistently.
     It also helps deal with background trees, which are typically given as lists of samples.
@@ -147,11 +153,9 @@ def Hist(x, scale=1, legend_loc='best', weights=None, density=True, ax=None, pat
     
     if weights is None: 
       weights = np.ones_like(x)
-   #  else: density = False
     
     if isinstance(weights, float): 
       weights = np.ones_like(x) * weights
-      density = False
 
     # set default values for histogramming
     for k, v in plot_dict.items():
@@ -169,11 +173,11 @@ def Hist(x, scale=1, legend_loc='best', weights=None, density=True, ax=None, pat
         return n
     
     if density:
-        n, _ = np.histogram(x, weights=weights, bins=bins)
-        n, _, im = ax.hist(x_arr, weights=n/n.sum(), **kwargs)
-        ax.yaxis.set_major_formatter(OOMFormatter(exp, f"%2.{dec}f"))
-      #   ax.ticklabel_format(axis='y', style='sci', scilimits=(0,4))
-        return n
+      n, _ = np.histogram(x, weights=weights, bins=bins)
+      n, _, im = ax.hist(x_arr, weights=n/n.sum(), **kwargs)
+      ax.yaxis.set_major_formatter(OOMFormatter(exp, f"%2.{dec}f"))
+   #   ax.ticklabel_format(axis='y', style='sci', scilimits=(0,4))
+      return n
 
     if scale != 1:
         n, _, im = ax.hist(x_arr, weights=weights*scale, **kwargs)
@@ -188,10 +192,11 @@ def Hist(x, scale=1, legend_loc='best', weights=None, density=True, ax=None, pat
     if patches: return n, im
     return n
 
-def Ratio(data, bins, labels, xlabel, axs=None, weights=[None, None], density=False, ratio_ylabel='Ratio', broken=False, pull=False):
+def Ratio(data, bins, labels, xlabel, axs=None, weights=[None, None], density=False, ratio_ylabel='Ratio', broken=False, pull=False, data_norm=False, norm=None):
    
    from matplotlib.lines import Line2D
 
+   color1, color2 = None, None
    data1, data2 = data
    label1, label2 = labels
 
@@ -212,17 +217,40 @@ def Ratio(data, bins, labels, xlabel, axs=None, weights=[None, None], density=Fa
    
    if axs is None: fig, axs = plt.subplots(nrows=2, ncols=1, gridspec_kw={'height_ratios':[4,1]})
    ax = axs[0]
-   n_num = Hist(data1, bins=bins, ax=ax, weights=weights1, density=density)
+   if norm is not None: 
+      norm = np.nan_to_num(norm)
+      # print("norm",norm)
+      n_num, edges = np.histogram(data1, bins=bins, weights=weights1)
+      x = x_bins(edges)
+      n_num = Hist(x, bins=bins, ax=ax, weights=n_num*norm, density=density)
+   else:
+      n_num = Hist(data1, bins=bins, ax=ax, weights=weights1, density=density)
+   # print(n_num)
+   for i,edge in enumerate(bins[:-1]):
+      weights = np.sqrt(np.square(weights1[(data1 >= edge) & (data1 < bins[i+1])]).sum())
+      # print(weights, n_num[i])
+      ax.fill_between([edge, bins[i+1]], n_num[i]-weights, n_num[i]+weights, color='C0', alpha=0.25)
+
    if broken:
       n_den,e = np.histogram(data2, bins=bins, weights=weights2)
       for i,(edge,val) in enumerate(zip(e[:-1], n_den)):
          ax.plot([edge, e[i+1]],[val,val], color='C1')
    else:
-      n_den = Hist(data2, bins=bins, ax=ax, weights=weights2, density=density)
+      if 'Data' in label2: 
+         n_den, e = np.histogram(data2, bins=bins, weights=weights2)
+         n_err = np.sqrt(n_den)
+         if data_norm: 
+            n_den = n_den / n_den.sum()
+            n_err = np.zeros_like(n_den)
+         # ax.plot(x_bins(bins), n_den, 'o', color='k')#, lw=0)
+         ax.errorbar(x_bins(bins), n_den, n_err, marker='o', color='k', ls='none')
+      else:
+         n_den = Hist(data2, bins=bins, ax=ax, weights=weights2, density=density)
 
-   line1 = Line2D([0], [0], color='C0', lw=2, label=label1)
-   line2 = Line2D([0], [0], color='C1', lw=2, label=label2)
-   ax.legend(handles=[line1, line2])
+   handle1 = Line2D([0], [0], color='C0', lw=2, label=label1)
+   handle2 = Line2D([0], [0], color='C1', lw=2, label=label2)
+   if 'Data' in label2: handle2 = Line2D([], [], color='k', marker='o', markersize=6, lw=0, label=label2)
+   ax.legend(handles=[handle1, handle2])
 
    ax = axs[1]
    x = (bins[1:] + bins[:-1])/2
@@ -245,18 +273,28 @@ def Ratio(data, bins, labels, xlabel, axs=None, weights=[None, None], density=Fa
       axs[0].text(x=0.9, y=0.5, s=f"pull = {round(np.abs(diff).mean(),1)}", transform=axs[0].transAxes, fontsize=16, ha='right')
    else:
       n_ratio = n_num / n_den
+      n_ratio = n_den / n_num
       n_ratio = np.where(np.isnan(n_ratio), 0, n_ratio)
       n_ratio = np.where(np.isposinf(n_ratio), 0, n_ratio)
-      # print(n_ratio)
-      if one: ax.plot(x, np.ones_like(x), '--', color='gray')
-      n_ratio = Hist(x, weights=n_ratio, bins=bins, ax=ax)
+      n_uncert_up = np.where(n_num != 0, (n_num + n_err) / n_num, 0)
+      n_uncert_down = np.where(n_num != 0, (n_num - n_err) / n_num, 0)
+
+      n_data_err_up = np.where(n_den != 0, (n_den + n_err)/n_den, 0)
+      n_data_err_down = np.where(n_den != 0, (n_den - n_err)/n_den, 0)
+      for i,n_nominal in enumerate(n_num):
+         axs[1].fill_between([bins[i],bins[i+1]], n_uncert_down[i], n_uncert_up[i], color='C0', alpha=0.25)
+         if n_ratio[i] < 1: y = -(1-n_ratio[i])
+         else: y = n_ratio[i] - 1
+         axs[1].plot([x[i], x[i]], [n_data_err_down[i]+y, n_data_err_up[i]+y], color='k', lw=2)
+      ax.plot(x, np.ones_like(x), '--', color='gray')
+      ax.scatter(x, n_ratio, color='k')
       ax.set_ylabel(ratio_ylabel)
-      ax.set_ylim(0.5, 1.5)
+      ax.set_ylim(0, 2)
 
    ax.set_xlabel(xlabel)
    
    if pull: return n_num, n_den, n_pull, pull
-   return n_num, n_den
+   return n_num, n_den, n_ratio
 
 class Model:
   def __init__(self, h_sig, h_bkg, h_data=None):
