@@ -1,16 +1,5 @@
-"""
-Project: 6b Final States - 
+""" 
 Author: Suzanne Rosenzweig
-
-Classes:
-Tree - Extracts information from ROOT TTrees.
-TrainSix - Produces inputs to train the 6-jet classifier.
-TrainTwo - A work in progress. Produces inputs to train the 2-jet classifier.
-
-Notes:
-Training samples are prepared such that these requirements are already imposed:
-- n_jet > 6
-- n_sixb == 6
 """
 
 from utils import *
@@ -37,9 +26,9 @@ def get_scaled_weights(list_of_arrs, bins, scale):
         except: n += n_i
     return n, b, centers
 
-class Tree():
+class Bkg():
     
-    def __init__(self, filename, treename='sixBtree', year=2018, training=False, exploration=False, signal=True):
+    def __init__(self, filename, treename='sixBtree', year=2018, training=False, exploration=False, signal=True, gnn_model=None):
         """
         A class for handling TTrees from older skims, which output an array of jet kinematics. (Newer skims output a single branch for each b jet kinematic.)
 
@@ -52,11 +41,11 @@ class Tree():
         """
 
         if type(filename) != list:
-            self.single_init(filename, treename, year)
+            self.single_init(filename, treename, year, gnn_model=gnn_model)
         else:
-            self.multi_init(filename, treename, year)
+            self.multi_init(filename, treename, year, gnn_model=gnn_model)
 
-    def single_init(self, filename, treename, year):
+    def single_init(self, filename, treename, year, gnn_model):
         """Opens a single file into a TTree"""
         tree = uproot.open(f"{filename}:{treename}")
         self.tree = tree
@@ -86,7 +75,7 @@ class Tree():
         self.scale = self.lumi*xsec/total
         self.cutflow = cutflow.to_numpy()[0]*self.scale
 
-    def multi_init(self, filelist, treename, year=2018):
+    def multi_init(self, filelist, treename, year, gnn_model):
         """Opens a list of files into several TTrees. Typically used for bkgd events."""
         self.is_signal = False
         self.is_bkgd = True
@@ -100,7 +89,7 @@ class Tree():
             # Open tree
             tree = uproot.open(f"{filename}:{treename}")
             # How many events in the tree?
-            n = len(tree['n_jet'].array())
+            n = len(tree['jet_pt'].array())
             cutflow = uproot.open(f"{filename}:h_cutflow")
             # save total number of events for scaling purposes
             samp_tot = cutflow.to_numpy()[0][0]
@@ -137,6 +126,8 @@ class Tree():
                     leaves.append(arr)
                 setattr(self, k, leaves)
 
+        if gnn_model is not None: self.init_from_gnn(gnn_model)
+
     def get_hist_weights(self, key, bins):
         if self.is_bkgd: 
             n = np.zeros_like(bins[:-1])
@@ -169,3 +160,6 @@ class Tree():
 
     def get(self, key):
         return self.tree[key].array()
+
+    def init_from_gnn(self):
+        
