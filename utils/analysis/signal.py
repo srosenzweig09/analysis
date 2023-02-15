@@ -238,21 +238,9 @@ class Tree():
          self.H2_b2.sig_id.to_numpy(),
       ))
 
-      # self.n_h_correct = ak.sum(self.H_b_sig_id > -1, axis=1) == 6
-
-
-
-      # self.HX_b1_correct = (self.H_b_sig_id[:,0] == 0) | (self.H_b_sig_id[:,0] == 1)
-      # self.HX_b2_correct = (self.H_b_sig_id[:,1] == 0) | (self.H_b_sig_id[:,1] == 1)
-      # self.H1_b1_correct_1 = (self.H_b_sig_id[:,2] == 2) | (self.H_b_sig_id[:,2] == 3)
-      # self.H1_b2_correct_1 = (self.H_b_sig_id[:,3] == 2) | (self.H_b_sig_id[:,3] == 3)
-      # self.H2_b1_correct_1 = (self.H_b_sig_id[:,4] == 4) | (self.H_b_sig_id[:,4] == 5)
-      # self.H2_b2_correct_1 = (self.H_b_sig_id[:,5] == 4) | (self.H_b_sig_id[:,5] == 5)
-
       self.HX_correct = (self.HX_b1.h_id == self.HX_b2.h_id) & (self.HX_b1.h_id == 0)
       self.H1_correct = (self.H1_b1.h_id == self.H1_b2.h_id) & ((self.H1_b1.h_id == 1) | (self.H1_b1.h_id == 2))
       self.H2_correct = (self.H2_b1.h_id == self.H2_b2.h_id) & ((self.H2_b1.h_id == 1) | (self.H2_b1.h_id == 2))
-      # self.H2_correct = self.H2_b1_correct & self.H2_b2_correct
 
       self.n_H_correct = self.HX_correct*1 + self.H1_correct*1 + self.H2_correct*1
 
