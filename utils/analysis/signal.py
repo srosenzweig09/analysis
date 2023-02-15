@@ -1,21 +1,19 @@
 """
-Store ROOT events in a standard and convenient way.
-
-Classes:
-    Signal
+Author: Suzanne Rosenzweig
 """
 
 from utils import *
+from utils.analysis.gnn import combo_dict
 from utils.cutConfig import jet_btagWP
 from utils.varUtils import *
 from utils.plotter import latexTitle, Hist
 from utils.useCMSstyle import *
 plt.style.use(CMS)
 from .particle import Particle
-from awkward.highlevel import Array
 
 # Standard library imports
 from array import array
+from awkward.highlevel import Array
 # import awkward0 as ak0
 from colorama import Fore
 from hep_ml import reweight
@@ -67,13 +65,21 @@ def ROOTHist(n, mass_name, title):
 #    return tree[presel_mask]
 
 
+current_model_path = '/uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_6_19_patch2/src/sixb/weaver-multiH/weaver/models/exp_xy/XY_3H_reco_ranker/20230213_ranger_lr0.0047_batch1024__full_reco_withbkg/predict_output'
+# def sixb_from_gnn(filename, model_name, model_path = '/uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_6_19_patch2/src/sixb/weaver-multiH/weaver/models/trih_ranker_mp/20221216_ranger_lr0.0047_batch512/predict_output'):
+
+def sixb_from_gnn(filename, model_name, model_path=current_model_path):
+   return SixB(filename, gnn_model=f"{model_path}/{model_name}.awkd")
+
+def data_from_gnn(model_name, model_path=current_model_path):
+   return Data('/eos/uscms/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag/JetHT_Data_UL/JetHT_Run2018_full/ntuple.root', gnn_model=f"{model_path}/{model_name}")
 
 
 from configparser import ConfigParser
 # Parent Class
 class Tree():
 
-   def __init__(self, filename, treename='sixBtree', cfg_file=None, year=2018, selection='3322'):
+   def __init__(self, filename, treename='sixBtree', cfg_file=None, year=2018, selection='3322', gnn_model=None):
 
       self.filename = filename
       self.treename = treename
@@ -93,6 +99,9 @@ class Tree():
       self.cutflow = (cutflow.to_numpy()[0]).astype(int)
       self.cutflow_norm = (cutflow.to_numpy()[0]/cutflow.to_numpy()[0][0]*100).astype(int)
 
+      if gnn_model is not None: self.initialize_from_gnn(gnn_model) 
+      else: self.initialize_bosons()
+      
       self.initialize_vars()
 
       self.cfg = cfg_file
@@ -125,6 +134,128 @@ class Tree():
       if not isinstance(np_arr, np.ndarray): np_arr = np_arr.to_numpy()
       return np_arr
 
+   def initialize_from_gnn(self, model):
+      import awkward0 as ak0
+      # from weaver_utils.nn.combinatorics import torch_combinations
+
+      with ak0.load(model) as f_awk:
+         self.scores = ak.unflatten(f_awk['scores'], np.repeat(45, self.nevents)).to_numpy()
+         self.maxscore = f_awk['maxscore']
+         self.maxcomb = f_awk['maxcomb']
+
+      # combos = []
+      # for score in scores:
+      #    ind_max = score.argmax()
+      #    combo = ak.from_numpy(combo_dict[ind_max])
+      #    # combo = ak.unflatten(ak.flatten(combo), ak.ones_like(combo[:,0])*6)
+      #    # combo = np.asarray(([combo_dict[score] for score in scores.argmax(axis=1)]))
+      #    # combo = ak.from_numpy(combo)
+      #    # combo = ak.unflatten(ak.flatten(combo), ak.ones_like(combo[:,0])*6)
+      #    combos.append(combo)
+
+      # self.combos = combos
+      # all_combos = torch_combinations(6, [2, [2,2]])
+
+      # combos = np.asarray(([combo_dict[score] for score in self.scores.argmax(axis=1)]))
+      # combos = np.asarray(([all_combos[score] for score in self.scores.argmax(axis=1)]))
+      combos = self.maxcomb
+      combos = ak.from_numpy(combos)
+      combos = ak.unflatten(ak.flatten(combos), ak.ones_like(combos[:,0])*6)
+
+
+      self.combos = combos
+      print("combos")
+      # print(self.combos)
+      # self.combos = self.maxcomb
+
+      print(self.jet_ptRegressed)
+
+      pt = self.jet_ptRegressed[combos]
+      phi = self.jet_phi[combos]
+      eta = self.jet_eta[combos]
+      m = self.jet_mRegressed[combos]
+      btag = self.jet_btag[combos]
+
+      print("Checkpoint 1")
+      print(pt)
+      print(pt[0])
+      print(type(pt))
+
+
+      sample_particles = []
+      for j in range(6):
+         particle = Particle(kin_dict={
+               'pt' : pt[:,j],
+               'eta' : eta[:,j],
+               'phi' : phi[:,j],
+               'm' : m[:,j],
+               }
+         )
+         particle.set_btag(btag[:,i])
+         sample_particles.append(particle)
+
+      print("Checkpoint 2")
+
+      self.HX_b1 = sample_particles[0]
+      self.HX_b2 = sample_particles[1]
+      self.H1_b1 = sample_particles[2]
+      self.H1_b2 = sample_particles[3]
+      self.H2_b1 = sample_particles[4]
+      self.H2_b2 = sample_particles[5]
+
+      self.HX_b1_btag = sample_particles[0].btag
+      self.HX_b2_btag = sample_particles[1].btag
+      self.H1_b1_btag = sample_particles[2].btag
+      self.H1_b2_btag = sample_particles[3].btag
+      self.H2_b1_btag = sample_particles[4].btag
+      self.H2_b2_btag = sample_particles[5].btag
+
+      self.HX = self.HX_b1 + self.HX_b2
+      self.H1 = self.H1_b1 + self.H1_b2
+      self.H2 = self.H2_b1 + self.H2_b2
+
+      self.Y = self.H1 + self.H2
+
+      self.X = self.HX + self.H1 + self.H2
+
+      self.HX_m = self.HX.m
+      self.H1_m = self.H1.m
+      self.H2_m = self.H2.m
+      
+      self.HX_pt = self.HX.pt
+      self.H1_pt = self.H1.pt
+      self.H2_pt = self.H2.pt
+
+      self.HX_eta = self.HX.eta
+      self.H1_eta = self.H1.eta
+      self.H2_eta = self.H2.eta
+
+      self.HX_phi = self.HX.phi
+      self.H1_phi = self.H1.phi
+      self.H2_phi = self.H2.phi
+
+      self.HX_dr = self.HX_b1.deltaR(self.HX_b2)
+      self.H1_dr = self.H1_b1.deltaR(self.H1_b2)
+      self.H2_dr = self.H2_b1.deltaR(self.H2_b2)
+      print("Checkpoint 3")
+
+
+   def initialize_bosons(self):
+      self.HX_b1 = Particle(self, 'HX_b1')
+      self.HX_b2 = Particle(self, 'HX_b2')
+      self.H1_b1 = Particle(self, 'H1_b1')
+      self.H1_b2 = Particle(self, 'H1_b2')
+      self.H2_b1 = Particle(self, 'H2_b1')
+      self.H2_b2 = Particle(self, 'H2_b2')
+
+      self.HX = Particle(self, 'HX')
+      self.H1 = Particle(self, 'H1')
+      self.H2 = Particle(self, 'H2')
+
+      self.Y = Particle(self, 'Y')
+
+      self.X = Particle(self, 'X')
+
    def initialize_vars(self):
       """Initialize variables that don't exist in the original ROOT tree."""
 
@@ -142,23 +273,10 @@ class Tree():
       #       setattr(self, k, v.array())
       #       setattr(self, k, v.array()[self.btag_mask])
 
-      HX_b1 = Particle(self, 'HX_b1')
-      HX_b2 = Particle(self, 'HX_b2')
-      H1_b1 = Particle(self, 'H1_b1')
-      H1_b2 = Particle(self, 'H1_b2')
-      H2_b1 = Particle(self, 'H2_b1')
-      H2_b2 = Particle(self, 'H2_b2')
+      
 
-      HX = Particle(self, 'HX')
-      H1 = Particle(self, 'H1')
-      H2 = Particle(self, 'H2')
-
-      Y = Particle(self, 'Y')
-
-      X = Particle(self, 'X')
-
-      bs = [HX_b1, HX_b2, H1_b1, H1_b2, H2_b1, H2_b2]
-      pair1 = [HX_b1]*5 + [HX_b2]*4 + [H1_b1]*3 + [H1_b2]*2 + [H2_b1]
+      bs = [self.HX_b1, self.HX_b2, self.H1_b1, self.H1_b2, self.H2_b1, self.H2_b2]
+      pair1 = [self.HX_b1]*5 + [self.HX_b2]*4 + [self.H1_b1]*3 + [self.H1_b2]*2 + [self.H2_b1]
       pair2 = bs[1:] + bs[2:] + bs[3:] + bs[4:] + [bs[-1]]
 
       dR6b = []
@@ -171,36 +289,36 @@ class Tree():
       self.dR6bmin = dR6b.min(axis=1)
       self.dEta6bmax = dEta6b.max(axis=1)
 
-      self.pt6bsum = HX_b1.pt + HX_b2.pt + H1_b1.pt + H1_b2.pt + H2_b1.pt + H2_b2.pt
+      self.pt6bsum = self.HX_b1.pt + self.HX_b2.pt + self.H1_b1.pt + self.H1_b2.pt + self.H2_b1.pt + self.H2_b2.pt
 
       # self.HX_dr = HX_b1.deltaR(HX_b2)
       # self.H1_dr = H1_b1.deltaR(H1_b2)
       # self.H2_dr = H2_b1.deltaR(H2_b2)
 
-      self.HX_H1_dEta = abs(HX.deltaEta(H1))
-      self.H1_H2_dEta = abs(H1.deltaEta(H2))
-      self.H2_HX_dEta = abs(H2.deltaEta(HX))
+      self.HX_H1_dEta = abs(self.HX.deltaEta(self.H1))
+      self.H1_H2_dEta = abs(self.H1.deltaEta(self.H2))
+      self.H2_HX_dEta = abs(self.H2.deltaEta(self.HX))
 
-      self.HX_H1_dPhi = HX.deltaPhi(H1)
-      self.H1_H2_dPhi = H1.deltaPhi(H2)
-      self.H2_HX_dPhi = H2.deltaPhi(HX)
+      self.HX_H1_dPhi = self.HX.deltaPhi(self.H1)
+      self.H1_H2_dPhi = self.H1.deltaPhi(self.H2)
+      self.H2_HX_dPhi = self.H2.deltaPhi(self.HX)
 
-      self.HX_H1_dr = HX.deltaR(H1)
-      self.HX_H2_dr = H2.deltaR(HX)
-      self.H1_H2_dr = H1.deltaR(H2)
+      self.HX_H1_dr = self.HX.deltaR(self.H1)
+      self.HX_H2_dr = self.H2.deltaR(self.HX)
+      self.H1_H2_dr = self.H1.deltaR(self.H2)
       
-      self.Y_HX_dr = Y.deltaR(HX)
+      self.Y_HX_dr = self.Y.deltaR(self.HX)
 
-      self.HX_costheta = abs(np.cos(HX.P4.theta))
-      self.H1_costheta = abs(np.cos(H1.P4.theta))
-      self.H2_costheta = abs(np.cos(H2.P4.theta))
+      self.HX_costheta = abs(np.cos(self.HX.P4.theta))
+      self.H1_costheta = abs(np.cos(self.H1.P4.theta))
+      self.H2_costheta = abs(np.cos(self.H2.P4.theta))
 
-      self.HX_H1_dr = HX.deltaR(H1)
-      self.H1_H2_dr = H2.deltaR(H1)
-      self.H2_HX_dr = HX.deltaR(H2)
+      self.HX_H1_dr = self.HX.deltaR(self.H1)
+      self.H1_H2_dr = self.H2.deltaR(self.H1)
+      self.H2_HX_dr = self.HX.deltaR(self.H2)
 
       # X = HX + H1 + H2
-      self.X_m = X.m
+      self.X_m = self.X.m
 
       self.H_j_btag = np.column_stack((
          self.HX_b1_btag.to_numpy(),
@@ -216,8 +334,6 @@ class Tree():
       self.n_H_jet_loose = np.sum(self.H_j_btag >= jet_btagWP[1], axis=1)
 
       self.btag_avg = np.average(self.H_j_btag, axis=1)
-
-
 
    def spherical_region(self):
 
@@ -294,8 +410,8 @@ class SixB(Tree):
 
    _is_signal = True
 
-   def __init__(self, filename, config='config/bdt_params.cfg', treename='sixBtree', year=2018):
-      super().__init__(filename, treename, config, year)
+   def __init__(self, filename, config='config/bdt_params.cfg', treename='sixBtree', year=2018, gnn_model=None):
+      super().__init__(filename, treename, config, year, gnn_model=gnn_model)
 
       print(filename)
       self.mx = int(re.search('MX_.+MY', filename).group().split('_')[1])
@@ -310,6 +426,8 @@ class SixB(Tree):
       self.scale = self.lumi * xsec / self.total
 
       self.cutflow_scaled = (self.cutflow * self.scale).astype(int)
+
+      self.resolved_mask = ak.sum(self.jet_signalId > -1, axis=1) == 6
 
       # for k, v in self.tree.items():
       #    if 'gen' in k:
@@ -396,8 +514,8 @@ class Data(Tree):
 
    _is_signal = False
 
-   def __init__(self, filename, config='config/bdt_params.cfg', treename='sixBtree', year=2018):
-      super().__init__(filename, treename, config, year)
+   def __init__(self, filename, config='config/bdt_params.cfg', treename='sixBtree', year=2018, gnn_model=None):
+      super().__init__(filename, treename, config, year, gnn_model=gnn_model)
 
       self.sample = rf"{data_lumi[year]} fb$^{{-1}}$ (13 TeV, 2018)"
       self.set_bdt_params()
@@ -621,7 +739,8 @@ class Data(Tree):
       difference = abs(y_model_interp - y_obs_interp) * nm
 
       ks_statistic = round(difference.max(),2)
-      ks_probability = int(kstwobign.sf(ks_statistic)*100)
+      try: ks_probability = int(kstwobign.sf(ks_statistic)*100)
+      except: ks_probability = 0
 
       return ks_statistic, ks_probability
       
@@ -639,6 +758,7 @@ class Data(Tree):
       # xlabel = xlabel_dict[variable]
 
       fig, axs, n_obs, n_unweighted = self.vr_hist(self.V_SRls_mask, self.V_SRhs_mask, np.ones_like(self.V_SR_ls_weights)/sum(self.V_SRls_mask), data_norm=True, variable=variable)
+      print(type(axs))
       axs[0].set_title('Validation Signal Region - Before Applying BDT Weights', fontsize=18)
 
       if savedir is not None: fig.savefig(f"{savedir}/{variable}_vsr_before_bdt.pdf")
@@ -773,114 +893,3 @@ class GNN(Tree):
 
    model = '/uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_6_19_patch2/src/sixb/weaver-multiH/weaver/models/trih_ranker_mp/20221212_ranger_lr0.0047_batch512/predict_output/trih_ranker_mp_NMSSM_XYH_YToHH_6b_MX_700_MY_400_ntuple.awkd'
    
-   def __init__(self, filename, model=None):
-
-      if model is not None: self.model = model
-      self.tree = SixB(filename)
-
-      import awkward0 as ak0
-      with ak0.load(self.model) as f_awk:
-         scores = ak.unflatten(f_awk['scores'], np.repeat(15, self.tree.nevents)).to_numpy()
-         maxscore = f_awk['maxscore']
-         maxcomb = f_awk['maxcomb']
-
-      combo_arr = np.asarray(([combo_dict[score] for score in scores.argmax(axis=1)]))
-      combo_arr = ak.from_numpy(combo_arr)
-      combo_arr = ak.unflatten(ak.flatten(combo_arr), ak.ones_like(combo_arr[:,0])*6)
-      self.combo_arr = combo_arr
-
-      j1_index = combo_arr[:,::2]
-      j2_index = combo_arr[:,1::2]
-
-      h_j1_id = (self.tree.jet_signalId[j1_index]+2)//2
-      h_j2_id = (self.tree.jet_signalId[j2_index]+2)//2
-      self.h_id = ak.where(h_j1_id == h_j2_id, h_j1_id, 0)[ak.sum(self.tree.jet_signalId[:,:6] > -1, axis=1) == 6]
-
-      particles = []
-      for i in range(6):
-         particles.append(Particle(kin_dict={
-            'pt' : self.tree.jet_ptRegressed[combo_arr][:,i],
-            'eta' : self.tree.jet_eta[combo_arr][:,i],
-            'phi' : self.tree.jet_phi[combo_arr][:,i],
-            'm' : self.tree.jet_m[combo_arr][:,i]
-         }))
-
-      self.H1 = particles[0] + particles[1]
-      self.H2 = particles[2] + particles[3]
-      self.H3 = particles[4] + particles[5]
-
-
-   def get_eff_hist(self):
-      fig, ax = plt.subplots()
-
-      self.tree.hist(ak.sum(self.h_id>0, axis=-1), bins=np.arange(5), density=True, ax=ax)
-      ax.set_xlabel('Number of Accurate Higgs Pairs')
-
-   def spherical_region(self, cfg='config/bdt_params.cfg'):
-
-      self.config = ConfigParser()
-      self.config.optionxform = str
-      self.config.read(cfg)
-      self.config = self.config
-
-      minMX = int(self.config['plot']['minMX'])
-      maxMX = int(self.config['plot']['maxMX'])
-      if self.config['plot']['style'] == 'linspace':
-         nbins = int(self.config['plot']['edges'])
-         self.mBins = np.linspace(minMX,maxMX,nbins)
-      if self.config['plot']['style'] == 'arange':
-         step = int(self.config['plot']['steps'])
-         self.mBins = np.arange(minMX,maxMX,step)
-
-      self.x_mBins = (self.mBins[:-1] + self.mBins[1:])/2
-
-      """Defines spherical estimation region masks."""
-      self.AR_center = float(self.config['spherical']['ARcenter'])
-      self.SR_edge   = float(self.config['spherical']['rInner'])
-      self.CR_edge   = float(self.config['spherical']['rOuter'])
-
-      self.VR_center = int(self.AR_center + (self.SR_edge + self.CR_edge)/np.sqrt(2))
-
-      higgs = [self.H1.m, self.H2.m, self.H3.m]
-
-      deltaM = np.column_stack(([mh.to_numpy() - self.AR_center for mh in higgs]))
-      deltaM = deltaM * deltaM
-      deltaM = deltaM.sum(axis=1)
-      AR_deltaM = np.sqrt(deltaM)
-      self.A_SR_mask = AR_deltaM <= self.SR_edge # Analysis SR
-      # if self._is_signal: self.A_SR_avgbtag = self.btag_avg[self.A_SR_mask]
-      self.A_SR_avgbtag = self.tree.btag_avg[self.A_SR_mask]
-      self.A_CR_mask = (AR_deltaM > self.SR_edge) & (AR_deltaM <= self.CR_edge) # Analysis CR
-      # if not self._is_signal: self.A_CR_avgbtag = self.btag_avg[self.A_CR_mask]
-
-      VR_deltaM = np.column_stack(([mh.to_numpy() - self.VR_center for mh in higgs]))
-      VR_deltaM = VR_deltaM * VR_deltaM
-      VR_deltaM = VR_deltaM.sum(axis=1)
-      VR_deltaM = np.sqrt(VR_deltaM)
-      self.V_SR_mask = VR_deltaM <= self.SR_edge # Validation SR
-      self.V_CR_mask = (VR_deltaM > self.SR_edge) & (VR_deltaM <= self.CR_edge) # Validation CR
-
-      score_cut = float(self.config['score']['threshold'])
-      self.ls_mask = self.tree.btag_avg < score_cut # ls
-      self.hs_mask = self.tree.btag_avg >= score_cut # hs
-
-
-      # b_cut = float(config['score']['n'])
-      # self.nloose_b = ak.sum(self.get('jet_btag') > 0.0490, axis=1)
-      # self.nmedium_b = ak.sum(self.get('jet_btag') > 0.2783, axis=1)
-      # ls_mask = self.nmedium_b < b_cut # ls
-      # hs_mask = self.nmedium_b >= b_cut # hs
-
-      self.A_CRls_mask = self.A_CR_mask & self.ls_mask
-      self.A_CRhs_mask = self.A_CR_mask & self.hs_mask
-      self.A_SRls_mask = self.A_SR_mask & self.ls_mask
-      self.A_SRhs_mask = self.A_SR_mask & self.hs_mask
-      # if not self._is_signal:
-      #    self.blind_mask = ~self.A_SRhs_mask
-      #    self.A_SRhs_mask = np.zeros_like(self.A_SR_mask)
-      # else: self.A_CR_avgbtag = self.btag_avg[self.V_CR_mask]
-
-      self.V_CRls_mask = self.V_CR_mask & self.ls_mask
-      self.V_CRhs_mask = self.V_CR_mask & self.hs_mask
-      self.V_SRls_mask = self.V_SR_mask & self.ls_mask
-      self.V_SRhs_mask = self.V_SR_mask & self.hs_mask
