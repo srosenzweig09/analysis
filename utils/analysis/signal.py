@@ -72,7 +72,7 @@ def sixb_from_gnn(filename, model_name, model_path=current_model_path):
    return SixB(filename, gnn_model=f"{model_path}/{model_name}.awkd")
 
 def data_from_gnn(model_name, model_path=current_model_path):
-   return Data('/eos/uscms/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag/JetHT_Data_UL/JetHT_Run2018_full/ntuple.root', gnn_model=f"{model_path}/{model_name}")
+   return Data('/eos/uscms/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag/JetHT_Data_UL/JetHT_Run2018_full/ntuple.root', gnn_model=f"{model_path}/{model_name}.awkd")
 
 
 from configparser import ConfigParser
@@ -162,25 +162,16 @@ class Tree():
       combos = ak.from_numpy(combos)
       combos = ak.unflatten(ak.flatten(combos), ak.ones_like(combos[:,0])*6)
 
-
       self.combos = combos
-      print("combos")
-      # print(self.combos)
       # self.combos = self.maxcomb
-
-      print(self.jet_ptRegressed)
 
       pt = self.jet_ptRegressed[combos]
       phi = self.jet_phi[combos]
       eta = self.jet_eta[combos]
       m = self.jet_mRegressed[combos]
       btag = self.jet_btag[combos]
-
-      print("Checkpoint 1")
-      print(pt)
-      print(pt[0])
-      print(type(pt))
-
+      sig_id = self.jet_signalId[combos]
+      h_id = (self.jet_signalId[combos] + 2) // 2
 
       sample_particles = []
       for j in range(6):
@@ -191,10 +182,10 @@ class Tree():
                'm' : m[:,j],
                }
          )
-         particle.set_btag(btag[:,i])
+         particle.set_btag(btag[:,j])
+         particle.set_attr('sig_id', sig_id[:,j])
+         particle.set_attr('h_id', h_id[:,j])
          sample_particles.append(particle)
-
-      print("Checkpoint 2")
 
       self.HX_b1 = sample_particles[0]
       self.HX_b2 = sample_particles[1]
@@ -237,7 +228,33 @@ class Tree():
       self.HX_dr = self.HX_b1.deltaR(self.HX_b2)
       self.H1_dr = self.H1_b1.deltaR(self.H1_b2)
       self.H2_dr = self.H2_b1.deltaR(self.H2_b2)
-      print("Checkpoint 3")
+
+      self.H_b_sig_id = np.column_stack((
+         self.HX_b1.sig_id.to_numpy(),
+         self.HX_b2.sig_id.to_numpy(),
+         self.H1_b1.sig_id.to_numpy(),
+         self.H1_b2.sig_id.to_numpy(),
+         self.H2_b1.sig_id.to_numpy(),
+         self.H2_b2.sig_id.to_numpy(),
+      ))
+
+      # self.n_h_correct = ak.sum(self.H_b_sig_id > -1, axis=1) == 6
+
+
+
+      # self.HX_b1_correct = (self.H_b_sig_id[:,0] == 0) | (self.H_b_sig_id[:,0] == 1)
+      # self.HX_b2_correct = (self.H_b_sig_id[:,1] == 0) | (self.H_b_sig_id[:,1] == 1)
+      # self.H1_b1_correct_1 = (self.H_b_sig_id[:,2] == 2) | (self.H_b_sig_id[:,2] == 3)
+      # self.H1_b2_correct_1 = (self.H_b_sig_id[:,3] == 2) | (self.H_b_sig_id[:,3] == 3)
+      # self.H2_b1_correct_1 = (self.H_b_sig_id[:,4] == 4) | (self.H_b_sig_id[:,4] == 5)
+      # self.H2_b2_correct_1 = (self.H_b_sig_id[:,5] == 4) | (self.H_b_sig_id[:,5] == 5)
+
+      self.HX_correct = (self.HX_b1.h_id == self.HX_b2.h_id) & (self.HX_b1.h_id == 0)
+      self.H1_correct = (self.H1_b1.h_id == self.H1_b2.h_id) & ((self.H1_b1.h_id == 1) | (self.H1_b1.h_id == 2))
+      self.H2_correct = (self.H2_b1.h_id == self.H2_b2.h_id) & ((self.H2_b1.h_id == 1) | (self.H2_b1.h_id == 2))
+      # self.H2_correct = self.H2_b1_correct & self.H2_b2_correct
+
+      self.n_H_correct = self.HX_correct*1 + self.H1_correct*1 + self.H2_correct*1
 
 
    def initialize_bosons(self):
