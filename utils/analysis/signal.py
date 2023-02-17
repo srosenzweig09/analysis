@@ -66,6 +66,7 @@ def ROOTHist(n, mass_name, title):
 
 
 current_model_path = '/uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_6_19_patch2/src/sixb/weaver-multiH/weaver/models/exp_xy/XY_3H_reco_ranker/20230213_ranger_lr0.0047_batch1024__full_reco_withbkg/predict_output'
+current_model_path = '/uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_6_19_patch2/src/sixb/weaver-multiH/weaver/models/exp_xy/XY_3H_reco_ranker/20230215_ranger_lr0.0047_batch1024__withbkg/predict_output'
 # def sixb_from_gnn(filename, model_name, model_path = '/uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_6_19_patch2/src/sixb/weaver-multiH/weaver/models/trih_ranker_mp/20221216_ranger_lr0.0047_batch512/predict_output'):
 
 def sixb_from_gnn(filename, model_name, model_path=current_model_path):
@@ -136,12 +137,12 @@ class Tree():
 
    def initialize_from_gnn(self, model):
       import awkward0 as ak0
-      # from weaver_utils.nn.combinatorics import torch_combinations
 
       with ak0.load(model) as f_awk:
          self.scores = ak.unflatten(f_awk['scores'], np.repeat(45, self.nevents)).to_numpy()
          self.maxscore = f_awk['maxscore']
          self.maxcomb = f_awk['maxcomb']
+         self.maxlabel = f_awk['maxlabel']
 
       # combos = []
       # for score in scores:
@@ -238,9 +239,9 @@ class Tree():
          self.H2_b2.sig_id.to_numpy(),
       ))
 
-      self.HX_correct = (self.HX_b1.h_id == self.HX_b2.h_id) & (self.HX_b1.h_id == 0)
-      self.H1_correct = (self.H1_b1.h_id == self.H1_b2.h_id) & ((self.H1_b1.h_id == 1) | (self.H1_b1.h_id == 2))
-      self.H2_correct = (self.H2_b1.h_id == self.H2_b2.h_id) & ((self.H2_b1.h_id == 1) | (self.H2_b1.h_id == 2))
+      self.HX_correct = (self.HX_b1.h_id == self.HX_b2.h_id) & (self.HX_b1.h_id == 1)
+      self.H1_correct = (self.H1_b1.h_id == self.H1_b2.h_id) & ((self.H1_b1.h_id == 2) | (self.H1_b1.h_id == 3))
+      self.H2_correct = (self.H2_b1.h_id == self.H2_b2.h_id) & ((self.H2_b1.h_id == 2) | (self.H2_b1.h_id == 3))
 
       self.n_H_correct = self.HX_correct*1 + self.H1_correct*1 + self.H2_correct*1
 
@@ -432,7 +433,7 @@ class SixB(Tree):
 
       self.cutflow_scaled = (self.cutflow * self.scale).astype(int)
 
-      self.resolved_mask = ak.sum(self.jet_signalId > -1, axis=1) == 6
+      self.resolved_mask = ak.all(self.jet_signalId[:,:6] > -1, axis=1)
 
       # for k, v in self.tree.items():
       #    if 'gen' in k:
