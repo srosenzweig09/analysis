@@ -5,12 +5,19 @@ Author: Suzanne Rosenzweig
 from utils import *
 from utils.varUtils import *
 from utils.plotter import latexTitle
+from utils.analysis.particle import Particle
 
 # Standard library imports
 import sys 
 import uproot
+import subprocess, shlex
+
+import awkward0 as ak0
 
 vector.register_awkward()
+
+current_model_path = '/uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_6_19_patch2/src/sixb/weaver-multiH/weaver/models/exp_xy/XY_3H_reco_ranker/20230213_ranger_lr0.0047_batch1024__full_reco_withbkg/predict_output'
+current_model_path = '/uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_6_19_patch2/src/sixb/weaver-multiH/weaver/models/exp_xy/XY_3H_reco_ranker/20230215_ranger_lr0.0047_batch1024__withbkg/predict_output'
 
 def get_scaled_weights(list_of_arrs, bins, scale):
     """This function is used to get weights for background events."""
@@ -79,44 +86,70 @@ class Bkg():
         """Opens a list of files into several TTrees. Typically used for bkgd events."""
         self.is_signal = False
         self.is_bkgd = True
-        trees = []
-        xsecs = []
-        nevent = []
-        sample = []
-        total = []
+
+        arr_trees = []
+        arr_xsecs = []
+        arr_nevent = []
+        arr_sample = []
+        arr_total = []
+        self.arr_n = []
+        self.maxcomb = []
+
+        
+
         self.cutflow = np.zeros(11)
+
+        predictions = subprocess.check_output(shlex.split(f"ls {current_model_path}"))
+        predictions = predictions.decode('UTF-8').split('\n')[:-1]
+
         for filename in filelist:
             # Open tree
-            tree = uproot.open(f"{filename}:{treename}")
-            # How many events in the tree?
-            n = len(tree['jet_pt'].array())
-            cutflow = uproot.open(f"{filename}:h_cutflow")
-            # save total number of events for scaling purposes
-            samp_tot = cutflow.to_numpy()[0][0]
-            cf = cutflow.to_numpy()[0]
-            if len(cf) < 11: cf = np.append(cf, np.zeros(11-len(cf)))
-            if n == 0: continue # Skip if no events
-            total.append(samp_tot)
-            nevent.append(n)
-            # Bkgd events must be scaled to the appropriate xs in order to compare fairly with signal yield
-            samp, xsec = next( ((key,value) for key,value in xsecMap.items() if key in filename),("unk",1) )
-            self.cutflow += cf[:11] * lumiMap[year][0] * xsec / samp_tot
-            trees.append(tree)
-            xsecs.append(xsec)
-            sample.append(samp)
-            setattr(self, samp, tree)
-            for k, v in tree.items():
-                setattr(getattr(self, samp), k, v.array())
-            
-        self.ntrees = len(trees)
-        self.tree = trees
-        self.xsec = xsecs
+            # tree = uproot.open(f"{filename}:{treename}")
+            with uproot.open(f"{filename}:{treename}") as tree:
+                # How many events in the tree?
+                n = len(tree['jet_pt'].array())
+                self.arr_n.append(n)
+                cutflow = uproot.open(f"{filename}:h_cutflow")
+                # save total number of events for scaling purposes
+                samp_tot = cutflow.to_numpy()[0][0]
+                cf = cutflow.to_numpy()[0]
+                if len(cf) < 11: cf = np.append(cf, np.zeros(11-len(cf)))
+                if n == 0: continue # Skip if no events
+                arr_total.append(samp_tot)
+                arr_nevent.append(n)
+                # Bkgd events must be scaled to the appropriate xs in order to compare fairly with signal yield
+                samp, xsec = next( ((key,value) for key,value in xsecMap.items() if key in filename),("unk",1) )
+                print(samp)
+                samp_file = f"{current_model_path}/{[i for i in predictions if samp in i][0]}"
+                print(samp_file)
+                with ak0.load(samp_file) as f_awk:
+                    # self.scores = ak.unflatten(f_awk['scores'], np.repeat(45, n)).to_numpy()
+                    # self.maxscore = f_awk['maxscore']
+                    # combos = ak.from_numpy(f_awk['maxcomb'])
+                    combos = ak.from_regular(f_awk['maxcomb'])
+                    # combos = ak.unflatten(ak.flatten(combos), ak.ones_like(combos[:,0])*6)
+                    self.maxcomb.append(combos)
+                    
+                    # self.maxlabel = f_awk['maxlabel']
+
+                self.cutflow += cf[:11] * lumiMap[year][0] * xsec / samp_tot
+                arr_trees.append(tree)
+                arr_xsecs.append(xsec)
+                arr_sample.append(samp)
+                setattr(self, samp, tree)
+                for k, v in tree.items():
+                    setattr(getattr(self, samp), k, v.array())
+
+        self.ntrees = len(arr_trees)
+        self.tree = arr_trees
+        self.xsec = arr_xsecs
         self.lumi = lumiMap[year][0]
-        self.nevents = nevent
-        self.sample = sample
-        self.total = total
-        self.scale = self.lumi*np.asarray(xsecs)/np.asarray(total)
-        self.weighted_n = np.asarray(self.nevents)*self.scale
+        self.nevents = arr_nevent
+        self.sample = arr_sample
+        self.total = arr_total
+        self.scale = self.lumi*np.asarray(arr_xsecs)/np.asarray(arr_total)
+        self.scale = np.repeat(self.scale, np.array(self.arr_n))
+        # self.weighted_n = np.asarray(self.nevents)*self.scale
 
         for k in tree.keys():
             if 'jet' in k:
@@ -152,8 +185,10 @@ class Bkg():
             # centers = (b[1:] + b[:-1])/2
         return n*self.scale#, b, centers
 
-    # def hist(self):
-
+    def hist(self, key):
+        # print(getattr(self, key))
+        scale = np.repeat(self.scale, np.array(self.arr_n))
+        return ak.concatenate(getattr(self, key))
 
     def keys(self):
         print(self.tree.keys())
@@ -162,4 +197,21 @@ class Bkg():
         return self.tree[key].array()
 
     def init_from_gnn(self):
-        
+        pt = ak.concatenate([pt[comb] for pt,comb in zip(self.jet_ptRegressed,self.maxcomb)])
+        eta = ak.concatenate([eta[comb] for eta,comb in zip(self.jet_eta,self.maxcomb)])
+        phi = ak.concatenate([phi[comb] for phi,comb in zip(self.jet_phi,self.maxcomb)])
+        m = ak.concatenate([m[comb] for m,comb in zip(self.jet_mRegressed,self.maxcomb)])
+        btag = ak.concatenate([btag[comb] for btag,comb in zip(self.jet_btag,self.maxcomb)])
+
+        HX_b1 = Particle(kin_dict={'pt':pt[:,0],'eta':eta[:,0],'phi':phi[:,0],'m':m[:,0],'btag':btag[:,0]})
+        HX_b2 = Particle(kin_dict={'pt':pt[:,1],'eta':eta[:,1],'phi':phi[:,1],'m':m[:,1],'btag':btag[:,1]})
+        H1_b1 = Particle(kin_dict={'pt':pt[:,2],'eta':eta[:,2],'phi':phi[:,2],'m':m[:,2],'btag':btag[:,2]})
+        H1_b2 = Particle(kin_dict={'pt':pt[:,3],'eta':eta[:,3],'phi':phi[:,3],'m':m[:,3],'btag':btag[:,3]})
+        H2_b1 = Particle(kin_dict={'pt':pt[:,4],'eta':eta[:,4],'phi':phi[:,4],'m':m[:,4],'btag':btag[:,4]})
+        H2_b2 = Particle(kin_dict={'pt':pt[:,5],'eta':eta[:,5],'phi':phi[:,5],'m':m[:,5],'btag':btag[:,5]})
+
+        self.HX = HX_b1 + HX_b2
+        self.H1 = H1_b1 + H1_b2
+        self.H2 = H2_b1 + H2_b2
+
+        self.Y = self.H1 + self.H2
