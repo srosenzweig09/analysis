@@ -136,7 +136,7 @@ def producePulls(datTree, variables, pdf=False, region='VSR', **kwargs):
       # ax1t.set_title(f"Xsq statistic = {Xsq}, p-value = {p}")
 
       n_model = Hist(x, weights=n_model, bins=bins, ax=ax1t, zorder=9)
-      _ = ax1t.plot([x,x],[n_target+np.sqrt(n_target), n_target-np.sqrt(n_target)], color='k', zorder=10)
+      _ = ax1t.plot([x,x],[n_target+np.sqrt(n_target), n_target-np.sqrt(n_target)], color='k', zorder=10)      
       scatter = ax1t.scatter(x, n_target, s=10, c='k', zorder=10)
       handles = [Rectangle([0,0],1,1,color='C0', fill=False, lw=2), Rectangle([0,0],1,1,color='C0', alpha=0.2)]
       labels=[f'Bkg Model ({int(n_model.sum())})', 'Bkg Uncertainty']
