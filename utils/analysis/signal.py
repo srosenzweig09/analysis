@@ -3,19 +3,19 @@ Author: Suzanne Rosenzweig
 """
 
 from utils import *
-from utils.analysis.gnn import combo_dict
-from utils.cutConfig import jet_btagWP
+from utils.cutConfig import *
 from utils.varUtils import *
 from utils.plotter import latexTitle, Hist
 from utils.useCMSstyle import *
 plt.style.use(CMS)
-from .particle import Particle
+from utils.analysis.particle import Particle, Higgs, Y
+from utils.analysis.gnn import model_path
 
 # Standard library imports
 from array import array
 from awkward.highlevel import Array
 # import awkward0 as ak0
-from colorama import Fore
+# from colorama import Fore
 from hep_ml import reweight
 import re
 import ROOT
@@ -25,6 +25,7 @@ import uproot
 import pandas as pd
 # from hep_ml.metrics_utils import ks_2samp_weighted
 from scipy.stats import kstwobign
+# import subprocess
 
 njet_bins = np.arange(8)
 id_bins = np.arange(-1, 7)
@@ -35,22 +36,46 @@ nbins = 40
 m_bins = np.linspace(375, 1150, nbins)
 x_X_m = (m_bins[:-1] + m_bins[1:]) / 2
 
-def ROOTHist(n, mass_name, title):
-      fout = ROOT.TFile(f"ml/gnn/{mass_name}.root","recreate")
-      fout.cd()
+def get_region_mask(higgs, center, sr_edge, cr_edge):
+   deltaM = np.column_stack(([abs(mH.to_numpy() - val) for mH,val in zip(higgs,center)]))
+   deltaM = deltaM * deltaM
+   deltaM = deltaM.sum(axis=1)
+   deltaM = np.sqrt(deltaM)
 
-      canvas = ROOT.TCanvas('c1','c1', 600, 600)
-      canvas.SetFrameLineWidth(3)
-      canvas.Draw()
+   sr_mask = deltaM <= sr_edge 
+   cr_mask = (deltaM > sr_edge) & (deltaM <= cr_edge) 
 
-      h_title = title
-      ROOT_hist = ROOT.TH1D(h_title,";m_{X} [GeV];Events",nbins-1,array('d',list(m_bins)))
-      for i,(val) in enumerate(n):
-         ROOT_hist.SetBinContent(i+1, val) 
+   return sr_mask, cr_mask
 
-      ROOT_hist.Draw("hist")
-      ROOT_hist.Write()
-      fout.Close()
+def get_hs_ls_masks(sr_mask, cr_mask, ls_mask, hs_mask):
+   cr_ls_mask = cr_mask & ls_mask
+   cr_hs_mask = cr_mask & hs_mask
+   sr_ls_mask = sr_mask & ls_mask
+   sr_hs_mask = sr_mask & hs_mask
+
+   return cr_ls_mask, cr_hs_mask, sr_ls_mask, sr_hs_mask
+
+def ROOTHist(h_vals, title, filename):
+   """
+   title : should be either 'signal' or 'data'
+   """
+   assert ".root" in filename, print("[ERROR] Please include '.root' in filename")
+   
+   fout = ROOT.TFile(f"{filename}","recreate")
+   fout.cd()
+
+   canvas = ROOT.TCanvas('c1','c1', 600, 600)
+   canvas.SetFrameLineWidth(3)
+   canvas.Draw()
+
+   h_title = title
+   ROOT_hist = ROOT.TH1D(h_title,";m_{X} [GeV];Events",nbins-1,array('d',list(m_bins)))
+   for i,(val) in enumerate(h_vals):
+      ROOT_hist.SetBinContent(i+1, val) 
+
+   ROOT_hist.Draw("hist")
+   ROOT_hist.Write()
+   fout.Close()
 
 
 
@@ -65,33 +90,38 @@ def ROOTHist(n, mass_name, title):
 #    return tree[presel_mask]
 
 
-current_model_path = '/uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_6_19_patch2/src/sixb/weaver-multiH/weaver/models/exp_xy/XY_3H_reco_ranker/20230213_ranger_lr0.0047_batch1024__full_reco_withbkg/predict_output'
-current_model_path = '/uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_6_19_patch2/src/sixb/weaver-multiH/weaver/models/exp_xy/XY_3H_reco_ranker/20230215_ranger_lr0.0047_batch1024__withbkg/predict_output'
-# def sixb_from_gnn(filename, model_name, model_path = '/uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_6_19_patch2/src/sixb/weaver-multiH/weaver/models/trih_ranker_mp/20221216_ranger_lr0.0047_batch512/predict_output'):
 
-def sixb_from_gnn(filename, model_name, model_path=current_model_path):
-   return SixB(filename, gnn_model=f"{model_path}/{model_name}.awkd")
+def sixb_from_gnn(filename, suffix=''):
+   if '_4b' in filename: suffix='_4b'
+   model_name = re.search('NMSSM_.+/', filename).group()[:-1]
+   return SixB(filename, gnn_model=f"{model_path}/{model_name}.root{suffix}.awkd")
 
-def data_from_gnn(model_name, model_path=current_model_path):
-   return Data('/eos/uscms/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag/JetHT_Data_UL/JetHT_Run2018_full/ntuple.root', gnn_model=f"{model_path}/{model_name}.awkd")
+def data_from_gnn(filename='/eos/uscms/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag/JetHT_Data_UL/ntuple.root', model_path=model_path):
+   if '_4b' in filename: return Data(filename, gnn_model=f"{model_path}/JetHT_Data_UL.root_4b.awkd")
+   return Data(filename, gnn_model=f"{model_path}/JetHT_Data_UL.root.awkd")
+   # return Data('/eos/uscms/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag/JetHT_Data_UL/ntuple.root', gnn_model=f"{model_path}/JetHT_Run2018_full.root.awkd")
 
+year_dict = ['2016', '2017', '2018']
 
 from configparser import ConfigParser
 # Parent Class
 class Tree():
 
-   def __init__(self, filename, treename='sixBtree', cfg_file=None, year=2018, selection='3322', gnn_model=None):
+   def __init__(self, filename, treename='sixBtree', cfg_file=None, year=2018, selection='ttmm', gnn_model=None):
 
       self.filename = filename
       self.treename = treename
+
+      print(self.filename)
 
       with uproot.open(f"{filename}:{treename}") as tree:
          pattern = re.compile('H.+_') # Search for any keys beginning with an 'H' and followed somewhere by a '_'
          for k, v in tree.items():
             if re.match(pattern, k) or 'jet' in k or 'gen' in k or 'Y' in k or 'X' in k:
                setattr(self, k, v.array())
-            
-      cutflow = uproot.open(f"{filename}:h_cutflow_unweighted")
+      with uproot.open(f"{filename}:h_cutflow_unweighted") as f:
+         cutflow = f
+      cutflow_labels = cutflow.axis().labels()
       # self.tree = tree
       self.nevents = int(cutflow.to_numpy()[0][-1])
       self.total = int(cutflow.to_numpy()[0][0])
@@ -100,6 +130,7 @@ class Tree():
       self.cutflow = (cutflow.to_numpy()[0]).astype(int)
       self.cutflow_norm = (cutflow.to_numpy()[0]/cutflow.to_numpy()[0][0]*100).astype(int)
 
+      self.gnn = False
       if gnn_model is not None: self.initialize_from_gnn(gnn_model) 
       else: self.initialize_bosons()
       
@@ -108,6 +139,35 @@ class Tree():
       self.cfg = cfg_file
 
       self.spherical_region()
+
+      self.year = int([yr for yr in year_dict if yr in filename][0])
+      self.loose_wp = btagWP[self.year]['Loose']
+      self.medium_wp = btagWP[self.year]['Medium']
+      self.tight_wp = btagWP[self.year]['Tight']
+
+      self.tight_mask = self.jet_btag > self.tight_wp
+      medium_mask = self.jet_btag > self.medium_wp
+      loose_mask = self.jet_btag > self.loose_wp
+
+      self.fail_mask = ~loose_mask
+      self.loose_mask = loose_mask & ~medium_mask
+      self.medium_mask = medium_mask & ~self.tight_mask
+
+      self.n_tight = ak.sum(self.tight_mask, axis=1)
+      self.n_medium = ak.sum(self.medium_mask, axis=1)
+      self.n_loose = ak.sum(self.loose_mask, axis=1)
+      self.n_fail = ak.sum(self.fail_mask, axis=1)
+
+      if selection == 'ttmm' and 'maxbtag' in filename:
+         assert ~ak.any(ak.argsort(self.jet_btag, axis=1, ascending=False)[:,0])
+         t1_mask = self.tight_mask[:,0]
+         t2_mask = self.tight_mask[:,1]
+         m3_mask = self.tight_mask[:,2] | self.medium_mask[:,2]
+         m4_mask = self.tight_mask[:,3] | self.medium_mask[:,3]
+
+         self.ttmm_mask = t1_mask & t2_mask & m3_mask & m4_mask
+
+      # assert ak.all((self.n_tight + self.n_medium + self.n_loose + self.n_fail) == self.n_jet)
 
    # def keys(self):
       # return self.tree.keys()
@@ -136,13 +196,20 @@ class Tree():
       return np_arr
 
    def initialize_from_gnn(self, model):
+      print(model)
+      self.gnn = True
       import awkward0 as ak0
+
 
       with ak0.load(model) as f_awk:
          self.scores = ak.unflatten(f_awk['scores'], np.repeat(45, self.nevents)).to_numpy()
          self.maxscore = f_awk['maxscore']
+         assert np.array_equal(self.maxscore, self.scores.max(axis=1))
+         self.minscore = self.scores.min(axis=1)
          self.maxcomb = f_awk['maxcomb']
          self.maxlabel = f_awk['maxlabel']
+         self.mass_rank = np.concatenate(f_awk['mass_rank'])
+         self.nres_rank = np.concatenate(f_awk['nres_rank'])
 
       # combos = []
       # for score in scores:
@@ -160,8 +227,8 @@ class Tree():
       # combos = np.asarray(([combo_dict[score] for score in self.scores.argmax(axis=1)]))
       # combos = np.asarray(([all_combos[score] for score in self.scores.argmax(axis=1)]))
       combos = self.maxcomb
-      combos = ak.from_numpy(combos)
-      combos = ak.unflatten(ak.flatten(combos), ak.ones_like(combos[:,0])*6)
+      combos = ak.from_regular(combos)
+      # combos = ak.unflatten(ak.flatten(combos), ak.ones_like(combos[:,0])*6)
 
       self.combos = combos
       # self.combos = self.maxcomb
@@ -176,37 +243,48 @@ class Tree():
 
       sample_particles = []
       for j in range(6):
-         particle = Particle(kin_dict={
+         particle = Particle({
                'pt' : pt[:,j],
                'eta' : eta[:,j],
                'phi' : phi[:,j],
                'm' : m[:,j],
+               'btag' : btag[:,j],
+               'sig_id' : sig_id[:,j],
+               'h_id': h_id[:,j]
                }
          )
-         particle.set_btag(btag[:,j])
-         particle.set_attr('sig_id', sig_id[:,j])
-         particle.set_attr('h_id', h_id[:,j])
          sample_particles.append(particle)
 
-      self.HX_b1 = sample_particles[0]
-      self.HX_b2 = sample_particles[1]
-      self.H1_b1 = sample_particles[2]
-      self.H1_b2 = sample_particles[3]
-      self.H2_b1 = sample_particles[4]
-      self.H2_b2 = sample_particles[5]
+      HX_b1 = {'pt':sample_particles[0].pt,'eta':sample_particles[0].eta,'phi':sample_particles[0].phi,'m':sample_particles[0].m,'btag':sample_particles[0].btag,'sig_id':sample_particles[0].sig_id,'h_id':sample_particles[0].h_id}
+      HX_b2 = {'pt':sample_particles[1].pt,'eta':sample_particles[1].eta,'phi':sample_particles[1].phi,'m':sample_particles[1].m,'btag':sample_particles[1].btag,'sig_id':sample_particles[1].sig_id,'h_id':sample_particles[1].h_id}
+      H1_b1 = {'pt':sample_particles[2].pt,'eta':sample_particles[2].eta,'phi':sample_particles[2].phi,'m':sample_particles[2].m,'btag':sample_particles[2].btag,'sig_id':sample_particles[2].sig_id,'h_id':sample_particles[2].h_id}
+      H1_b2 = {'pt':sample_particles[3].pt,'eta':sample_particles[3].eta,'phi':sample_particles[3].phi,'m':sample_particles[3].m,'btag':sample_particles[3].btag,'sig_id':sample_particles[3].sig_id,'h_id':sample_particles[3].h_id}
+      H2_b1 = {'pt':sample_particles[4].pt,'eta':sample_particles[4].eta,'phi':sample_particles[4].phi,'m':sample_particles[4].m,'btag':sample_particles[4].btag,'sig_id':sample_particles[4].sig_id,'h_id':sample_particles[4].h_id}
+      H2_b2 = {'pt':sample_particles[5].pt,'eta':sample_particles[5].eta,'phi':sample_particles[5].phi,'m':sample_particles[5].m,'btag':sample_particles[5].btag,'sig_id':sample_particles[5].sig_id,'h_id':sample_particles[5].h_id}
 
-      self.HX_b1_btag = sample_particles[0].btag
-      self.HX_b2_btag = sample_particles[1].btag
-      self.H1_b1_btag = sample_particles[2].btag
-      self.H1_b2_btag = sample_particles[3].btag
-      self.H2_b1_btag = sample_particles[4].btag
-      self.H2_b2_btag = sample_particles[5].btag
+      self.HX = Higgs(HX_b1, HX_b2)
 
-      self.HX = self.HX_b1 + self.HX_b2
-      self.H1 = self.H1_b1 + self.H1_b2
-      self.H2 = self.H2_b1 + self.H2_b2
+      self.HX_b1 = self.HX.b1
+      self.HX_b2 = self.HX.b2
 
-      self.Y = self.H1 + self.H2
+      H1 = Higgs(H1_b1, H1_b2)
+      H2 = Higgs(H2_b1, H2_b2)
+
+      assert ak.all(self.HX.b1.pt >= self.HX.b2.pt)
+      assert ak.all(H1.b1.pt >= H1.b2.pt)
+      assert ak.all(H2.b1.pt >= H2.b2.pt)
+
+      self.Y = Y(H1, H2)
+
+      self.H1 = self.Y.H1
+      self.H2 = self.Y.H2
+
+      assert ak.all(self.H1.pt >= self.H2.pt)
+
+      self.H1_b1 = self.Y.H1_b1
+      self.H1_b2 = self.Y.H1_b2
+      self.H2_b1 = self.Y.H2_b1
+      self.H2_b2 = self.Y.H2_b2
 
       self.X = self.HX + self.H1 + self.H2
 
@@ -226,9 +304,12 @@ class Tree():
       self.H1_phi = self.H1.phi
       self.H2_phi = self.H2.phi
 
-      self.HX_dr = self.HX_b1.deltaR(self.HX_b2)
-      self.H1_dr = self.H1_b1.deltaR(self.H1_b2)
-      self.H2_dr = self.H2_b1.deltaR(self.H2_b2)
+      # self.HX_dr = self.HX_b1.deltaR(self.HX_b2)
+      # self.H1_dr = self.H1_b1.deltaR(self.H1_b2)
+      # self.H2_dr = self.H2_b1.deltaR(self.H2_b2)
+      self.HX_dr = self.HX.dr
+      self.H1_dr = self.H1.dr
+      self.H2_dr = self.H2.dr
 
       self.H_b_sig_id = np.column_stack((
          self.HX_b1.sig_id.to_numpy(),
@@ -244,6 +325,12 @@ class Tree():
       self.H2_correct = (self.H2_b1.h_id == self.H2_b2.h_id) & ((self.H2_b1.h_id == 2) | (self.H2_b1.h_id == 3))
 
       self.n_H_correct = self.HX_correct*1 + self.H1_correct*1 + self.H2_correct*1
+
+      self.HA_correct = (self.HX_b1.h_id == self.HX_b2.h_id) & (self.HX_b1.h_id > 0)
+      self.HB_correct = (self.H1_b1.h_id == self.H1_b2.h_id) & (self.H1_b1.h_id > 0)
+      self.HC_correct = (self.H2_b1.h_id == self.H2_b2.h_id) & (self.H2_b1.h_id > 0)
+
+      self.n_H_paired_correct = self.HA_correct*1 + self.HB_correct*1 + self.HC_correct*1
 
 
    def initialize_bosons(self):
@@ -261,6 +348,26 @@ class Tree():
       self.Y = Particle(self, 'Y')
 
       self.X = Particle(self, 'X')
+
+      self.HX_dr = self.HX_b1.deltaR(self.HX_b2)
+      self.H1_dr = self.H1_b1.deltaR(self.H1_b2)
+      self.H2_dr = self.H2_b1.deltaR(self.H2_b2)
+
+      self.HX_m = self.HX.m
+      self.H1_m = self.H1.m
+      self.H2_m = self.H2.m
+
+      self.HX_H1_dEta = self.HX.deltaEta(self.H1)
+      self.H1_H2_dEta = self.H1.deltaEta(self.H2)
+      self.H2_HX_dEta = self.H2.deltaEta(self.HX)
+
+      self.HX_H1_dPhi = self.HX.deltaPhi(self.H1)
+      self.H1_H2_dPhi = self.H1.deltaPhi(self.H2)
+      self.H2_HX_dPhi = self.H2.deltaPhi(self.HX)
+
+      self.HX_costheta = self.HX.costheta
+      self.H1_costheta = self.H1.costheta
+      self.H2_costheta = self.H2.costheta
 
    def initialize_vars(self):
       """Initialize variables that don't exist in the original ROOT tree."""
@@ -326,6 +433,9 @@ class Tree():
       # X = HX + H1 + H2
       self.X_m = self.X.m
 
+      self.X_m_prime = self.X_m - self.HX_m - self.H1_m - self.H2_m + 3*125
+      # self.X_m_dbl_prime = 
+
       self.H_j_btag = np.column_stack((
          self.HX_b1_btag.to_numpy(),
          self.HX_b2_btag.to_numpy(),
@@ -341,7 +451,24 @@ class Tree():
 
       self.btag_avg = np.average(self.H_j_btag, axis=1)
 
-   def spherical_region(self):
+      if self._is_signal and not self.gnn:
+         self.HA_correct = (self.HX_b1.h_id == self.HX_b2.h_id) & (self.HX_b1.h_id != -1)
+         self.HB_correct = (self.H1_b1.h_id == self.H1_b2.h_id) & (self.H1_b1.h_id != -1)
+         self.HC_correct = (self.H2_b1.h_id == self.H2_b2.h_id) & (self.H2_b1.h_id != -1)
+
+         self.n_H_paired_correct = self.HA_correct*1 + self.HB_correct*1 + self.HC_correct*1
+
+         self.HX_correct = (self.HX_b1.h_id == self.HX_b2.h_id) & (self.HX_b1.h_id == 0)
+         self.H1_correct = (self.H1_b1.h_id == self.H1_b2.h_id) & (self.H1_b1.h_id == 1)
+         self.H2_correct = (self.H2_b1.h_id == self.H2_b2.h_id) & (self.H2_b1.h_id == 2)
+
+         self.n_H_correct = self.HX_correct*1 + self.H1_correct*1 + self.H2_correct*1
+
+
+
+      # self.resolved_mask = ak.all(self.jet_signalId[:,:6] > -1, axis=1)
+
+   def spherical_region(self, mode='add'):
 
       self.config = ConfigParser()
       self.config.optionxform = str
@@ -364,11 +491,14 @@ class Tree():
       self.SR_edge   = float(self.config['spherical']['rInner'])
       self.CR_edge   = float(self.config['spherical']['rOuter'])
 
-      self.VR_center = int(self.AR_center + (self.SR_edge + self.CR_edge)/np.sqrt(2))
+      if mode == 'add': self.VR_center = int(self.AR_center + (self.SR_edge + self.CR_edge)/np.sqrt(2))
+      elif mode == 'subtract': self.VR_center = int(self.AR_center - (self.SR_edge + self.CR_edge)/np.sqrt(2))
 
-      higgs = ['HX_m', 'H1_m', 'H2_m']
+      # higgs = ['HX_m', 'H1_m', 'H2_m']
+      higgs = [self.HX.m, self.H1.m, self.H2.m]
 
-      deltaM = np.column_stack(([getattr(self, mH).to_numpy() - self.AR_center for mH in higgs]))
+      # deltaM = np.column_stack(([getattr(self, mH).to_numpy() - self.AR_center for mH in higgs]))
+      deltaM = np.column_stack(([abs(mH.to_numpy() - self.AR_center) for mH in higgs]))
       deltaM = deltaM * deltaM
       deltaM = deltaM.sum(axis=1)
       AR_deltaM = np.sqrt(deltaM)
@@ -377,16 +507,17 @@ class Tree():
       self.A_CR_mask = (AR_deltaM > self.SR_edge) & (AR_deltaM <= self.CR_edge) # Analysis CR
       if not self._is_signal: self.A_CR_avgbtag = self.btag_avg[self.A_CR_mask]
 
-      VR_deltaM = np.column_stack(([abs(getattr(self, mH).to_numpy() - self.VR_center) for mH in higgs]))
+      # VR_deltaM = np.column_stack(([abs(getattr(self, mH).to_numpy() - self.VR_center) for mH in higgs]))
+      VR_deltaM = np.column_stack(([abs(mH.to_numpy() - self.VR_center) for mH in higgs]))
       VR_deltaM = VR_deltaM * VR_deltaM
       VR_deltaM = VR_deltaM.sum(axis=1)
       VR_deltaM = np.sqrt(VR_deltaM)
       self.V_SR_mask = VR_deltaM <= self.SR_edge # Validation SR
       self.V_CR_mask = (VR_deltaM > self.SR_edge) & (VR_deltaM <= self.CR_edge) # Validation CR
 
-      score_cut = float(self.config['score']['threshold'])
-      self.ls_mask = self.btag_avg < score_cut # ls
-      self.hs_mask = self.btag_avg >= score_cut # hs
+      self.score_cut = float(self.config['score']['threshold'])
+      self.ls_mask = self.btag_avg < self.score_cut # ls
+      self.hs_mask = self.btag_avg >= self.score_cut # hs
 
 
       # b_cut = float(config['score']['n'])
@@ -409,7 +540,72 @@ class Tree():
       self.V_SRls_mask = self.V_SR_mask & self.ls_mask
       self.V_SRhs_mask = self.V_SR_mask & self.hs_mask
 
+   def multi_region(self, mode='add'):
 
+      self.config = ConfigParser()
+      self.config.optionxform = str
+      self.config.read(self.cfg)
+      self.config = self.config
+
+      minMX = int(self.config['plot']['minMX'])
+      maxMX = int(self.config['plot']['maxMX'])
+      if self.config['plot']['style'] == 'linspace':
+         nbins = int(self.config['plot']['edges'])
+         self.mBins = np.linspace(minMX,maxMX,nbins)
+      if self.config['plot']['style'] == 'arange':
+         step = int(self.config['plot']['steps'])
+         self.mBins = np.arange(minMX,maxMX,step)
+
+      self.x_mBins = (self.mBins[:-1] + self.mBins[1:])/2
+
+      """Defines spherical estimation region masks."""
+      self.AR_center = float(self.config['spherical']['ARcenter'])
+      self.SR_edge   = float(self.config['spherical']['rInner'])
+      self.CR_edge   = float(self.config['spherical']['rOuter'])
+
+      deltaS = (self.CR_edge + self.SR_edge) / np.sqrt(2)
+      self.val_center_1 = (self.AR_center + deltaS, self.AR_center + deltaS, self.AR_center + deltaS)
+      self.val_center_2 = (self.AR_center + deltaS, self.AR_center + deltaS, self.AR_center - deltaS)
+      self.val_center_3 = (self.AR_center + deltaS, self.AR_center - deltaS, self.AR_center + deltaS)
+      self.val_center_4 = (self.AR_center - deltaS, self.AR_center + deltaS, self.AR_center + deltaS)
+      self.val_center_5 = (self.AR_center + deltaS, self.AR_center - deltaS, self.AR_center - deltaS)
+      self.val_center_6 = (self.AR_center - deltaS, self.AR_center + deltaS, self.AR_center - deltaS)
+      self.val_center_7 = (self.AR_center - deltaS, self.AR_center - deltaS, self.AR_center + deltaS)
+      self.val_center_8 = (self.AR_center - deltaS, self.AR_center - deltaS, self.AR_center - deltaS)
+
+      higgs = [self.HX.m, self.H1.m, self.H2.m]
+
+      self.asr_mask, self.acr_mask = get_region_mask(higgs, (125,125,125), self.SR_edge, self.CR_edge)
+      self.vsr_mask_1, self.vcr_mask_1 = get_region_mask(higgs, self.val_center_1, self.SR_edge, self.CR_edge)
+      self.vsr_mask_2, self.vcr_mask_2 = get_region_mask(higgs, self.val_center_2, self.SR_edge, self.CR_edge)
+      self.vsr_mask_3, self.vcr_mask_3 = get_region_mask(higgs, self.val_center_3, self.SR_edge, self.CR_edge)
+      self.vsr_mask_4, self.vcr_mask_4 = get_region_mask(higgs, self.val_center_4, self.SR_edge, self.CR_edge)
+      self.vsr_mask_5, self.vcr_mask_5 = get_region_mask(higgs, self.val_center_5, self.SR_edge, self.CR_edge)
+      self.vsr_mask_6, self.vcr_mask_6 = get_region_mask(higgs, self.val_center_6, self.SR_edge, self.CR_edge)
+      self.vsr_mask_7, self.vcr_mask_7 = get_region_mask(higgs, self.val_center_7, self.SR_edge, self.CR_edge)
+      self.vsr_mask_8, self.vcr_mask_8 = get_region_mask(higgs, self.val_center_8, self.SR_edge, self.CR_edge)
+
+      self.score_cut = float(self.config['score']['threshold'])
+      self.ls_mask = self.btag_avg < self.score_cut # ls
+      self.hs_mask = self.btag_avg >= self.score_cut # hs
+
+      self.acr_ls_mask = self.acr_mask & self.ls_mask
+      self.acr_hs_mask = self.acr_mask & self.hs_mask
+      self.asr_ls_mask = self.asr_mask & self.ls_mask
+      self.asr_hs_mask = self.asr_mask & self.hs_mask
+      if not self._is_signal:
+         self.blind_mask = ~self.asr_hs_mask
+         self.asr_hs_mask = np.zeros_like(self.asr_mask)
+      # else: self.A_CR_avgbtag = self.btag_avg[self.V_CR_mask]
+
+      self.vcr_ls_mask_1, self.vcr_hs_mask_1, self.vsr_ls_mask_1, self.vsr_hs_mask_1 = get_hs_ls_masks(self.vsr_mask_1, self.vcr_mask_1, self.ls_mask, self.hs_mask)
+      self.vcr_ls_mask_2, self.vcr_hs_mask_2, self.vsr_ls_mask_2, self.vsr_hs_mask_2 = get_hs_ls_masks(self.vsr_mask_2, self.vcr_mask_2, self.ls_mask, self.hs_mask)
+      self.vcr_ls_mask_3, self.vcr_hs_mask_3, self.vsr_ls_mask_3, self.vsr_hs_mask_3 = get_hs_ls_masks(self.vsr_mask_3, self.vcr_mask_3, self.ls_mask, self.hs_mask)
+      self.vcr_ls_mask_4, self.vcr_hs_mask_4, self.vsr_ls_mask_4, self.vsr_hs_mask_4 = get_hs_ls_masks(self.vsr_mask_4, self.vcr_mask_4, self.ls_mask, self.hs_mask)
+      self.vcr_ls_mask_5, self.vcr_hs_mask_5, self.vsr_ls_mask_5, self.vsr_hs_mask_5 = get_hs_ls_masks(self.vsr_mask_5, self.vcr_mask_5, self.ls_mask, self.hs_mask)
+      self.vcr_ls_mask_6, self.vcr_hs_mask_6, self.vsr_ls_mask_6, self.vsr_hs_mask_6 = get_hs_ls_masks(self.vsr_mask_6, self.vcr_mask_6, self.ls_mask, self.hs_mask)
+      self.vcr_ls_mask_7, self.vcr_hs_mask_7, self.vsr_ls_mask_7, self.vsr_hs_mask_7 = get_hs_ls_masks(self.vsr_mask_7, self.vcr_mask_7, self.ls_mask, self.hs_mask)
+      self.vcr_ls_mask_8, self.vcr_hs_mask_8, self.vsr_ls_mask_8, self.vsr_hs_mask_8 = get_hs_ls_masks(self.vsr_mask_8, self.vcr_mask_8, self.ls_mask, self.hs_mask)
 
 
 class SixB(Tree):
@@ -418,10 +614,12 @@ class SixB(Tree):
 
    def __init__(self, filename, config='config/bdt_params.cfg', treename='sixBtree', year=2018, gnn_model=None):
       super().__init__(filename, treename, config, year, gnn_model=gnn_model)
-
-      print(filename)
-      self.mx = int(re.search('MX_.+MY', filename).group().split('_')[1])
-      self.my = int(re.search('MY.+/', filename).group().split('_')[1].split('/')[0])
+      
+      try: self.mx = int(re.search('MX_.+MY', filename).group().split('_')[1])
+      except: self.mx = int(re.search('MX-.+MY', filename).group().split('-')[1].split('_')[0])
+      try: self.my = int(re.search('MY.+/', filename).group().split('_')[1].split('/')[0])
+      except: 
+         self.my = int(re.search('MY.+/', filename).group().split('-')[1].split('/')[0].split('_')[0])
       # self.filename = re.search('NMSSM_.+/', filename).group()[:-1]
       self.sample = latexTitle(self.mx, self.my)
       self.mxmy = self.sample.replace('$','').replace('_','').replace('= ','_').replace(', ','_').replace(' GeV','')
@@ -638,6 +836,7 @@ class Data(Tree):
 
    def train(self):
       self.config.read(self.cfg)
+      print(self.score_cut)
       print(".. training in validation region")
       self.train_vr()
       print()
@@ -649,8 +848,6 @@ class Data(Tree):
       self.v_sr_const_ks_t, self.v_sr_const_ks_p = self.ks_test('X_m', self.V_SRls_mask, self.V_SRhs_mask, np.ones_like(self.V_SR_ls_weights)) # unweighted ks test (ls shape without weights)
       self.v_cr_model_ks_t, self.v_cr_model_ks_p = self.ks_test('X_m', self.V_CRls_mask, self.V_CRhs_mask, self.V_CR_ls_weights)
 
-
-
    def vr_hist(self, ls_mask, hs_mask, weights, density=False, vcr=False, data_norm=False, ax=None, variable='X_m', bins=None, norm=None):
       # ratio = ak.sum(self.V_CRls_mask) / ak.sum(self.V_CRhs_mask) 
       ratio = 1
@@ -661,6 +858,7 @@ class Data(Tree):
 
       # fig.suptitle("Validation Control Region")
       var = getattr(self, variable)
+      var = self.X.m
       xlabel = xlabel_dict[variable]
       if variable == 'X_m': bins = self.mBins
       else: bins = bin_dict[variable]
@@ -671,7 +869,7 @@ class Data(Tree):
       # print(n_ls.sum(), n_hs.sum(), weights.sum())
       # print(np.histogram(var[ls_mask], bins=bins, weights=weights)[0])
       # print(weights, weights.shape)
-      n_target, n_model, n_ratio = Ratio([var[ls_mask], var[hs_mask]], weights=[weights*ratio, None], bins=bins, density=density, axs=axs, labels=['Model', 'Data'], xlabel=r"M$_\mathrm{X}$ [GeV]", ratio_ylabel='Obs/Exp', data_norm=data_norm, norm=norm)
+      n_target, n_model, n_ratio, total = Ratio([var[ls_mask], var[hs_mask]], weights=[weights*ratio, None], bins=bins, density=density, axs=axs, labels=['Model', 'Data'], xlabel=r"M$_\mathrm{X}$ [GeV]", ratio_ylabel='Obs/Exp', data_norm=data_norm, norm=norm, total=True)
 
       axs[0].set_ylabel('Events')
 
@@ -689,18 +887,21 @@ class Data(Tree):
       for i,n_nominal in enumerate(n_model):#, model_uncertainty_up, model_uncertainty_down)):
          low_x = self.X_m[self.V_SRls_mask] > self.mBins[i]
          high_x = self.X_m[self.V_SRls_mask] <= self.mBins[i+1]
-         weights = np.sum(self.V_SR_ls_weights[low_x & high_x]**2)
+         weights = np.sum((self.V_SR_ls_weights[low_x & high_x]/total)**2)
          sumw2.append(weights)
          weights = np.sqrt(weights)
+         # print(weights, n_nominal)
          err.append(weights)
-         # model_uncertainty_up = n_nominal + weights
-         # model_uncertainty_down = n_nominal - weights
+         model_uncertainty_up = n_nominal + weights
+         model_uncertainty_down = n_nominal - weights
+         # print(model_uncertainty_up,model_uncertainty_down)
 
          # axs[0].fill_between([self.mBins[i], self.mBins[i+1]], model_uncertainty_down, model_uncertainty_up, color='C0', alpha=0.25)
-         # ratio_up = model_uncertainty_up / n_nominal
-         # ratio_down = model_uncertainty_down / n_nominal
-         # # print(ratio_down)
-         # axs[1].fill_between([self.mBins[i], self.mBins[i+1]], ratio_down, ratio_up, color='C0', alpha=0.25)
+         ratio_up   = np.nan_to_num(model_uncertainty_up / n_nominal)
+         # print(weights, model_uncertainty_up, n_nominal)
+         ratio_down = np.nan_to_num(model_uncertainty_down / n_nominal)
+         # print(ratio_up, ratio_down)
+         axs[1].fill_between([self.mBins[i], self.mBins[i+1]], ratio_down, ratio_up, color='C0', alpha=0.25)
 
       self.VR_sumw2 = np.array((sumw2))
       self.VR_err = np.array((err))
@@ -760,22 +961,112 @@ class Data(Tree):
       axs[0].set_title('Validation Control Region')
       return fig, axs, n_target, n_model
 
+
+
+
+
+   def new_before_after(self, variable='X_m'):
+      fig_before, axs_before = plt.subplots(nrows=2, ncols=1, gridspec_kw={'height_ratios':[4,1]})
+      fig_after, axs_after = plt.subplots(nrows=2, ncols=1, gridspec_kw={'height_ratios':[4,1]})
+
+      axs_before[0].set_title('Validation Signal Region - Before BDT Weights')
+      axs_after[0].set_title('Validation Signal Region - After BDT Weights')
+
+      var = getattr(self, variable)
+      var = self.X.m
+      xlabel = xlabel_dict[variable]
+      if variable == 'X_m': bins = self.mBins
+      else: bins = bin_dict[variable]
+      bins=bins
+      x = (bins[:-1] + bins[1:]) / 2
+      
+      n_v_sr_ls_unweighted = np.histogram(var[self.V_SRls_mask], bins=bins)[0]
+      n_v_sr_ls_weighted = np.histogram(var[self.V_SRls_mask], bins=bins, weights=self.V_SR_ls_weights)[0]
+      n_v_sr_hs = np.histogram(var[self.V_SRhs_mask], bins=bins)[0]
+      err_v_sr_hs = np.sqrt(n_v_sr_hs)
+
+      ratio = sum(self.V_CRhs_mask) / sum(self.V_CRls_mask)
+
+      n_unweighted = n_v_sr_ls_unweighted*ratio
+      axs_before[0].hist(x, weights=n_unweighted, bins=bins, histtype='step',lw=2,align='mid')
+      axs_before[0].scatter(x,n_v_sr_hs,color='black')
+      ratio_unweighted = np.nan_to_num(n_v_sr_hs / n_unweighted, nan=1)
+      err_unweighted = np.sqrt(n_unweighted*ratio)
+
+      axs_after[0].hist(x, weights=n_v_sr_ls_weighted, bins=bins, histtype='step',lw=2,align='mid')
+      axs_after[0].scatter(x,n_v_sr_hs,color='black')
+      ratio_weighted = np.nan_to_num(n_v_sr_hs / n_v_sr_ls_weighted, nan=1)
+
+      axs_before[1].scatter(x,ratio_unweighted, color='k')
+      axs_after[1].scatter(x,ratio_weighted, color='k')
+
+      lbf_before_a, lbf_before_b = np.polyfit(x, ratio_unweighted, 1)
+      lbf_after_a, lbf_after_b = np.polyfit(x, ratio_weighted, 1)
+
+      lbf_before = lbf_before_a*x+lbf_before_b
+      lbf_after = lbf_after_a*x+lbf_after_b
+
+      axs_before[1].plot(x, lbf_before, color='k')
+      axs_after[1].plot(x, lbf_after, color='k')
+
+      axs_before[1].set_ylim(0,2)
+      axs_after[1].set_ylim(0,2)
+
+      sumw2, err = [], []
+      for i,(n_unw,n_w,n) in enumerate(zip(n_unweighted, n_v_sr_ls_weighted, n_v_sr_hs)):
+         ratio_uncert_up   = n_unw + err_unweighted[i]
+         ratio_uncert_down = n_unw - err_unweighted[i]
+         axs_before[0].fill_between([self.mBins[i], self.mBins[i+1]], ratio_uncert_down, ratio_uncert_up, color='C0', alpha=0.25)
+
+         target_uncert_up = n + err_v_sr_hs[i]
+         target_uncert_down = n - err_v_sr_hs[i]
+         axs_before[0].plot([x[i],x[i]],[target_uncert_down, target_uncert_up], color='k')
+         axs_after[0].plot([x[i],x[i]],[target_uncert_down, target_uncert_up], color='k')
+
+         ratio_up = np.nan_to_num(ratio_uncert_up / n_unw)
+         ratio_down = np.nan_to_num(ratio_uncert_down / n_unw)
+         axs_before[1].fill_between([self.mBins[i], self.mBins[i+1]], ratio_down, ratio_up, color='C0', alpha=0.25)
+
+         low_x = self.X_m[self.A_SRls_mask] > self.mBins[i]
+         high_x = self.X_m[self.A_SRls_mask] <= self.mBins[i+1]
+         weights = np.sum(self.AR_ls_weights[low_x & high_x]**2)
+         sumw2.append(weights)
+         weights = np.sqrt(weights)
+         err.append(weights)
+
+         model_uncertainty_up   = n_w + weights
+         model_uncertainty_down = n_w - weights
+         ratio_up = np.nan_to_num(model_uncertainty_up / n_w)
+         ratio_down = np.nan_to_num(model_uncertainty_down / n_w)
+
+         axs_after[0].fill_between([self.mBins[i], self.mBins[i+1]], model_uncertainty_down, model_uncertainty_up, color='C0', alpha=0.25)
+         axs_after[1].fill_between([self.mBins[i], self.mBins[i+1]], ratio_down, ratio_up, color='C0', alpha=0.25)
+
+
+
+
+
+
+
+
+
+
    def before_after(self, savedir=None, variable='X_m'):
       # xlabel = xlabel_dict[variable]
 
-      fig, axs, n_obs, n_unweighted = self.vr_hist(self.V_SRls_mask, self.V_SRhs_mask, np.ones_like(self.V_SR_ls_weights)/sum(self.V_SRls_mask), data_norm=True, variable=variable)
-      print(type(axs))
+      # fig, axs, n_obs, n_unweighted
+      fig, axs, n_target, n_model, n_ratio = self.vr_hist(self.V_SRls_mask, self.V_SRhs_mask, np.ones_like(self.V_SR_ls_weights)/sum(self.V_SRls_mask), data_norm=True, variable=variable)
       axs[0].set_title('Validation Signal Region - Before Applying BDT Weights', fontsize=18)
 
       if savedir is not None: fig.savefig(f"{savedir}/{variable}_vsr_before_bdt.pdf")
 
-      fig, axs, n_obs, n_weighted = self.vr_hist(self.V_SRls_mask, self.V_SRhs_mask, self.V_SR_ls_weights/self.V_SR_ls_weights.sum(), data_norm=True, variable=variable)
+      fig, axs, n_target, n_model, n_ratio = self.vr_hist(self.V_SRls_mask, self.V_SRhs_mask, self.V_SR_ls_weights/self.V_SR_ls_weights.sum(), data_norm=True, variable=variable)
       axs[0].set_title('Validation Signal Region - After Applying BDT Weights', fontsize=18)
       if savedir is not None: fig.savefig(f"{savedir}/{variable}_vsr_after_bdt.pdf")
 
       # fig.savefig(f"plots/model_VCR.pdf", bbox_inches='tight')
 
-   def sr_hist(self):
+   def sr_hist(self, savein=None):
       from matplotlib.lines import Line2D
       from matplotlib.patches import Patch
 
@@ -798,9 +1089,11 @@ class Data(Tree):
          model_uncertainty_down = n_nominal - weights
 
          axs[0].fill_between([self.mBins[i], self.mBins[i+1]], model_uncertainty_down, model_uncertainty_up, color='C0', alpha=0.25)
-         ratio_up = model_uncertainty_up / n_nominal
-         ratio_down = model_uncertainty_down / n_nominal
+         
+         ratio_up = np.nan_to_num(model_uncertainty_up / n_nominal)
+         ratio_down = np.nan_to_num(model_uncertainty_down / n_nominal)
          # print(ratio_down)
+         # print(i, i+1, ratio_down, ratio_up)
          axs[1].fill_between([self.mBins[i], self.mBins[i+1]], ratio_down, ratio_up, color='C0', alpha=0.25)
 
       self.sumw2 = np.array((sumw2))
@@ -817,6 +1110,8 @@ class Data(Tree):
 
       axs[1].plot([self.mBins[0], self.mBins[-1]], [1,1], color='gray', linestyle='--')
       axs[1].set_xlabel(r"$M_X$ [GeV]")
+
+      if savein is not None: ROOTHist(n_model_SR_hs, 'data', savein)
       
       return fig, axs, n_model_SR_hs
 
@@ -863,39 +1158,3 @@ xlabel_dict = {
    'Y_m' : r"$M_Y$ [GeV]"
 }
 
-
-
-
-from itertools import combinations
-combos = list(combinations(np.arange(6),2))
-N = len(combos)
-combo_dict = {}
-
-indices = []
-total = 0
-for i,combo1 in enumerate(combos):
-    combo1 = np.array(combo1)
-    for j in range(i+1, N):
-        combo2 = np.array(combos[j])
-        # print(combo,combos[j])
-        if combo1[0] in combo2 or combo1[1] in combo2: continue
-        for k in range(j+1, N):
-            combo3 = np.array(combos[k])
-            if combo2[0] in combo3 or combo2[1] in combo3: continue
-            if combo1[0] in combo3 or combo1[1] in combo3: continue
-            indices.append(np.concatenate((combo1, combo2, combo3)))
-            combo_dict[total] = np.concatenate((combo1, combo2, combo3))
-            # print(f"combo_dict[{total}] = {combo_dict[total]}")
-            # combo_dict[total] = 
-            total += 1
-        # break
-    # break
-indices = np.row_stack([ind for ind in indices])
-
-class GNN(Tree):
-   """
-   A class to handle the output from the gnn designed to choose the best jet pairs.
-   """
-
-   model = '/uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_6_19_patch2/src/sixb/weaver-multiH/weaver/models/trih_ranker_mp/20221212_ranger_lr0.0047_batch512/predict_output/trih_ranker_mp_NMSSM_XYH_YToHH_6b_MX_700_MY_400_ntuple.awkd'
-   
