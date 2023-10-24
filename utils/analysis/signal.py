@@ -758,6 +758,57 @@ class SixB(Tree):
       
       self.jet_higgsIdx = (self.jet_signalId) // 2
 
+      print("Calculating SF correction factors")
+      self.get_sf_ratios()
+
+   def get_sf_ratios(self):
+      self.spherical_region()
+
+      n_min = min(self.n_jet) - 0.5
+      n_max = max(self.n_jet) + 1.5
+      bins = np.arange(n_min, n_max)
+
+      systematics_name = [key for key in self.keys() if key.startswith('bSFshape_')]
+      systematics = [self.get(key, library='np') for key in self.keys() if key.startswith('bSFshape_')]
+      masks = [self.asr_mask, self.acr_mask, self.vsr_mask, self.vcr_mask]
+
+      print("SANITY CHECK")
+      print(np.array_equal(self.acr_mask, self.vsr_mask))
+      print(np.any(np.equal(self.acr_mask, self.vsr_mask)))
+
+      mask_names = ['asr', 'acr', 'vsr', 'vcr']
+      for mask,region in zip(masks,mask_names):
+         # print(f".. processing {region}")
+         for sys,sys_name in zip(systematics,systematics_name):
+            branch_name = f"{region}_{sys_name}"
+            scale = np.repeat(self.scale, len(self.n_jet[mask]))
+            n_jet = self.n_jet.to_numpy()
+            
+            n_b, e_b = np.histogram(n_jet[mask], bins=bins, weights=scale)
+            n_a, e_a  = np.histogram(n_jet[mask], bins=bins, weights=sys[mask]*scale)
+            total_before = round(len(self.n_jet[mask]) * self.scale)
+            total_after  = round(sys[mask].sum() * self.scale)
+
+            ratio = n_b / n_a
+            ratio_dict = {int(e):n for e,n in zip(e_b[1:], ratio)}
+            get_ratio = lambda x : ratio_dict[x]
+            v_ratio = np.vectorize(get_ratio)
+            final_bsf = (v_ratio(n_jet) * sys)[mask]
+            setattr(self, branch_name, final_bsf)
+
+            total_bsf_after = round((final_bsf).sum()*self.scale)
+            # print(f"{total_before} =? {total_bsf_after}")
+
+            jet_btag = self.jet_btag[:,:6][mask]
+            final_bsf_jet, _ = ak.broadcast_arrays(ak.from_numpy(final_bsf), jet_btag)
+
+            fig, ax = plt.subplots()
+
+            n_b = Hist(ak.flatten(jet_btag), bins=np.linspace(0,1.01,101), ax=ax, label='Before SF', weights=self.scale)
+            n_a = Hist(ak.flatten(jet_btag), bins=np.linspace(0,1.01,101), ax=ax, label='After SF & Correction', weights=ak.flatten(final_bsf_jet)*self.scale)
+            # print(f"{round(n_b.sum())} =? {round(n_a.sum())}")
+
+
    def sr_hist(self):
       fig, ax = plt.subplots()
       n = Hist(self.X_m[self.asr_hs_mask], bins=self.mBins, ax=ax, density=False, weights=self.scale, zorder=2)
