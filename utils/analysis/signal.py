@@ -2,35 +2,30 @@
 Author: Suzanne Rosenzweig
 """
 
-from utils import *
-from utils.cutConfig import *
-from utils.varUtils import *
-from utils.plotter import latexTitle, Hist
+# from utils import *
+# from utils.cutConfig import *
+# from utils.varUtils import *
+# from utils.plotter import latexTitle, Hist
+import numpy as np
+import matplotlib.pyplot as plt
 from utils.useCMSstyle import *
 plt.style.use(CMS)
 from utils.analysis.particle import Particle, Higgs, Y
 from utils.analysis.gnn import model_path
-from utils.xsecUtils import lumiMap
 
 # Standard library imports
-from array import array
-from awkward.highlevel import Array
+
 from rich.console import Console
 console = Console()
 # import awkward0 as ak0
 # from colorama import Fore
-from hep_ml import reweight
+# from hep_ml import reweight
 import re
-import ROOT
-ROOT.gROOT.SetBatch(True)
 import os, sys 
-import uproot
-import pandas as pd
 # from hep_ml.metrics_utils import ks_2samp_weighted
-from scipy.stats import kstwobign
 # import subprocess
 
-from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
+
 
 njet_bins = np.arange(8)
 id_bins = np.arange(-1, 7)
@@ -67,6 +62,9 @@ def ROOTHist(h_vals, title, filename):
    """
    title : should be either 'signal' or 'data'
    """
+   import ROOT
+   ROOT.gROOT.SetBatch(True)
+   from array import array
    assert ".root" in filename, print("[ERROR] Please include '.root' in filename")
    
    fout = ROOT.TFile(f"{filename}","recreate")
@@ -102,6 +100,7 @@ from configparser import ConfigParser
 class Tree():
 
    def __init__(self, filename, treename='sixBtree', cfg_file=None, selection='ttmm', gnn_model=True, is_signal=True):
+      import uproot
 
       self.filename = filename
       self.treename = treename
@@ -110,18 +109,18 @@ class Tree():
       updated_model_path = f"{model_path}{self.year}"
       if 'Summer2016UL' in self.filename and 'preVFP' in filename: updated_model_path += 'preVFP'
       if 'Summer2016UL' in self.filename and 'preVFP' not in filename: updated_model_path += 'postVFP'
-      print(updated_model_path)
+      # print(updated_model_path)
 
       if gnn_model and is_signal: 
          model_name = re.search('NMSSM_.+/', filename).group()[:-1]
          # updated_model_path = f"{updated_model_path}{year}"
          if isinstance(gnn_model, bool): gnn_model = f"{updated_model_path}/{model_name}.root"
-         console.log(f"[light_slate_blue]Loading model: {gnn_model}")
+         # console.log(f"[light_slate_blue]Loading model: {gnn_model}")
          self.gnn_model = gnn_model
       elif gnn_model and ~is_signal:
          # global updated_model_path
          gnn_model=f"{updated_model_path}/JetHT_Data_UL.root"
-         console.log(f"[light_slate_blue]Loading model: {gnn_model}")
+         # console.log(f"[light_slate_blue]Loading model: {gnn_model}")
          self.gnn_model = gnn_model
 
       file_info = '/'.join(self.filename.split('/')[8:])
@@ -228,8 +227,9 @@ class Tree():
       print("Running: ", cmd)
       output = subprocess.check_output(shlex.split(cmd)).decode("UTF-8").split('\n')
       sample = self.filename.split('/')[-2]
-      print(sample)
-      model = [f"{modelpath}/{out}" for out in output if sample in out][0]
+      # print(sample)
+      # model = [f"{modelpath}/{out}" for out in output if sample in out][0]
+      model = self.gnn_model
       # console.log(f"[purple]Loading {model}...")
       console.log(f"[purple]Loading {self.gnn_model}...")
 
@@ -731,6 +731,7 @@ class SixB(Tree):
 
    def __init__(self, filename, config='config/bdt_params.cfg', treename='sixBtree', selection='ttmm', model_path=model_path, gnn_model=True):
       super().__init__(filename, treename, config, gnn_model=gnn_model, selection=selection)
+      from utils.xsecUtils import lumiMap
 
       # self.gnn_model = gnn_model
       
@@ -762,6 +763,7 @@ class SixB(Tree):
       self.get_sf_ratios()
 
    def get_sf_ratios(self):
+      from utils.plotter import Hist
       self.spherical_region()
 
       n_min = min(self.n_jet) - 0.5
@@ -771,10 +773,6 @@ class SixB(Tree):
       systematics_name = [key for key in self.keys() if key.startswith('bSFshape_')]
       systematics = [self.get(key, library='np') for key in self.keys() if key.startswith('bSFshape_')]
       masks = [self.asr_mask, self.acr_mask, self.vsr_mask, self.vcr_mask]
-
-      print("SANITY CHECK")
-      print(np.array_equal(self.acr_mask, self.vsr_mask))
-      print(np.any(np.equal(self.acr_mask, self.vsr_mask)))
 
       mask_names = ['asr', 'acr', 'vsr', 'vcr']
       for mask,region in zip(masks,mask_names):
@@ -806,6 +804,8 @@ class SixB(Tree):
 
             n_b = Hist(ak.flatten(jet_btag), bins=np.linspace(0,1.01,101), ax=ax, label='Before SF', weights=self.scale)
             n_a = Hist(ak.flatten(jet_btag), bins=np.linspace(0,1.01,101), ax=ax, label='After SF & Correction', weights=ak.flatten(final_bsf_jet)*self.scale)
+
+            plt.close()
             # print(f"{round(n_b.sum())} =? {round(n_a.sum())}")
 
 
@@ -940,6 +940,7 @@ class Data(Tree):
       self.variables = var_list
 
    def get_df(self, mask, variables):
+      import pandas as pd
       features = {}
       for var in variables:
          # features[var] = abs(getattr(self, var)[mask])
@@ -1093,6 +1094,9 @@ class Data(Tree):
       return fig, axs, n_target, n_model, n_ratio
 
    def ks_test(self, variable, ls_mask, hs_mask, weights):
+      from scipy.stats import kstwobign
+      from awkward.highlevel import Array
+
       ratio = 1
 
       var = getattr(self, variable)
@@ -1148,6 +1152,7 @@ class Data(Tree):
 
 
    def pull_plots(self, variable='X_m', savein=None, filename=None):
+      from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
       fig_before = plt.figure(figsize=(30,10))
       fig_after = plt.figure(figsize=(30,10))
 
