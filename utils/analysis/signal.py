@@ -25,8 +25,6 @@ import os, sys
 # from hep_ml.metrics_utils import ks_2samp_weighted
 # import subprocess
 
-
-
 njet_bins = np.arange(8)
 id_bins = np.arange(-1, 7)
 pt_bins = np.linspace(0, 500, 100)
@@ -35,9 +33,6 @@ score_bins = np.linspace(0,1.01,102)
 nbins = 40
 m_bins = np.linspace(375, 1150, nbins)
 x_X_m = (m_bins[:-1] + m_bins[1:]) / 2
-
-def gauss(x, H, A, x0, sigma):
-   return H + A * np.exp(-(x - x0) ** 2 / (2 * sigma ** 2))
 
 def get_region_mask(higgs, center, sr_edge, cr_edge):
    deltaM = np.column_stack(([abs(mH.to_numpy() - val) for mH,val in zip(higgs,center)]))
@@ -83,8 +78,6 @@ def ROOTHist(h_vals, title, filename):
    ROOT_hist.Write()
    fout.Close()
 
-year_dict = ['2016', '2017', '2018']
-
 from configparser import ConfigParser
 # Parent Class
 class Tree():
@@ -94,7 +87,7 @@ class Tree():
 
       self.filename = filename
       self.treename = treename
-      self.year = int([yr for yr in year_dict if yr in filename][0])
+      self.year = int([yr for yr in ['2016', '2017', '2018'] if yr in filename][0])
 
       updated_model_path = f"{model_path}{self.year}"
       if 'Summer2016UL' in self.filename and 'preVFP' in filename: updated_model_path += 'preVFP'
