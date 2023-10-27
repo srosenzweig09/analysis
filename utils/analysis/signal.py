@@ -83,16 +83,6 @@ def ROOTHist(h_vals, title, filename):
    ROOT_hist.Write()
    fout.Close()
 
-def sixb_from_gnn(filename, cfg_file='config/bdt_params.cfg', suffix=''):
-   if '_4b' in filename: suffix='_4b'
-   model_name = re.search('NMSSM_.+/', filename).group()[:-1]
-   return SixB(filename, model_path=model_path, gnn_model=f"{model_path}/{model_name}.root{suffix}.awkd", config=cfg_file)
-
-def data_from_gnn(filename='/eos/uscms/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag/JetHT_Data_UL/ntuple.root', config='config/bdt_params.cfg'):
-   if '_4b' in filename: return Data(filename, model_path=model_path, gnn_model=f"{model_path}/JetHT_Data_UL.root_4b.awkd", config=config)
-   return Data(filename, model_path=model_path, gnn_model=f"{model_path}/JetHT_Data_UL.root")
-   # return Data('/eos/uscms/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag/JetHT_Data_UL/ntuple.root', gnn_model=f"{model_path}/JetHT_Run2018_full.root.awkd")
-
 year_dict = ['2016', '2017', '2018']
 
 from configparser import ConfigParser
