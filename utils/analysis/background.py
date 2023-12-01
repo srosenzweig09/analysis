@@ -13,14 +13,13 @@ from utils.analysis.gnn import model_path
 from configparser import ConfigParser
 from rich import print as rprint
 
-import awkward0 as ak0
 import subprocess, shlex
 import sys 
 import uproot
 
 vector.register_awkward()
 
-year_dict = ['2016', '2017', '2018']
+years = ['2016', '2017', '2018']
 
 def get_scaled_weights(list_of_arrs, bins, scale):
     """This function is used to get weights for background events."""
@@ -57,7 +56,7 @@ def get_hs_ls_masks(sr_mask, cr_mask, ls_mask, hs_mask):
 
 class Bkg():
     
-    def __init__(self, filename, treename='sixBtree', year=2018, gnn=True, max=None):
+    def __init__(self, filename, treename='sixBtree', year=2018, feyn=True, max=None):
         """
         A class for handling TTrees from older skims, which output an array of jet kinematics. (Newer skims output a single branch for each b jet kinematic.)
 
@@ -72,12 +71,13 @@ class Bkg():
         self.year = year
 
         if type(filename) != list:
-            self.single_init(filename, treename, year, gnn=gnn, max=max)
+            self.single_init(filename, treename, year, feyn=feyn, max=max)
         else:
-            self.multi_init(filename, treename, year, gnn=gnn, max=max)
+            self.multi_init(filename, treename, year, feyn=feyn, max=max)
 
-    def single_init(self, filename, treename, year, gnn, max):
+    def single_init(self, filename, treename, year, feyn, max):
         """Opens a single file into a TTree"""
+        self.single = True
         tree = uproot.open(f"{filename}:{treename}")
         self.tree = tree
 
@@ -94,6 +94,7 @@ class Bkg():
 
         self.nevents = len(tree[used_key].array())
 
+
         cutflow = uproot.open(f"{filename}:h_cutflow")
         # save total number of events for scaling purposes
         total = cutflow.to_numpy()[0][0]
@@ -106,8 +107,39 @@ class Bkg():
         self.scale = self.lumi*xsec/total
         self.cutflow = cutflow.to_numpy()[0]*self.scale
 
-    def multi_init(self, filelist, treename, year, gnn, max):
+        # self.genWeight = self.lumi*xsec*tree['genWeight'].array()
+        self.PUWeight = tree['PUWeight'].array()
+        self.PUWeight_up = tree['PUWeight_up'].array()
+        self.PUWeight_down = tree['PUWeight_down'].array()
+        # self.PUIDWeight = tree['PUIDWeight'].array()
+        # self.PUIDWeight_up = tree['PUIDWeight_up'].array()
+        # self.PUIDWeight_down = tree['PUIDWeight_down'].array()
+        # self.triggerSF = tree['triggerScaleFactor'].array()
+        # self.triggerSF_up = tree['triggerScaleFactorUp'].array()
+        # self.triggerSF_down = tree['triggerScaleFactorDown'].array()
+
+        samp, xsec = next( ((key,value) for key,value in xsecMap.items() if key in filename),("unk",1) )
+        if feyn:
+            predictions = subprocess.check_output(shlex.split(f"ls {model_path}{self.year}"))
+            predictions = predictions.decode('UTF-8').split('\n')[:-1]
+            samp_file = f"{model_path}{self.year}/{[i for i in predictions if samp in i][0]}"
+            with uproot.open(samp_file) as f:
+                f = f['Events']
+                self.scores = f['scores'].array(library='np')
+                self.maxcomb = f['max_comb'].array(library='np')
+                self.maxscore = f['max_score'].array()
+                self.maxlabel = f['max_label'].array()
+                self.minscore = f['min_score'].array()
+                self.nres_rank = f['nres_rank'].array()
+                self.mass_rank = f['mass_rank'].array()
+                self.max_diff = np.sort(self.scores, axis=1)[:,44]-np.sort(self.scores, axis=1)[:,43]
+            self.init_from_gnn()
+
+
+
+    def multi_init(self, filelist, treename, year, feyn, max):
         """Opens a list of files into several TTrees. Typically used for bkgd events."""
+        self.single = False
         self.is_signal = False
         self.is_bkgd = True
 
@@ -129,12 +161,13 @@ class Bkg():
 
         qcd_mask = np.array(())
 
-        if gnn:
+        if feyn:
             predictions = subprocess.check_output(shlex.split(f"ls {model_path}{self.year}"))
             predictions = predictions.decode('UTF-8').split('\n')[:-1]
         
         skip_4b = True
 
+        print('/'.join(filelist[0].split('/')[:8]))
         for filename in filelist:
             file_info = '/'.join(filename.split('/')[8:])
             print(file_info)
@@ -178,24 +211,10 @@ class Bkg():
                 if gnn:
                     if skip_4b: samp_file = f"{model_path}{self.year}/{[i for i in predictions if samp in i and '_4b' not in i][0]}"
                     else:       samp_file = f"{model_path}{self.year}/{[i for i in predictions if samp in i][0]}"
-                    # print(samp_file)
-                    # with ak0.load(samp_file) as f_awk:
-                        # scores = ak.unflatten(f_awk['scores'], np.repeat(45, n)).to_numpy()
-                        # scores = ak.from_regular(f_awk['scores'].astype(float))
-                        # self.mass_rank.append(f_awk['mass_rank'])
-                        # self.nres_rank.append(f_awk['nres_rank'])
-                        # # self.maxscore = f_awk['maxscore']
-                        # self.maxscores.append(f_awk['maxscore'])
-                        # self.scores.append(scores)
-                        # # self.minscores.append(scores.min(axis=1))
-                        # # combos = ak.from_numpy(f_awk['maxcomb'])
-                        # combos = ak.from_regular(f_awk['maxcomb'].astype(int))
-                        # # combos = ak.unflatten(ak.flatten(combos), ak.ones_like(combos[:,0])*6)
-                        # self.maxcomb.append(combos)
                     with uproot.open(samp_file) as f:
                         f = f['Events']
                         self.scores = f['scores'].array(library='np')
-                        self.maxcomb = f['max_comb'].array(library='np')
+                        self.maxcomb.append(f['max_comb'].array(library='np'))
                         self.maxscore = f['max_score'].array()
                         self.maxlabel = f['max_label'].array()
                         self.minscore = f['min_score'].array()
@@ -213,13 +232,10 @@ class Bkg():
                 setattr(self, samp, tree)
 
                 # CHANGED FOR UPROOT ITERATE
-                for k in ak.fields(tree):
-                    setattr(getattr(self, samp), k, tree[k])
+                # for k in ak.fields(tree):
+                #     print(getattr(self, samp))
+                #     setattr(getattr(self, samp), k, tree[k])
 
-                # for k, v in tree.items():
-                    # setattr(getattr(self, samp), k, v.array())
-
-                break
         
         self.qcd_mask = qcd_mask == 1
         self.ttbar_mask = ~self.qcd_mask
@@ -247,36 +263,10 @@ class Bkg():
                     except: pass
                 setattr(self, k, leaves)
 
-        self.year = int([yr for yr in year_dict if yr in filename][0])
- 
-        # self.loose_wp = btagWP[self.year]['Loose']
-        # self.medium_wp = btagWP[self.year]['Medium']
-        # self.tight_wp = btagWP[self.year]['Tight']
+        self.year = int([yr for yr in years if yr in filename][0])
 
-        # self.tight_mask  = ak.concatenate(self.jet_btag) > self.tight_wp
-        # medium_mask = ak.concatenate(self.jet_btag) > self.medium_wp
-        # loose_mask  = ak.concatenate(self.jet_btag) > self.loose_wp
-
-        # self.fail_mask = ~loose_mask
-        # self.loose_mask = loose_mask & ~medium_mask
-        # self.medium_mask = medium_mask & ~self.tight_mask
-
-        # self.n_tight = ak.sum(self.tight_mask, axis=1)
-        # self.n_medium = ak.sum(self.medium_mask, axis=1)
-        # self.n_loose = ak.sum(self.loose_mask, axis=1)
-        # self.n_fail = ak.sum(self.fail_mask, axis=1)
-
-        if gnn: self.init_from_gnn()
+        if feyn: self.init_from_gnn()
         else: self.init_from_cuts()
-
-        # print("Actually sums to...")
-        # print(self.n_tight + self.n_medium + self.n_loose + self.n_fail)
-        # print([ak.count(jet_pt, axis=1) for jet_pt in self.jet_pt])
-
-        # if 'cutflow_studies' in filename:
-        #     assert ak.all((self.n_tight + self.n_medium + self.n_loose + self.n_fail) == ak.concatenate(self.n_jet)) 
-        # else:
-        #     assert ak.all((self.n_tight + self.n_medium + self.n_loose + self.n_fail) == ak.ones_like(ak.concatenate(self.n_jet))*6)
 
     def hist(self, var, bins, mask=None, ax=None, plot_mode='together', colors=['green', 'rebeccapurple'], labels=['ttbar', 'qcd'], all_jets=False, **kwargs):
         """
@@ -336,19 +326,29 @@ class Bkg():
         # return [tree[key].array() for tree in self.tree]
 
     def init_from_gnn(self):
+        # combos = [maxcomb.astype(int) for maxcomb in self.maxcomb]
+        # combos = [ak.from_regular(c) for c in combos]
         combos = self.maxcomb.astype(int)
         combos = ak.from_regular(combos)
-
+        
         self.combos = combos
 
         btag_mask = ak.argsort(self.jet_btag, axis=1, ascending=False) < 6
 
-        pt = ak.concatenate([pt[ak.argsort(btag, axis=1, ascending=False) < 6][comb] for pt,comb,btag in zip(self.jet_ptRegressed[btag_mask],combos,self.jet_btag)])
-        eta = ak.concatenate([eta[comb] for eta,comb in zip(self.jet_eta,combos)])
-        phi = ak.concatenate([phi[comb] for phi,comb in zip(self.jet_phi,combos)])
-        m = ak.concatenate([m[comb] for m,comb in zip(self.jet_mRegressed,combos)])
-        btag = ak.concatenate([btag[comb] for btag,comb in zip(self.jet_btag,combos)])
-
+        if self.single:
+            pt = self.jet_ptRegressed[combos]
+            eta = self.jet_eta[combos]
+            phi = self.jet_phi[combos]
+            m = self.jet_mRegressed[combos]
+            btag = self.jet_btag[combos]
+            print(pt)
+        else:
+            pt = ak.concatenate([pt[comb] for pt,comb in zip(self.jet_ptRegressed,combos)])
+            eta = ak.concatenate([eta[comb] for eta,comb in zip(self.jet_eta,combos)])
+            phi = ak.concatenate([phi[comb] for phi,comb in zip(self.jet_phi,combos)])
+            m = ak.concatenate([m[comb] for m,comb in zip(self.jet_mRegressed,combos)])
+            btag = ak.concatenate([btag[comb] for btag,comb in zip(self.jet_btag,combos)])
+        
         HX_b1 = Particle({'pt':pt[:,0],'eta':eta[:,0],'phi':phi[:,0],'m':m[:,0],'btag':btag[:,0]})
         HX_b2 = Particle({'pt':pt[:,1],'eta':eta[:,1],'phi':phi[:,1],'m':m[:,1],'btag':btag[:,1]})
         H1_b1 = Particle({'pt':pt[:,2],'eta':eta[:,2],'phi':phi[:,2],'m':m[:,2],'btag':btag[:,2]})
@@ -514,7 +514,7 @@ class Bkg():
         higgs = [self.HX.m, self.H1.m, self.H2.m]
 
         # deltaM = np.column_stack(([getattr(self, mH).to_numpy() - self.ar_center for mH in higgs]))
-        deltaM = np.column_stack(([abs(mH.to_numpy() - self.ar_center) for mH in higgs]))
+        deltaM = np.column_stack(([abs(mH - self.ar_center) for mH in higgs]))
         deltaM = deltaM * deltaM
         deltaM = deltaM.sum(axis=1)
         deltaM = np.sqrt(deltaM)
