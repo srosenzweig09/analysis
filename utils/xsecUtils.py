@@ -33,7 +33,8 @@ xsecMap = {
     "JetHT_Run2018C":'N/A',
     "JetHT_Run2018D":'N/A',
     
-    "NMSSM":0.3, # pb
+    "NMSSM": 1.0 * (5.824E-01)**3, # pb,
+    "NMSSM_XYH_YToHH_8b": 1.0 * (5.824E-01)**4, # pb
     
     "QCD_Pt_15to30"    :1246000000.0,
     "QCD_Pt_30to50"    :106500000.0,
@@ -50,24 +51,34 @@ xsecMap = {
     "QCD_Pt_1800to2400":0.08734,
     "QCD_Pt_2400to3200":0.005237,
     "QCD_Pt_3200toInf" :0.000135,
+
+    "QCD_HT50to100_TuneCP5_PSWeights"   : 187300000.0,
+    "QCD_HT100to200_TuneCP5_PSWeights"   : 23640000.00,
+    "QCD_HT200to300_TuneCP5_PSWeights"   : 1546000.00,
+    "QCD_HT300to500_TuneCP5_PSWeights"   : 321600.00,
+    "QCD_HT500to700_TuneCP5_PSWeights"   : 30980.00,
+    "QCD_HT700to1000_TuneCP5_PSWeights"  : 6364.00,
+    "QCD_HT1000to1500_TuneCP5_PSWeights" : 1117.00,
+    "QCD_HT1500to2000_TuneCP5_PSWeights" : 108.40,
+    "QCD_HT2000toInf_TuneCP5_PSWeights"  : 21.98,
+        
+    "QCD_bEnriched_HT100to200"  :1122000.00,
+    "QCD_bEnriched_HT200to300"  :79760.00,
+    "QCD_bEnriched_HT300to500"  :16600.00,
+    "QCD_bEnriched_HT500to700"  :1503.000,
+    "QCD_bEnriched_HT700to1000" :297.400,
+    "QCD_bEnriched_HT1000to1500":48.0800,
+    "QCD_bEnriched_HT1500to2000":3.95100,
+    "QCD_bEnriched_HT2000toInf" :0.695700,
     
-    "QCD_bEnriched_HT100to200"  :1127000.0,
-    "QCD_bEnriched_HT200to300"  :80430.0,
-    "QCD_bEnriched_HT300to500"  :16620.0,
-    "QCD_bEnriched_HT500to700"  :1487.0,
-    "QCD_bEnriched_HT700to1000" :296.5,
-    "QCD_bEnriched_HT1000to1500":46.61,
-    "QCD_bEnriched_HT1500to2000":3.72,
-    "QCD_bEnriched_HT2000toInf" :0.6462,
-    
-    "QCD_HT100to200_BGenFilter"  :1275000.0,
-    "QCD_HT200to300_BGenFilter"  :111700.0,
-    "QCD_HT300to500_BGenFilter"  :27960.0,
-    "QCD_HT500to700_BGenFilter"  :3078.0,
-    "QCD_HT700to1000_BGenFilter" :721.8,
-    "QCD_HT1000to1500_BGenFilter":138.2,
-    "QCD_HT1500to2000_BGenFilter":13.61,
-    "QCD_HT2000toInf_BGenFilter" :2.92,
+    "QCD_HT100to200_BGenFilter"  :1266000.00,
+    "QCD_HT200to300_BGenFilter"  :109900.00,
+    "QCD_HT300to500_BGenFilter"  :27360.00,
+    "QCD_HT500to700_BGenFilter"  :2991.00,
+    "QCD_HT700to1000_BGenFilter" :731.80,
+    "QCD_HT1000to1500_BGenFilter":139.300,
+    "QCD_HT1500to2000_BGenFilter":14.7400,
+    "QCD_HT2000toInf_BGenFilter" :3.0900,
 
     "TTJets":831.76, # pb
 }

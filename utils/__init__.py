@@ -1,8 +1,8 @@
 import os
 import sys
-import git
+# import git
 
-GIT_WD = git.Repo('.', search_parent_directories=True).working_tree_dir
+# GIT_WD = git.Repo('.', search_parent_directories=True).working_tree_dir
 
 import uproot as ut
 import awkward as ak
@@ -17,7 +17,7 @@ from tqdm import tqdm
 
 from .xsecUtils import *
 from .cutConfig import *
-# from .varConfig import varinfo
+from .varConfig import *
 
 def init_attr(attr,init,size):
     if attr is None: return [init]*size
@@ -30,5 +30,7 @@ from .plotUtils import *
 # from .classUtils import *
 from .orderUtils import *
 from .testUtils import *
+
+from .bashUtils import *
 
 from .plotter import *

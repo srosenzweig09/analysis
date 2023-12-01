@@ -13,14 +13,12 @@ from .varUtils import *
 from awkward import flatten
 from awkward.highlevel import Array
 import matplotlib.colors as colors
-import matplotlib.cm as cm
 import numpy as np
 
 # import matplotlib as mpl
 # mpl.rcParams['axes.formatter.limits'] = (-1,4)
 
 from matplotlib.ticker import ScalarFormatter
-
 class OOMFormatter(ScalarFormatter):
     def __init__(self, order=0, fformat="%1.1f", offset=True, mathText=True):
         self.oom = order
@@ -64,6 +62,7 @@ def latexTitle(mx,my):
 
 def change_cmap_bkg_to_white(colormap, arr=False, n=256):
     """Changes lowest value of colormap to white."""
+    import matplotlib.cm as cm
     tmp_colors = cm.get_cmap(colormap, n)
     newcolors = tmp_colors(np.linspace(0, 1, n))
     # Define colors by [Red, Green, Blue, Alpha]
@@ -79,6 +78,7 @@ r_arr = change_cmap_bkg_to_white('rainbow', arr=True)
 def Hist2d(x, y, bins, log=False, density=False, **kwargs):
    if 'ax' in kwargs.keys():
       ax = kwargs['ax']
+      kwargs.pop('ax')
    else:
       fig, ax = plt.subplots(figsize=(12, 10))
       
@@ -98,13 +98,13 @@ def Hist2d(x, y, bins, log=False, density=False, **kwargs):
 
    if log:
       n, xe, ye, im = ax.hist2d(
-         x, y, bins=bins, norm=colors.LogNorm(), cmap=cmap)
+         x, y, bins=bins, norm=colors.LogNorm(), cmap=cmap, **kwargs)
    elif density:
       n, xe, ye, im = ax.hist2d(
          x, y, bins=bins, cmap=cmap, density=True)
          # x, y, bins=bins, density=True, cmap=cmap)
    else:
-      n, xe, ye, im = ax.hist2d(x, y, bins=bins, cmap=cmap)
+      n, xe, ye, im = ax.hist2d(x, y, bins=bins, cmap=cmap, **kwargs)
 
    if 'fig' in kwargs.keys():
       fig = kwargs['fig']
@@ -127,7 +127,7 @@ plot_dict = {
 }
 
 
-def Hist(x, scale=1, legend_loc='best', weights=None, density=False, ax=None, patches=False, qcd=False, exp=0, dec=2, **kwargs):
+def Hist(x, scale=1, legend_loc='best', weights=None, density=False, ax=None, patches=False, qcd=False, exp=0, dec=2, total=False, **kwargs):
     """
     This function is a wrapper for matplotlib.pyplot.hist that allows me to generate histograms quickly and consistently.
     It also helps deal with background trees, which are typically given as lists of samples.
@@ -162,37 +162,31 @@ def Hist(x, scale=1, legend_loc='best', weights=None, density=False, ax=None, pa
         if k not in kwargs:
             kwargs[k] = v
 
-    if qcd:
-        # this handles background events, which are provided as a list of arrays
-        n = np.zeros_like(x_arr)
-        for bkg_kin, scale in zip(x, scale):
-            n_temp, e = np.histogram(bkg_kin.to_numpy(), bins=bins)
-            n += n_temp*scale
-            if density: n = n/n.sum()
-        n, _, im = ax.hist(x=x_bins(bins), weights=n, **kwargs)
-        return n
-    
     if density:
-      n, _ = np.histogram(x, weights=weights, bins=bins)
+      n, _ = np.histogram(x, bins=bins, weights=weights)
+      n = np.where(np.isinf(n), 0, n)
+      n = np.nan_to_num(n)
       n, _, im = ax.hist(x_arr, weights=n/n.sum(), **kwargs)
       ax.yaxis.set_major_formatter(OOMFormatter(exp, f"%2.{dec}f"))
    #   ax.ticklabel_format(axis='y', style='sci', scilimits=(0,4))
+      if total: return n, n.sum()
       return n
 
     if scale != 1:
-        n, _, im = ax.hist(x_arr, weights=weights*scale, **kwargs)
+      n, _, im = ax.hist(x_arr, weights=weights*scale, **kwargs)
     if np.array_equal(weights, np.ones_like(x_arr)):
-        n, _, im = ax.hist(x, **kwargs)
+      n, _, im = ax.hist(x, **kwargs)
     else:
-        n, _, im = ax.hist(x, weights=weights, **kwargs)
+      n, _, im = ax.hist(x, weights=weights, **kwargs)
 
     if 'label' in kwargs.keys():
         ax.legend()
     
     if patches: return n, im
+    if total: return n, n.sum()
     return n
 
-def Ratio(data, bins, labels, xlabel, axs=None, weights=[None, None], density=False, ratio_ylabel='Ratio', broken=False, pull=False, data_norm=False, norm=None):
+def Ratio(data, bins, labels, xlabel, axs=None, weights=[None, None], density=False, ratio_ylabel='Ratio', broken=False, pull=False, data_norm=False, norm=None, total=False):
    
    from matplotlib.lines import Line2D
 
@@ -222,12 +216,15 @@ def Ratio(data, bins, labels, xlabel, axs=None, weights=[None, None], density=Fa
       # print("norm",norm)
       n_num, edges = np.histogram(data1, bins=bins, weights=weights1)
       x = x_bins(edges)
-      n_num = Hist(x, bins=bins, ax=ax, weights=n_num*norm, density=density)
+      if total: n_num, total = Hist(x, bins=bins, ax=ax, weights=n_num*norm, density=density, total=True)
+      else: n_num = Hist(x, bins=bins, ax=ax, weights=n_num*norm, density=density)
    else:
-      n_num = Hist(data1, bins=bins, ax=ax, weights=weights1, density=density)
+      if total: n_num, total = Hist(data1, bins=bins, ax=ax, weights=weights1, density=density, total=True)
+      else: n_num = Hist(data1, bins=bins, ax=ax, weights=weights1, density=density)
    # print(n_num)
    for i,edge in enumerate(bins[:-1]):
-      weights = np.sqrt(np.square(weights1[(data1 >= edge) & (data1 < bins[i+1])]).sum())
+      try: weights = np.sqrt(np.square(weights1[(data1 >= edge) & (data1 < bins[i+1])]).sum())
+      except: weights = np.sqrt(ak.sum(np.square(weights1[(data1 >= edge) & (data1 < bins[i+1])])))
       # print(weights, n_num[i])
       ax.fill_between([edge, bins[i+1]], n_num[i]-weights, n_num[i]+weights, color='C0', alpha=0.25)
 
@@ -293,8 +290,17 @@ def Ratio(data, bins, labels, xlabel, axs=None, weights=[None, None], density=Fa
 
    ax.set_xlabel(xlabel)
    
+   if total: return n_num, n_den, n_ratio, total
    if pull: return n_num, n_den, n_pull, pull
    return n_num, n_den, n_ratio
+
+def RatioWithError(data, bins, labels, xlabel, axs=None, weights=[None, None], density=False, ratio_ylabel='Ratio', broken=False, pull=False, data_norm=False, norm=None, total=False):
+   from matplotlib.lines import Line2D
+
+   color1, color2 = None, None
+   data1, data2 = data
+   label1, label2 = labels
+
 
 class Model:
   def __init__(self, h_sig, h_bkg, h_data=None):
@@ -316,3 +322,121 @@ class Model:
 
 
 
+def model_ratio(target, prediction, weights, bins, ax_top, ax_bottom, lbf=True):
+   x = (bins[:-1] + bins[1:]) / 2
+   ax_bottom.plot([bins[0], bins[-1]], [1,1], '--', color='gray')
+   ax_top.set_ylabel('Events')
+
+   # plot distributions
+   n_target = np.histogram(target, bins=bins)[0]
+   n_pred = np.histogram(prediction, bins=bins, weights=weights)[0]
+
+   ax_top.hist(x, weights=n_pred, bins=bins, histtype='step',lw=2,align='mid')
+   ax_top.scatter(x, n_target, color='black')
+   
+   ratio = np.nan_to_num(n_target / n_pred, nan=1)
+   ax_bottom.scatter(x, ratio, color='k')
+   ax_bottom.set_ylim(0,2)
+   
+   err_target = np.sqrt(n_target)
+   # print(err)
+
+   sumw2, err = [], []
+   for i,(n_w,n,e) in enumerate(zip(n_pred, n_target, err_target)):
+      low_x = prediction > bins[i]
+      high_x = prediction <= bins[i+1]
+      w = np.sum(weights[low_x & high_x]**2)
+      sumw2.append(w)
+      w = np.sqrt(w)
+      err.append(w)
+
+      model_uncertainty_up   = n_w + w
+      model_uncertainty_down = n_w - w
+      ratio_up = np.nan_to_num(model_uncertainty_up / n_w)
+      ratio_down = np.nan_to_num(model_uncertainty_down / n_w)
+
+      ax_top.fill_between([bins[i], bins[i+1]], model_uncertainty_down, model_uncertainty_up, color='C0', alpha=0.25)
+      # The blue error bars in the ratio plot represent only the error in the model prediction
+      ax_bottom.fill_between([bins[i], bins[i+1]], ratio_down, ratio_up, color='C0', alpha=0.25)
+
+      target_uncert_up = n + e
+      target_uncert_down = n - e
+      ax_top.plot([x[i],x[i]],[target_uncert_down, target_uncert_up], color='k')
+
+      ratio_err_up = target_uncert_up / n_w
+      ratio_err_down = target_uncert_down / n_w
+      ax_bottom.plot([x[i],x[i]],[ratio_err_up, ratio_err_down], color='k')
+
+
+   if lbf:
+      a, b = np.polyfit(x, ratio, 1)
+      lbf = a * x + b
+      ax_bottom.plot(x, lbf, ':', color='k')
+   # print(err)
+
+   return n_pred, n_target, ratio, sumw2
+
+def gauss(x, H, A, x0, sigma):
+   return H + A * np.exp(-(x - x0) ** 2 / (2 * sigma ** 2))
+
+def plot_residuals(ratio, ax):
+   rBins = np.arange(0.5,1.50001,0.1)
+   rX = (rBins[:-1] + rBins[1:]) / 2
+   h_ratio = Hist(ratio, bins=rBins, ax=ax, label='Ratio', align='mid', zorder=10)
+   ax.set_xlabel('Ratio')
+   ax.set_ylabel('Bins')
+   ax.set_xlim(0,2)
+
+   mean = (rX*h_ratio).sum()/h_ratio.sum()
+   sigma = np.sqrt(sum(h_ratio * (rX-mean) ** 2) / sum(h_ratio))
+
+   X = np.linspace(0.5,1.5,200)
+   from scipy.optimize import curve_fit
+   params, covar = curve_fit(gauss, rX, h_ratio, p0=[min(h_ratio), max(h_ratio), mean, sigma])
+   H, A, x0, s = params
+   std = np.around(np.sqrt(np.diag(covar)),3)
+
+   y = gauss(X, H, A, x0, s)
+   ax.plot(X, y, label='Gaussian Fit')
+   ax.legend(loc=2)
+   box = {
+      'boxstyle' :'round',
+      'fc' : 'white'
+   }
+   ax.text(.99,.99,f"mean = {round(x0,3)}+-{std[2]}\nstd = {round(s,3)}+-{std[3]}", transform=ax.transAxes, bbox=box, fontsize=18, va='top', ha='right')
+
+
+def plot_pulls(n_model, n_target, ax, err):
+   bin_width = 0.5
+   bins = np.arange(-3,3.0001,bin_width)
+   diff = n_model - n_target
+   e_diff = np.sqrt(n_target + err)
+   pull = diff / e_diff
+   n_pull, e = np.histogram(pull, bins=bins)
+   pBins = np.arange(-4,4.0001,bin_width)
+   pX = (pBins[:-1] + pBins[1:]) / 2
+   N_pull = Hist(pull, bins=pBins, ax=ax, align='mid', label='Pull')
+
+   x = (bins[:-1] + bins[1:]) / 2
+   X = np.linspace(-2,2,200)
+   
+   ax.set_xlabel('Pull')
+   ax.set_ylabel('Bins')
+
+   mean = (x*n_pull).sum()/n_pull.sum()
+   sigma = np.sqrt(sum(n_pull * (x - mean) ** 2) / sum(n_pull))
+
+   from scipy.optimize import curve_fit
+   params, covar = curve_fit(gauss, x, n_pull, p0=[min(n_pull), max(n_pull), mean, sigma])
+   H, A, x0, s = params
+   std = np.around(np.sqrt(np.diag(covar)),3)
+
+   y = gauss(X, H, A, x0, s)
+   ax.plot(X, y, label='Gaussian Fit')
+   box = {
+      'boxstyle' :'round',
+      'fc' : 'white'
+   }
+   ax.text(.99,.99,f"mean = {round(x0,3)}+-{std[2]}\nstd = {round(s,3)}+-{std[3]}", transform=ax.transAxes, bbox=box, fontsize=18, va='top', ha='right')
+
+   ax.legend(loc=2)
