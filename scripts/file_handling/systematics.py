@@ -12,19 +12,14 @@ from utils.analysis import Signal
 
 parser = ArgumentParser(description='Command line parser of model options and tags')
 parser.add_argument('--rectangular', dest='rectangular', help='', action='store_true', default=False)
-parser.add_argument('--btag', dest='btag', help='', action='store_true', default=False)
-parser.add_argument('--gnn', dest='gnn', help='', action='store_true', default=False)
 parser.add_argument('--vr', dest='vr', help='', action='store_true', default=False)
 parser.add_argument('--nominal', dest='nominal', help='', action='store_true', default=False)
 args = parser.parse_args()
 
-cfg = 'config/bias_config.cfg'
-method = 'sphere'
-if args.rectangular: 
-   cfg = 'config/rectConfig.cfg'
-   method = 'rect'
+cfg = 'config/bdt_params.cfg'
+method = 'concentric'
 
-def writeSystHist(systematic, sample, variation, method='sphere'):
+def writeSystHist(systematic, sample, variation, method):
    file = root + sys_dir + f'syst/{systematic}/{variation}/{sample}'
    tree = Signal(file)
 
@@ -98,14 +93,8 @@ if config['plot']['style'] == 'arange':
 nbins = nedges - 1
 
 root = 'root://cmseos.fnal.gov/'
-jets = 'bias'
-tag = 'bias'
-if args.btag:
-   jets = 'btag'
-   tag = 'btag'
-if args.gnn:
-   jets = 'gnn'
-   tag = 'gnn'
+jets = 'feyn'
+tag = 'maxbtag_4b'
 
 sys_dir = f'/store/user/srosenzw/sixb/ntuples/Summer2018UL/{tag}/NMSSM/'
 cmd = f'eos {root} ls {sys_dir}syst'
