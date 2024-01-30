@@ -41,6 +41,35 @@ var_bins = {
    'X_m' : np.linspace(400, 1500, nbins)
 }
 
+var_labels = {
+   'pt6bsum' : r"$\sum_{jets} p_T$ [GeV]",
+   'dR6bmin' : r"${min}(\Delta R_{bb})$",
+   'dEta6bmax' : r"${max}(\Delta\eta_{bb})$",
+   'HX_pt' : r"$H_X \; p_T$ [GeV]",
+   'HY1_pt' : r"$H_1 \; p_T$ [GeV]",
+   'HY2_pt' : r"$H_2 \; p_T$ [GeV]",
+   'HX_dr' : r"$H_X \; \Delta R_{bb}$",
+   'HY1_dr' : r"$H_1 \; \Delta R_{bb}$",
+   'HY2_dr' : r"$H_2 \; \Delta R_{bb}$",
+   'HX_m' : r"$H_X \; m$ [GeV]",
+   'HY1_m' : r"$H_1 \; m$ [GeV]",
+   'HY2_m' : r"$H_2 \; m$ [GeV]",
+   'HX_HY1_dEta' : r"$\Delta\eta(H_X, H_1)$",
+   'HY1_HY2_dEta' : r"$\Delta\eta(H_1, H_2)$",
+   'HY2_HX_dEta' : r"$\Delta\eta(H_2, H_X)$",
+   'HX_HY1_dPhi' : r"$\Delta\phi(H_X, H_1)$",
+   'HY1_HY2_dPhi' : r"$\Delta\phi(H_1, H_2)$",
+   'HY2_HX_dPhi' : r"$\Delta\phi(H_2, H_X)$",
+   'HX_costheta' : r"$\cos(\theta_{HX})$",
+   'HY1_costheta' : r"$\cos(\theta_{H1})$",
+   'HY2_costheta' : r"$\cos(\theta_{H2})$",
+   'Y_HX_dR' : r"$\Delta R({Y}, H_X)$",
+   'HY1_HY2_dR' : r"$\Delta R(H_1, H_2)$",
+   'HX_HY1_dR' : r"$\Delta R(H_X, H_1)$",
+   'HX_HY2_dR' : r"$\Delta R(H_X, H_2)$",
+   'X_m' : r"$m_X$ [GeV]",
+}
+
 def producePulls(datTree, variables, pdf=False, **kwargs):
    V_SRhs_mask = datTree.V_SRhs_mask
    V_SRls_mask = datTree.V_SRls_mask

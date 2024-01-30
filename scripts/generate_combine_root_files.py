@@ -1,18 +1,30 @@
+# parallel -j 10 "python scripts/generate_combine_root_files.py {}" ::: $(cat sig_files.txt) --eta
 """
 This script will build the individual root files for each mass point, containing the nominal MX distribution, as well as the distributions for each systematic variation.
+
+/eos/uscms/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag_4b/Official_NMSSM/NMSSM_XToYHTo6B_MX-500_MY-300_TuneCP5_13TeV-madgraph-pythia8/ntuple.root
+/eos/uscms/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag_4b/Official_NMSSM/NMSSM_XToYHTo6B_MX-850_MY-250_TuneCP5_13TeV-madgraph-pythia8/ntuple.root
+/eos/uscms/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag_4b/Official_NMSSM/NMSSM_XToYHTo6B_MX-1000_MY-800_TuneCP5_13TeV-madgraph-pythia8/ntuple.root
 """
 
+from argparse import ArgumentParser
+from colorama import Fore, Style
 import ROOT
+ROOT.gROOT.SetBatch(True)
 from array import array
 import numpy as np
 import matplotlib.pyplot as plt
-import subprocess
+# import subprocess
 from configparser import ConfigParser
 from utils.plotter import Hist
 from utils.analysis.signal import SixB
-from utils.analysis.gnn import model_path
-model_dir = model_path.split('/')[-3]
-fsave = f'combine/feynnet/{model_dir}'
+from utils.analysis.feyn import model_name
+fsave = f'combine/feynnet/{model_name}'
+import sys
+
+parser = ArgumentParser()
+parser.add_argument("filename")
+args = parser.parse_args()
 
 config = ConfigParser()
 config.read("config/bdt_params.cfg")
@@ -29,7 +41,11 @@ elif style == 'arange':
 else: raise ValueError(f"Unknown style: {style}")
 nbins = len(bins) - 1
 
-systematics = ['Absolute_2018', 'Absolute', 'BBEC1', 'BBEC1_2018', 'EC2', 'EC2_2018', 'FlavorQCD', 'HF', 'HF_2018', 'RelativeBal', 'RelativeSample_2018', 'jer_pt']
+systematics = ['JERpt', 'bJER','Absolute_2018', 'Absolute', 'BBEC1', 'BBEC1_2018', 'EC2', 'EC2_2018', 'FlavorQCD', 'HF', 'HF_2018', 'RelativeBal', 'RelativeSample_2018']
+
+def raiseError(fname):
+    print(f"{Fore.RED}[FAILED]{Style.RESET_ALL} Cannot open file:\n{fname}")
+    raise
 
 def writeHist(h_title, n):
     ROOT_hist = ROOT.TH1D(h_title,";m_{X} [GeV];Events",nbins,array('d',list(bins)))
@@ -39,14 +55,16 @@ def writeHist(h_title, n):
     ROOT_hist.Draw("hist")
     ROOT_hist.Write()
 
-base = "/eos/uscms/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag_4b/Official_NMSSM"
-output = subprocess.check_output(f"ls {base}", shell=True).decode('utf-8').split('\n')
-signals = [out for out in output if 'NMSSM' in out]
+# base = "/eos/uscms/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag_4b/Official_NMSSM"
+# output = subprocess.check_output(f"ls {base}", shell=True).decode('utf-8').split('\n')
+# signals = [out for out in output if 'NMSSM' in out]
+# signal = "NMSSM_XToYHTo6B_MX-850_MY-350_TuneCP5_13TeV-madgraph-pythia8"
+# fname = f"{base}/{signal}/ntuple.root"
 
-signal = "NMSSM_XToYHTo6B_MX-850_MY-350_TuneCP5_13TeV-madgraph-pythia8"
-fname = f"{base}/{signal}/ntuple.root"
+fname = args.filename
 
-tree = SixB(fname)
+try: tree = SixB(fname)
+except: raiseError(fname)
 tree.spherical_region()
 mx, my = tree.mx, tree.my
 MX = tree.X.m[tree.asr_hs_mask]
@@ -151,9 +169,48 @@ writeHist("signal_BTagLFStats2Down", n_lfstats2_down)
 writeHist("signal_PUIDUp", n_puid_up)
 writeHist("signal_PUIDDown", n_puid_down)
 
-# for systematic in systematics:
-#     fname = f"{base}/syst/{systematic}/up/{signal}/ntuple.root"
-#     tree = SixB(fname)
+for systematic in systematics:
+    tmp = fname.split('/')
+    tmp.insert(11, "syst")
+    tmp.insert(12, systematic)
+    tmp.insert(13, "up")
+    up = '/'.join(tmp)
+    # try: 
+    try: up = SixB(up)
+    except: raiseError(up)
+    up.spherical_region()
+    genWeight = up.genWeight
+    PUWeight = up.PUWeight
+    PUIDWeight = up.PUIDWeight
+    triggerSF = up.triggerSF
+
+    if "jer" in systematic.lower(): btag_weight = getattr(up, f'bSFshape_central')
+    elif '2018' in systematic: btag_weight = getattr(up, f'bSFshape_up_jes{systematic.replace("_2018","")}')
+    else: btag_weight = getattr(up, f'bSFshape_up_jes{systematic}')
+
+    weight = (genWeight*PUWeight*PUIDWeight*triggerSF*btag_weight)[up.asr_hs_mask]
+    n_syst = Hist(up.X.m[up.asr_hs_mask], bins=bins, weights=weight, ax=ax)
+    writeHist(f'signal_{systematic}Up', n_syst)
+    # except: print(f"[FAILED] Cannot open file: {up}")
+
+    tmp[13] = "down"
+    down = '/'.join(tmp)
+    # try:
+    try: down = SixB(down)
+    except: raiseError(down)
+    down.spherical_region()
+    genWeight = down.genWeight
+    PUWeight = down.PUWeight
+    PUIDWeight = down.PUIDWeight
+    triggerSF = down.triggerSF
+    if "jer" in systematic.lower(): btag_weight = getattr(down, f'bSFshape_central')
+    elif '2018' in systematic: btag_weight = getattr(down, f'bSFshape_down_jes{systematic.replace("_2018","")}')
+    else: btag_weight = getattr(down, f'bSFshape_down_jes{systematic}')
+    weight = (genWeight*PUWeight*PUIDWeight*triggerSF*btag_weight)[down.asr_hs_mask]
+    n_syst = Hist(down.X.m[down.asr_hs_mask], bins=bins, weights=weight, ax=ax)
+    writeHist(f'signal_{systematic}Down', n_syst)
+    # except: print(f"{Fore.RED}[FAILED]{Style.RESET_ALL} Cannot open file: {down}")
+
 
 ROOT.gStyle.SetOptStat(0)
 fout.Close()

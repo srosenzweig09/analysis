@@ -1,15 +1,16 @@
 # parallel -j 4 "python scripts/calculate_2d_sf_corrs.py {}" ::: $(cat sf_files.txt) --eta
 
-# from argparse import ArgumentParser
+from argparse import ArgumentParser
 import matplotlib.pyplot as plt
 import numpy as np
 import uproot
 from utils.analysis.signal import SixB
 from utils.plotter import Hist2d
+from colorama import Fore, Style
 
-# parser = ArgumentParser()
-# parser.add_argument("filename")
-# args = parser.parse_args()
+parser = ArgumentParser()
+parser.add_argument("filename")
+args = parser.parse_args()
 
 def get_2d_ratio(ratio, n, ht):
     i = np.digitize(n, n_bins) - 1
@@ -35,15 +36,16 @@ def calculate_ratio(n_jet, ht, bsf, scale):
 
     return ratio
 
-filename = '/eos/uscms/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag/NMSSM/NMSSM_XYH_YToHH_6b_MX_850_MY_350/ntuple.root'
-# filename = args.filename
+# filename = '/eos/uscms/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag/NMSSM/NMSSM_XYH_YToHH_6b_MX_850_MY_350/ntuple.root'
+filename = args.filename
 
-tree = SixB(filename, feyn=False)
+try: tree = SixB(filename, feyn=False)
+except uproot.exceptions.KeyInFileError: print(Fore.RED + f"File {filename} not found" + Style.RESET_ALL)
 
 n_jet = tree.n_jet.to_numpy()
 ht = tree.get('PFHT', library='np')
 bsf_names = [key for key in tree.keys() if key.startswith('bSFshape')]
-print("bsf_names", bsf_names)
+# print("bsf_names", bsf_names)
 scale = np.repeat(tree.scale, tree.nevents)
 
 n_bins = np.arange(6, n_jet.max() + 2)
