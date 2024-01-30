@@ -17,7 +17,6 @@ from tqdm import tqdm
 
 from .xsecUtils import *
 from .cutConfig import *
-from .varConfig import *
 
 def init_attr(attr,init,size):
     if attr is None: return [init]*size
