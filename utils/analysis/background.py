@@ -7,7 +7,7 @@ from utils.varUtils import *
 from utils.cutConfig import *
 from utils.plotter import Hist
 from utils.analysis.particle import Particle
-from utils.analysis.gnn import model_path
+from utils.analysis.feyn import model_path
 
 # Standard library imports
 from configparser import ConfigParser
@@ -56,7 +56,7 @@ def get_hs_ls_masks(sr_mask, cr_mask, ls_mask, hs_mask):
 
 class Bkg():
     
-    def __init__(self, filename, treename='sixBtree', year=2018, feyn=True, max=None):
+    def __init__(self, filename, treename='sixBtree', year=2018, feyn=True, floc=None):
         """
         A class for handling TTrees from older skims, which output an array of jet kinematics. (Newer skims output a single branch for each b jet kinematic.)
 
@@ -71,11 +71,11 @@ class Bkg():
         self.year = year
 
         if type(filename) != list:
-            self.single_init(filename, treename, year, feyn=feyn, max=max)
+            self.single_init(filename, treename, year, feyn=feyn, floc=floc)
         else:
-            self.multi_init(filename, treename, year, feyn=feyn, max=max)
+            self.multi_init(filename, treename, year, feyn=feyn, floc=floc)
 
-    def single_init(self, filename, treename, year, feyn, max):
+    def single_init(self, filename, treename, year, feyn, floc):
         """Opens a single file into a TTree"""
         self.single = True
         tree = uproot.open(f"{filename}:{treename}")
@@ -120,9 +120,7 @@ class Bkg():
 
         samp, xsec = next( ((key,value) for key,value in xsecMap.items() if key in filename),("unk",1) )
         if feyn:
-            predictions = subprocess.check_output(shlex.split(f"ls {model_path}{self.year}"))
-            predictions = predictions.decode('UTF-8').split('\n')[:-1]
-            samp_file = f"{model_path}{self.year}/{[i for i in predictions if samp in i][0]}"
+            # samp_file = 
             with uproot.open(samp_file) as f:
                 f = f['Events']
                 self.scores = f['scores'].array(library='np')
@@ -137,7 +135,7 @@ class Bkg():
 
 
 
-    def multi_init(self, filelist, treename, year, feyn, max):
+    def multi_init(self, filelist, treename, year, feyn, floc=None):
         """Opens a list of files into several TTrees. Typically used for bkgd events."""
         self.single = False
         self.is_signal = False
@@ -161,26 +159,24 @@ class Bkg():
 
         qcd_mask = np.array(())
 
-        if feyn:
-            predictions = subprocess.check_output(shlex.split(f"ls {model_path}{self.year}"))
-            predictions = predictions.decode('UTF-8').split('\n')[:-1]
-        
-        skip_4b = True
-
         print('/'.join(filelist[0].split('/')[:8]))
         for filename in filelist:
             file_info = '/'.join(filename.split('/')[8:])
+            fname = filename.split('/')[-2]
             print(file_info)
-            # print(filename)
-            if '_4b' in filename: skip_4b = False
             # Open tree
-            # tree = uproot.open(f"{filename}:{treename}")
             try: uproot.open(f"{filename}:{treename}")
             except FileNotFoundError: 
                 print(f"[FILE NOT FOUND] .. skipping {file_info}")
                 continue
+            except uproot.KeyInFileError:
+                print(f"[NO KEYS IN FILE] .. skipping {file_info}")
+                continue
+
             # with uproot.open(f"{filename}:{treename}") as tree:
-            for tree in uproot.iterate(f"{filename}:{treename}", step_size=100000):
+            if 'QCD' in filename: stepsize=100000
+            else: stepsize=2200000
+            for tree in uproot.iterate(f"{filename}:{treename}", step_size=stepsize):
                 # How many events in the tree?
 
                 # CHANGED FOR UPROOT ITERATE
@@ -208,10 +204,11 @@ class Bkg():
                 samp, xsec = next( ((key,value) for key,value in xsecMap.items() if key in filename),("unk",1) )
                 # print(samp)
                 # print(samp_file)
-                if gnn:
-                    if skip_4b: samp_file = f"{model_path}{self.year}/{[i for i in predictions if samp in i and '_4b' not in i][0]}"
-                    else:       samp_file = f"{model_path}{self.year}/{[i for i in predictions if samp in i][0]}"
-                    with uproot.open(samp_file) as f:
+                if feyn:
+                    if floc is None: feyn_file = f"{model_path}/{self.year}/{fname}.root"
+                    else: feyn_file = f"{floc}/{fname}.root"
+                    # samp_file = f"{model_path}/{[i for i in predictions if samp in i][0]}"
+                    with uproot.open(feyn_file) as f:
                         f = f['Events']
                         self.scores = f['scores'].array(library='np')
                         self.maxcomb.append(f['max_comb'].array(library='np'))
@@ -326,23 +323,21 @@ class Bkg():
         # return [tree[key].array() for tree in self.tree]
 
     def init_from_gnn(self):
-        # combos = [maxcomb.astype(int) for maxcomb in self.maxcomb]
-        # combos = [ak.from_regular(c) for c in combos]
-        combos = self.maxcomb.astype(int)
-        combos = ak.from_regular(combos)
-        
-        self.combos = combos
-
-        btag_mask = ak.argsort(self.jet_btag, axis=1, ascending=False) < 6
-
         if self.single:
+            combos = self.maxcomb.astype(int)
+            combos = ak.from_regular(combos)
+            self.combos = combos
+
             pt = self.jet_ptRegressed[combos]
             eta = self.jet_eta[combos]
             phi = self.jet_phi[combos]
             m = self.jet_mRegressed[combos]
             btag = self.jet_btag[combos]
-            print(pt)
         else:
+            combos = [maxcomb.astype(int) for maxcomb in self.maxcomb]
+            combos = [ak.from_regular(c) for c in combos]
+            self.combos = combos
+
             pt = ak.concatenate([pt[comb] for pt,comb in zip(self.jet_ptRegressed,combos)])
             eta = ak.concatenate([eta[comb] for eta,comb in zip(self.jet_eta,combos)])
             phi = ak.concatenate([phi[comb] for phi,comb in zip(self.jet_phi,combos)])
