@@ -114,7 +114,7 @@ class Higgs():
 
         self.dr = self.b1.deltaR(self.b2)
         self.theta = self.P4.theta
-        self.costheta = np.cos(self.theta)
+        self.costheta = abs(np.cos(self.theta))
 
     def __add__(self, another_particle):
         particle1 = self.P4
