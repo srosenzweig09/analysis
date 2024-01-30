@@ -127,7 +127,7 @@ plot_dict = {
 }
 
 
-def Hist(x, scale=1, legend_loc='best', weights=None, density=False, ax=None, patches=False, qcd=False, exp=0, dec=2, total=False, **kwargs):
+def Hist(x, scale=1, legend_loc='best', weights=None, density=False, ax=None, patches=False, exp=0, dec=2, total=False, **kwargs):
     """
     This function is a wrapper for matplotlib.pyplot.hist that allows me to generate histograms quickly and consistently.
     It also helps deal with background trees, which are typically given as lists of samples.
@@ -190,24 +190,17 @@ def Ratio(data, bins, labels, xlabel, axs=None, weights=[None, None], density=Fa
    
    from matplotlib.lines import Line2D
 
-   color1, color2 = None, None
    data1, data2 = data
    label1, label2 = labels
 
-   if isinstance(weights[0], float):
-      weights1 = weights[0] * np.ones_like(data1)
-   if isinstance(weights[1], float):
-      weights2 = weights[1] * np.ones_like(data2)
+   if isinstance(weights[0], float): weights1 = weights[0] * np.ones_like(data1)
+   if isinstance(weights[1], float): weights2 = weights[1] * np.ones_like(data2)
    
-   if weights[0] is None: 
-      weights1 = np.ones_like(data1)
-   else:
-      weights1 = weights[0]
+   if weights[0] is None: weights1 = np.ones_like(data1)
+   else: weights1 = weights[0]
 
-   if weights[1] is None: 
-      weights2 = np.ones_like(data2)
-   else:
-      weights2 = weights[1]
+   if weights[1] is None: weights2 = np.ones_like(data2)
+   else: weights2 = weights[1]
    
    if axs is None: fig, axs = plt.subplots(nrows=2, ncols=1, gridspec_kw={'height_ratios':[4,1]})
    ax = axs[0]
@@ -241,8 +234,7 @@ def Ratio(data, bins, labels, xlabel, axs=None, weights=[None, None], density=Fa
             n_err = np.zeros_like(n_den)
          # ax.plot(x_bins(bins), n_den, 'o', color='k')#, lw=0)
          ax.errorbar(x_bins(bins), n_den, n_err, marker='o', color='k', ls='none')
-      else:
-         n_den = Hist(data2, bins=bins, ax=ax, weights=weights2, density=density)
+      else: n_den = Hist(data2, bins=bins, ax=ax, weights=weights2, density=density)
 
    handle1 = Line2D([0], [0], color='C0', lw=2, label=label1)
    handle2 = Line2D([0], [0], color='C1', lw=2, label=label2)
@@ -322,17 +314,19 @@ class Model:
 
 
 
-def model_ratio(target, prediction, weights, bins, ax_top, ax_bottom, lbf=True):
+def model_ratio(target, prediction, weights, bins, ax_top, ax_bottom, lbf=False):
    x = (bins[:-1] + bins[1:]) / 2
    ax_bottom.plot([bins[0], bins[-1]], [1,1], '--', color='gray')
    ax_top.set_ylabel('Events')
+   ax_bottom.set_ylabel('Data/Model')
+   ax_bottom.set_xlabel(r'$M_X$ [GeV]')
 
    # plot distributions
    n_target = np.histogram(target, bins=bins)[0]
    n_pred = np.histogram(prediction, bins=bins, weights=weights)[0]
 
-   ax_top.hist(x, weights=n_pred, bins=bins, histtype='step',lw=2,align='mid')
-   ax_top.scatter(x, n_target, color='black')
+   ax_top.hist(x, weights=n_pred, bins=bins, histtype='step',lw=2,align='mid', color='C1', label='VSR Prediction')
+   ax_top.scatter(x, n_target, color='black', label='VSR Data')
    
    ratio = np.nan_to_num(n_target / n_pred, nan=1)
    ax_bottom.scatter(x, ratio, color='k')
@@ -355,9 +349,9 @@ def model_ratio(target, prediction, weights, bins, ax_top, ax_bottom, lbf=True):
       ratio_up = np.nan_to_num(model_uncertainty_up / n_w)
       ratio_down = np.nan_to_num(model_uncertainty_down / n_w)
 
-      ax_top.fill_between([bins[i], bins[i+1]], model_uncertainty_down, model_uncertainty_up, color='C0', alpha=0.25)
+      ax_top.fill_between([bins[i], bins[i+1]], model_uncertainty_down, model_uncertainty_up, color='C1', alpha=0.25)
       # The blue error bars in the ratio plot represent only the error in the model prediction
-      ax_bottom.fill_between([bins[i], bins[i+1]], ratio_down, ratio_up, color='C0', alpha=0.25)
+      ax_bottom.fill_between([bins[i], bins[i+1]], ratio_down, ratio_up, color='C1', alpha=0.25)
 
       target_uncert_up = n + e
       target_uncert_down = n - e
@@ -380,17 +374,19 @@ def gauss(x, H, A, x0, sigma):
    return H + A * np.exp(-(x - x0) ** 2 / (2 * sigma ** 2))
 
 def plot_residuals(ratio, ax):
-   rBins = np.arange(0.5,1.50001,0.1)
+   rBins = np.arange(-0.5,0.50001,0.1)
+   rBins = np.linspace(-0.5,0.5,12)
    rX = (rBins[:-1] + rBins[1:]) / 2
-   h_ratio = Hist(ratio, bins=rBins, ax=ax, label='Ratio', align='mid', zorder=10)
-   ax.set_xlabel('Ratio')
+   h_ratio = Hist(1-ratio, bins=rBins, ax=ax, label='Ratio', align='mid', zorder=10)
+   ax.set_xlabel('1 - Ratio')
    ax.set_ylabel('Bins')
-   ax.set_xlim(0,2)
+   ax.set_xlim(-1,1)
 
    mean = (rX*h_ratio).sum()/h_ratio.sum()
    sigma = np.sqrt(sum(h_ratio * (rX-mean) ** 2) / sum(h_ratio))
 
-   X = np.linspace(0.5,1.5,200)
+   # X = np.linspace(0.5,1.5,200)
+   X = np.linspace(-0.5,0.5,200)
    from scipy.optimize import curve_fit
    params, covar = curve_fit(gauss, rX, h_ratio, p0=[min(h_ratio), max(h_ratio), mean, sigma])
    H, A, x0, s = params
@@ -405,6 +401,7 @@ def plot_residuals(ratio, ax):
    }
    ax.text(.99,.99,f"mean = {round(x0,3)}+-{std[2]}\nstd = {round(s,3)}+-{std[3]}", transform=ax.transAxes, bbox=box, fontsize=18, va='top', ha='right')
 
+   return 1+round(x0,3)
 
 def plot_pulls(n_model, n_target, ax, err):
    bin_width = 0.5
