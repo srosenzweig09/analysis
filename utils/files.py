@@ -21,10 +21,15 @@ config = 'config/sphereConfig.cfg'
 def get_data(year='Summer2018UL', jets='btag_pt'):
    return f"{base}/{year}/{jets}/{data_path}"
 
+def get_mpoint(flist, mx, my, private):
+   if private: return [f for f in flist if f"_{mx}_" in f and f"_{my}_" in f][0]
+   else: return [f for f in flist if f"-{mx}_" in f and f"-{my}_" in f][0]
+
 def get_NMSSM(mx=700, my=400, year=2018, selection='maxbtag_4b', suffix='', private=False):
    year = yearDict[year]
    flist = maxbtag_files if private else maxbtag_4b_files
-   mpoint = [f for f in flist if str(mx) in f and str(my) in f][0] # find filename with both mx and my in it
+   # mpoint = [f for f in flist if f"{mx}_" in f and f"{my}_" in f][0] # find filename with both mx and my in it
+   mpoint = get_mpoint(flist, mx, my, private)
    if len(mpoint) < 0: raise FileNotFoundError(f'File not found: {mpoint}')
    if suffix != '': suffix = '_' + suffix
    mpoint = f"NMSSM/{mpoint}{suffix}" if private else f"Official_NMSSM/{mpoint}"
