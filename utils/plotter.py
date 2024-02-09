@@ -4,7 +4,6 @@ Author: Suzanne Rosenzweig
 This script works as a wrapper for 1D and 2D histograms.
 """
 
-# from tkinter import Y
 from . import *
 from .useCMSstyle import *
 plt.style.use(CMS)
