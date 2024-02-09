@@ -1,4 +1,5 @@
-# parallel -j 4 "python scripts/file_handling/hadd_private.py {}" ::: $(cat sig_files.txt) --eta
+# parallel -j 4 "python scripts/file_handling/hadd_private.py {}" ::: $(cat filelists/central.txt) --eta
+# parallel -j 4 "python scripts/file_handling/hadd_private.py {}" ::: $(cat filelists/private.txt) --eta
 
 from argparse import ArgumentParser
 import subprocess

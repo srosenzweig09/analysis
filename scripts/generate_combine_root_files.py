@@ -1,10 +1,10 @@
-# parallel -j 10 "python scripts/generate_combine_root_files.py {}" ::: $(cat sig_files.txt) --eta
+# parallel -j 10 "python scripts/generate_combine_root_files.py {}" ::: $(cat filelists/central.txt) --eta
 """
 This script will build the individual root files for each mass point, containing the nominal MX distribution, as well as the distributions for each systematic variation.
 
-/eos/uscms/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag_4b/Official_NMSSM/NMSSM_XToYHTo6B_MX-500_MY-300_TuneCP5_13TeV-madgraph-pythia8/ntuple.root
-/eos/uscms/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag_4b/Official_NMSSM/NMSSM_XToYHTo6B_MX-850_MY-250_TuneCP5_13TeV-madgraph-pythia8/ntuple.root
-/eos/uscms/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag_4b/Official_NMSSM/NMSSM_XToYHTo6B_MX-1000_MY-800_TuneCP5_13TeV-madgraph-pythia8/ntuple.root
+python scripts/generate_combine_root_files.py /eos/uscms/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag_4b/Official_NMSSM/NMSSM_XToYHTo6B_MX-500_MY-300_TuneCP5_13TeV-madgraph-pythia8/ntuple.root
+python scripts/generate_combine_root_files.py /eos/uscms/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag_4b/Official_NMSSM/NMSSM_XToYHTo6B_MX-950_MY-700_TuneCP5_13TeV-madgraph-pythia8/ntuple.root
+python scripts/generate_combine_root_files.py /eos/uscms/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag_4b/Official_NMSSM/NMSSM_XToYHTo6B_MX-1000_MY-800_TuneCP5_13TeV-madgraph-pythia8/ntuple.root
 """
 
 from argparse import ArgumentParser
