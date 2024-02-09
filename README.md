@@ -26,20 +26,20 @@
 ## 2. From Gen Productions to Sensitivities
 
 ### 1. Generate gridpacks
-- See [sixB repo on GitHub](https://github.com/srosenzweig09-forks/sixB)
- - See [MadGraph/gridpacks](https://github.com/srosenzweig09-forks/sixB/tree/master/MadGraph/gridpacks)
+- See [MultiHiggs repo on GitHub](https://github.com/UF-HH/MultiHiggs)
+ - See [MadGraph/gridpacks](https://github.com/UF-HH/MultiHiggs/tree/master/MadGraph/gridpacks)
   - See [genproductions](https://github.com/cms-sw/genproductions)
   - See [tutorial on producing gridpacks](https://twiki.cern.ch/twiki/bin/viewauth/CMS/QuickGuideMadGraph5aMCatNLO#Quick_tutorial_on_how_to_produce)
 
 ### 2. Hadronize and Simulate Detector Response
- - See [sixB/FullSim](https://github.com/srosenzweig09-forks/sixB/tree/master/FullSim)
+ - See [sixB/FullSim](https://github.com/UF-HH/MultiHiggs/tree/master/FullSim)
 
 ### 3. Run skims
-- See [sixB/analysis/sixBanalysis](https://github.com/srosenzweig09-forks/sixB/tree/master/analysis/sixBanalysis)
+- See [sixB/analysis/sixBanalysis](https://github.com/UF-HH/MultiHiggs/tree/master/analysis/sixBanalysis)
 
 ### 4. Generate Background Estimation Regions
 
-- Generate a config file (e.g. [config/regionConfig.cfg](config/regionConfig.cfg)) then run the following command: 
+- Generate a config file (e.g. [config/bdt_params.cfg](config/bdt_params.cfg)) then run the following command: 
 
 ```
 python scripts/skimRegions.py --cfg /path/to/cfg
