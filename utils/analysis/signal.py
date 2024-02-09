@@ -10,7 +10,7 @@ from utils.useCMSstyle import *
 plt.style.use(CMS)
 from utils.plotter import Hist
 from utils.analysis.particle import Particle, Higgs, Y
-from utils.analysis.feyn import model_path, new_model_path, Model
+from utils.analysis.feyn import Model
 from utils.xsecUtils import lumiMap, xsecMap
 from utils.plotter import latexTitle
 
@@ -49,16 +49,16 @@ def get_hs_ls_masks(sr_mask, cr_mask, ls_mask, hs_mask):
 
    return cr_ls_mask, cr_hs_mask, sr_ls_mask, sr_hs_mask
 
-def ROOTHist(h_vals, title, filename):
+def ROOTHist(h_vals, title, filepath):
    """
    title : should be either 'signal' or 'data'
    """
    import ROOT
    ROOT.gROOT.SetBatch(True)
    from array import array
-   assert ".root" in filename, print("[ERROR] Please include '.root' in filename")
+   assert ".root" in filepath, print("[ERROR] Please include '.root' in filepath")
    
-   fout = ROOT.TFile(f"{filename}","recreate")
+   fout = ROOT.TFile(f"{filepath}","recreate")
    fout.cd()
 
    canvas = ROOT.TCanvas('c1','c1', 600, 600)
@@ -78,33 +78,29 @@ from configparser import ConfigParser
 # Parent Class
 class Tree():
 
-   def __init__(self, filename, treename='sixBtree', cfg='config/bdt_params.cfg', feyn=True):
+   def __init__(self, filepath, treename='sixBtree', cfg='config/bdt_params.cfg', feyn=True):
       from utils.cutConfig import btagWP
       self.btagWP = btagWP
 
       self.read_config(cfg)
 
-      self.filename = filename
+      self.filepath = filepath
+      print(f"{Fore.CYAN}ntuple: {self.filepath}{Style.RESET_ALL}")
+      self.filename = self.filepath.split('/')[-2]
       self.treename = treename
-      self.year = int([yr for yr in ['2016', '2017', '2018'] if yr in filename][0])
-      self.is_signal = 'NMSSM' in filename
+      self.year = int([yr for yr in ['2016', '2017', '2018'] if yr in filepath][0])
+      self.is_signal = 'NMSSM' in filepath
+      self.tree = uproot.open(f"{filepath}:{treename}")
 
-      file_info = '/'.join(self.filename.split('/')[8:])
-      # print(file_info)
-      # console.log(f"[cyan]Loading {file_info}...")
-      print(f"{Fore.CYAN}ntuple: {self.filename}{Style.RESET_ALL}")
-
-      self.tree = uproot.open(f"{filename}:{treename}")
-
-      # with uproot.open(f"{filename}:{treename}") as tree:
+      # with uproot.open(f"{filepath}:{treename}") as tree:
       pattern = re.compile('H.+_') # Search for any keys beginning with an 'H' and followed somewhere by a '_'
       for k, v in self.tree.items():
          if re.match(pattern, k) or 'jet' in k or 'gen' in k or 'Y' in k or 'X' in k:
             setattr(self, k, v.array())
       try: 
-         with uproot.open(f"{filename}:h_cutflow_unweighted") as f: cutflow = f
+         with uproot.open(f"{filepath}:h_cutflow_unweighted") as f: cutflow = f
       except:
-         with uproot.open(f"{filename}:h_cutflow") as f: cutflow = f
+         with uproot.open(f"{filepath}:h_cutflow") as f: cutflow = f
       self.cutflow_labels = cutflow.axis().labels()
       # self.tree = tree
       self.nevents = int(cutflow.to_numpy()[0][-1])
@@ -115,7 +111,7 @@ class Tree():
       self.cutflow_norm = (cutflow.to_numpy()[0]/cutflow.to_numpy()[0][0]*100).astype(int)
 
       key = str(self.year)
-      if key == '2016' and 'preVFP' in self.filename: key += 'preVFP'
+      if key == '2016' and 'preVFP' in self.filepath: key += 'preVFP'
       elif key == '2016': key += 'postVFP'
       self.year_key = key
       self.loose_wp = self.btagWP[key]['Loose']
@@ -124,8 +120,10 @@ class Tree():
 
       if feyn: 
          # self.init_model(feyn)
-         self.model = Model(model_path, self.filename)
-         sys.exit()
+         self.model = Model('old', self)
+         self.model = Model('new', self)
+         self.combos = self.model.combos
+         self.init_model()
       else: self.initialize_bosons()
       
       self.initialize_vars()
@@ -144,7 +142,7 @@ class Tree():
          self.config = cfg
 
    def keys(self):
-      return uproot.open(f"{self.filename}:{self.treename}").keys()
+      return uproot.open(f"{self.filepath}:{self.treename}").keys()
 
    def find_key(self, start):
       for key in self.keys():
@@ -168,51 +166,17 @@ class Tree():
       return np_arr
 
 
-   def init_model(self, feyn):
-      if self.is_signal:
-         ### FIX ME FOR 2016/2017
-         year = self.year
-         if 'Summer2016UL' in self.filename and 'preVFP' in self.filename: year = self.year + 'preVFP'
-         if 'Summer2016UL' in self.filename and 'preVFP' not in self.filename: year = self.year + 'postVFP'
-         # print(updated_model_path)
-
-         if isinstance(feyn, bool): 
-            feyn_path = self.filename[self.filename.find('NMSSM/')+6:].replace('/ntuple','')
-            self.feyn = f"{model_path}/{year}/{feyn_path}"
-            if 'maxbtag/' in self.filename: self.feyn = f"{model_path}/{self.year}/maxbtag/{feyn_path}"
-         else: self.feyn = feyn
-      else:
-         data_name = [entry for entry in self.filename.split('/') if 'Data' in entry][0]
-         self.feyn = f"{model_path}/{self.year}/{data_name}.root"
-
-      # console.log(f"[purple]Loading {self.feyn}...")
-      print(f"{Fore.MAGENTA}model: {self.feyn}{Style.RESET_ALL}")
-
-      with uproot.open(self.feyn) as f:
-         f = f['Events']
-         self.scores = f['scores'].array(library='np')
-         self.maxcomb = f['max_comb'].array(library='np')
-         self.maxscore = f['max_score'].array()
-         self.maxlabel = f['max_label'].array()
-         self.minscore = f['min_score'].array()
-         self.nres_rank = f['nres_rank'].array()
-         self.mass_rank = f['mass_rank'].array()
-         self.max_diff = np.sort(self.scores, axis=1)[:,44]-np.sort(self.scores, axis=1)[:,43]
-
-      combos = self.maxcomb.astype(int)
-      combos = ak.from_regular(combos)
-
-      self.combos = combos
+   def init_model(self):
 
       btag_mask = ak.argsort(self.jet_btag, axis=1, ascending=False) < 6
 
-      pt = self.jet_ptRegressed[btag_mask][combos]
-      phi = self.jet_phi[btag_mask][combos]
-      eta = self.jet_eta[btag_mask][combos]
-      m = self.jet_mRegressed[btag_mask][combos]
-      btag = self.jet_btag[btag_mask][combos]
-      sig_id = self.jet_signalId[btag_mask][combos]
-      h_id = (self.jet_signalId[btag_mask][combos] + 2) // 2
+      pt = self.jet_ptRegressed[btag_mask][self.combos]
+      phi = self.jet_phi[btag_mask][self.combos]
+      eta = self.jet_eta[btag_mask][self.combos]
+      m = self.jet_mRegressed[btag_mask][self.combos]
+      btag = self.jet_btag[btag_mask][self.combos]
+      sig_id = self.jet_signalId[btag_mask][self.combos]
+      h_id = (self.jet_signalId[btag_mask][self.combos] + 2) // 2
 
       self.btag_avg = ak.mean(btag, axis=1)
 
@@ -747,24 +711,24 @@ class SixB(Tree):
 
    _is_signal = True
 
-   def __init__(self, filename, config='config/bdt_params.cfg', treename='sixBtree', model_path=model_path, feyn=True):
-      super().__init__(filename, treename, config, feyn=feyn)
+   def __init__(self, filepath, config='config/bdt_params.cfg', treename='sixBtree', feyn=True):
+      super().__init__(filepath, treename, config, feyn=feyn)
       
-      try: self.mx = int(re.search('MX_.+MY', filename).group().split('_')[1])
-      except: self.mx = int(re.search('MX-.+MY', filename).group().split('-')[1].split('_')[0])
-      try: self.my = int(re.search('MY.+/', filename).group().split('_')[1].split('/')[0])
+      try: self.mx = int(re.search('MX_.+MY', filepath).group().split('_')[1])
+      except: self.mx = int(re.search('MX-.+MY', filepath).group().split('-')[1].split('_')[0])
+      try: self.my = int(re.search('MY.+/', filepath).group().split('_')[1].split('/')[0])
       except: 
-         self.my = int(re.search('MY.+/', filename).group().split('-')[1].split('/')[0].split('_')[0])
-      # self.filename = re.search('NMSSM_.+/', filename).group()[:-1]
+         self.my = int(re.search('MY.+/', filepath).group().split('-')[1].split('/')[0].split('_')[0])
+      # self.filepath = re.search('NMSSM_.+/', filepath).group()[:-1]
       self.sample = latexTitle(self.mx, self.my)
       self.mxmy = self.sample.replace('$','').replace('_','').replace('= ','_').replace(', ','_').replace(' GeV','')
 
-      samp, xsec = next( ((key,value) for key,value in xsecMap.items() if key in filename),("unk",1) )
+      samp, xsec = next( ((key,value) for key,value in xsecMap.items() if key in filepath),("unk",1) )
       self.xsec = xsec
       self.lumi = lumiMap[self.year][0]
       self.scale = self.lumi * xsec / self.total
       self.cutflow_scaled = (self.cutflow * self.scale).astype(int)
-      if 'Official_NMSSM' in filename:
+      if 'Official_NMSSM' in filepath:
          genEventSumw = np.unique(self.get('genEventSumw', library='np')).sum()
          genWeight = self.get('genWeight', library='np') / genEventSumw
          self.genWeight = self.lumi * xsec * genWeight
@@ -791,7 +755,7 @@ class SixB(Tree):
       self.jet_higgsIdx = (self.jet_signalId) // 2
 
       # print("Calculating SF correction factors")
-      if 'Official' in self.filename: 
+      if 'Official' in self.filepath: 
          self.get_sf_ratios()
 
    def get_sf_ratios(self):
@@ -882,8 +846,8 @@ class Data(Tree):
 
    _is_signal = False
 
-   def __init__(self, filename, cfg='config/bdt_params.cfg', treename='sixBtree', model_path=model_path, feyn=True):
-      super().__init__(filename, treename, cfg, feyn=feyn)
+   def __init__(self, filepath, cfg='config/bdt_params.cfg', treename='sixBtree', feyn=True):
+      super().__init__(filepath, treename, cfg, feyn=feyn)
 
       self.sample = rf"{round(lumiMap[self.year][0]/1000,1)} fb$^{{-1}}$ (13 TeV, {self.year})"
       self.set_bdt_params(cfg)
@@ -1274,9 +1238,9 @@ class Data(Tree):
       plt.tight_layout()
 
       if saveas is not None:
-         # fname = f"{savein}/{filename}_{variable}_before.pdf"
+         # fname = f"{savein}/{filepath}_{variable}_before.pdf"
          # fig_before.savefig(saveas, bbox_inches='tight')
-         # fname = f"{savein}/{filename}_{variable}_after.pdf"
+         # fname = f"{savein}/{filepath}_{variable}_after.pdf"
          fig_after.savefig(saveas, bbox_inches='tight')
 
 
