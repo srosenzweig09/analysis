@@ -82,13 +82,7 @@ class Tree():
       from utils.cutConfig import btagWP
       self.btagWP = btagWP
 
-      if isinstance(cfg, str):
-         config = ConfigParser()
-         config.optionxform = str
-         config.read(cfg)
-         self.config = config
-      elif isinstance(cfg, ConfigParser):
-         self.config = cfg
+      self.read_config(cfg)
 
       self.filename = filename
       self.treename = treename
@@ -139,6 +133,15 @@ class Tree():
          self.set_var_dict()
       
       if self.nevents != len(self.n_jet): print("WARNING! Number of events in cutflow does not match number of events in tree!")
+
+   def read_config(self, cfg):
+      if isinstance(cfg, str):
+         config = ConfigParser()
+         config.optionxform = str
+         config.read(cfg)
+         self.config = config
+      elif isinstance(cfg, ConfigParser):
+         self.config = cfg
 
    def keys(self):
       return uproot.open(f"{self.filename}:{self.treename}").keys()
