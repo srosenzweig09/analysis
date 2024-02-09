@@ -264,16 +264,16 @@ def Ratio(data, bins, labels, xlabel, axs=None, weights=[None, None], density=Fa
       n_ratio = n_den / n_num
       n_ratio = np.where(np.isnan(n_ratio), 0, n_ratio)
       n_ratio = np.where(np.isposinf(n_ratio), 0, n_ratio)
-      n_uncert_up = np.where(n_num != 0, (n_num + n_err) / n_num, 0)
-      n_uncert_down = np.where(n_num != 0, (n_num - n_err) / n_num, 0)
+      # n_uncert_up = np.where(n_num != 0, (n_num + n_err) / n_num, 0)
+      # n_uncert_down = np.where(n_num != 0, (n_num - n_err) / n_num, 0)
 
-      n_data_err_up = np.where(n_den != 0, (n_den + n_err)/n_den, 0)
-      n_data_err_down = np.where(n_den != 0, (n_den - n_err)/n_den, 0)
-      for i,n_nominal in enumerate(n_num):
-         axs[1].fill_between([bins[i],bins[i+1]], n_uncert_down[i], n_uncert_up[i], color='C0', alpha=0.25)
-         if n_ratio[i] < 1: y = -(1-n_ratio[i])
-         else: y = n_ratio[i] - 1
-         axs[1].plot([x[i], x[i]], [n_data_err_down[i]+y, n_data_err_up[i]+y], color='k', lw=2)
+      # n_data_err_up = np.where(n_den != 0, (n_den + n_err)/n_den, 0)
+      # n_data_err_down = np.where(n_den != 0, (n_den - n_err)/n_den, 0)
+      # for i,n_nominal in enumerate(n_num):
+      #    axs[1].fill_between([bins[i],bins[i+1]], n_uncert_down[i], n_uncert_up[i], color='C0', alpha=0.25)
+      #    if n_ratio[i] < 1: y = -(1-n_ratio[i])
+      #    else: y = n_ratio[i] - 1
+      #    axs[1].plot([x[i], x[i]], [n_data_err_down[i]+y, n_data_err_up[i]+y], color='k', lw=2)
       ax.plot(x, np.ones_like(x), '--', color='gray')
       ax.scatter(x, n_ratio, color='k')
       ax.set_ylabel(ratio_ylabel)
@@ -284,6 +284,42 @@ def Ratio(data, bins, labels, xlabel, axs=None, weights=[None, None], density=Fa
    if total: return n_num, n_den, n_ratio, total
    if pull: return n_num, n_den, n_pull, pull
    return n_num, n_den, n_ratio
+
+
+def getRatio(numer, denom):
+   ratio = numer / denom
+   ratio = np.where(denom < 1e-6, 0, ratio)
+   return ratio
+
+def NewRatio(numer, denom, bins, labels, axs=None, weights=[None, None], density=False, **kwargs):
+   if axs is None:
+      fig = plt.figure()
+      gs = fig.add_gridspec(2,1, hspace=0, height_ratios=[4, 1])
+      ax1 = fig.add_subplot(gs[0])
+      ax2 = fig.add_subplot(gs[1], sharex=ax1)
+   elif isinstance(axs, tuple): ax1, ax2 = axs 
+
+   x = (bins[1:] + bins[:-1])/2
+   n_numer = np.histogram(numer, bins=bins, weights=weights[0])[0]
+   n_denom = np.histogram(denom, bins=bins, weights=weights[1])[0]
+
+   if density:
+      n_numer = n_numer / n_numer.sum()
+      n_denom = n_denom / n_denom.sum()
+      n_numer = Hist(x, bins=bins, ax=ax1, weights=numer, label=labels[0])
+      n_denom = Hist(x, bins=bins, ax=ax1, weights=denom, label=labels[1])
+   else:
+      n_numer = Hist(numer, bins=bins, ax=ax1, weights=weights[0], label=labels[0])
+      n_denom = Hist(denom, bins=bins, ax=ax1, weights=weights[1], label=labels[1])
+
+   ratio = getRatio(n_numer, n_denom)
+   ax2.plot(x, np.ones_like(x), '--', color='gray')
+   n_ratio = Hist(x, ax=ax2, weights=ratio, bins=bins)
+   ax2.set_ylim(0,2)
+   
+      
+
+
 
 def RatioWithError(data, bins, labels, xlabel, axs=None, weights=[None, None], density=False, ratio_ylabel='Ratio', broken=False, pull=False, data_norm=False, norm=None, total=False):
    from matplotlib.lines import Line2D
