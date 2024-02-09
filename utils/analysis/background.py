@@ -106,6 +106,7 @@ class Bkg():
         self.lumi = lumiMap[year][0]
         self.scale = self.lumi*xsec/total
         self.cutflow = cutflow.to_numpy()[0]*self.scale
+        self.cutflow_labels = cutflow.axis().labels()
 
         # self.genWeight = self.lumi*xsec*tree['genWeight'].array()
         self.PUWeight = tree['PUWeight'].array()
@@ -171,6 +172,9 @@ class Bkg():
                 continue
             except uproot.KeyInFileError:
                 print(f"[NO KEYS IN FILE] .. skipping {file_info}")
+                continue
+            except:
+                print(f"[ERROR] {file_info}")
                 continue
 
             # with uproot.open(f"{filename}:{treename}") as tree:
