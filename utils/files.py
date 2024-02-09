@@ -22,7 +22,7 @@ def get_data(year='Summer2018UL', jets='btag_pt'):
    return f"{base}/{year}/{jets}/{data_path}"
 
 def get_mpoint(flist, mx, my, private):
-   if private: return [f for f in flist if f"_{mx}_" in f and f"_{my}_" in f][0]
+   if private: return [f for f in flist if f"_{mx}_" in f and f"_{my}" in f][0]
    else: return [f for f in flist if f"-{mx}_" in f and f"-{my}_" in f][0]
 
 def get_NMSSM(mx=700, my=400, year=2018, selection='maxbtag_4b', suffix='', private=False):
