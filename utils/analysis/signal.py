@@ -182,22 +182,6 @@ class Tree():
       # console.log(f"[purple]Loading {self.feyn}...")
       print(f"{Fore.MAGENTA}model: {self.feyn}{Style.RESET_ALL}")
 
-      # if 'awkd' in model:
-      #    import awkward0 as ak0
-      #    # with ak0.load(model) as f_awk:
-      #    with ak0.load(self.feyn) as f_awk:
-      #       try: self.scores = ak.unflatten(f_awk['scores'], np.repeat(45, self.nevents)).to_numpy()
-      #       except: self.scores = ak.from_regular(f_awk['scores'].astype(float))
-      #       self.nmaxscore = self.scores[ak.argsort(self.scores, ascending=False)][:,1]
-      #       self.maxscore = f_awk['maxscore']
-      #       self.max_diff = self.maxscore - self.nmaxscore
-      #       assert np.array_equal(self.maxscore, ak.max(self.scores, axis=1))
-      #       self.minscore = ak.min(self.scores, axis=1)
-      #       self.maxcomb = f_awk['max_comb']
-      #       self.maxlabel = f_awk['max_label']
-      #       self.mass_rank = np.concatenate(f_awk['mass_rank'])
-      #       self.nres_rank = np.concatenate(f_awk['nres_rank'])
-      # else:
       with uproot.open(self.feyn) as f:
          f = f['Events']
          self.scores = f['scores'].array(library='np')
@@ -311,6 +295,58 @@ class Tree():
       # only worried about pairing together two jets from any higgs boson
       self.n_H_paired_correct = self.HA_correct*1 + self.HB_correct*1 + self.HC_correct*1
 
+   def init_unregressed(self):
+      btag_mask = ak.argsort(self.jet_btag, axis=1, ascending=False) < 6
+
+      pt = self.jet_pt[btag_mask][self.combos]
+      phi = self.jet_phi[btag_mask][self.combos]
+      eta = self.jet_eta[btag_mask][self.combos]
+      m = self.jet_m[btag_mask][self.combos]
+      btag = self.jet_btag[btag_mask][self.combos]
+      sig_id = self.jet_signalId[btag_mask][self.combos]
+      h_id = (self.jet_signalId[btag_mask][self.combos] + 2) // 2
+
+      self.btag_avg = ak.mean(btag, axis=1)
+
+      sample_particles = []
+      for j in range(6):
+         particle = Particle({
+               'pt' : pt[:,j],
+               'eta' : eta[:,j],
+               'phi' : phi[:,j],
+               'm' : m[:,j],
+               'btag' : btag[:,j],
+               'sig_id' : sig_id[:,j],
+               'h_id': h_id[:,j]
+               }
+         )
+         sample_particles.append(particle)
+
+      HX_b1 = {'pt':sample_particles[0].pt,'eta':sample_particles[0].eta,'phi':sample_particles[0].phi,'m':sample_particles[0].m,'btag':sample_particles[0].btag,'sig_id':sample_particles[0].sig_id,'h_id':sample_particles[0].h_id}
+      HX_b2 = {'pt':sample_particles[1].pt,'eta':sample_particles[1].eta,'phi':sample_particles[1].phi,'m':sample_particles[1].m,'btag':sample_particles[1].btag,'sig_id':sample_particles[1].sig_id,'h_id':sample_particles[1].h_id}
+      H1_b1 = {'pt':sample_particles[2].pt,'eta':sample_particles[2].eta,'phi':sample_particles[2].phi,'m':sample_particles[2].m,'btag':sample_particles[2].btag,'sig_id':sample_particles[2].sig_id,'h_id':sample_particles[2].h_id}
+      H1_b2 = {'pt':sample_particles[3].pt,'eta':sample_particles[3].eta,'phi':sample_particles[3].phi,'m':sample_particles[3].m,'btag':sample_particles[3].btag,'sig_id':sample_particles[3].sig_id,'h_id':sample_particles[3].h_id}
+      H2_b1 = {'pt':sample_particles[4].pt,'eta':sample_particles[4].eta,'phi':sample_particles[4].phi,'m':sample_particles[4].m,'btag':sample_particles[4].btag,'sig_id':sample_particles[4].sig_id,'h_id':sample_particles[4].h_id}
+      H2_b2 = {'pt':sample_particles[5].pt,'eta':sample_particles[5].eta,'phi':sample_particles[5].phi,'m':sample_particles[5].m,'btag':sample_particles[5].btag,'sig_id':sample_particles[5].sig_id,'h_id':sample_particles[5].h_id}
+
+      self.HX_unregressed = Higgs(HX_b1, HX_b2)
+
+      # self.HX_b1 = self.HX.b1
+      # self.HX_b2 = self.HX.b2
+
+      H1 = Higgs(H1_b1, H1_b2)
+      H2 = Higgs(H2_b1, H2_b2)
+
+      assert ak.all(self.HX.b1.pt >= self.HX.b2.pt)
+      assert ak.all(H1.b1.pt >= H1.b2.pt)
+      assert ak.all(H2.b1.pt >= H2.b2.pt)
+
+      self.Y_unregressed = Y(H1, H2)
+
+      self.H1_unregressed = self.Y_unregressed.H1
+      self.H2_unregressed = self.Y_unregressed.H2
+
+      assert ak.all(self.H1.pt >= self.H2.pt)
 
    def initialize_bosons(self):
       self.HX_b1 = Particle(self, 'HX_b1')
@@ -737,7 +773,7 @@ class SixB(Tree):
          self.triggerSF_down = self.get('triggerScaleFactorDown', library='np')
          self.scale = self.genWeight*self.PUWeight*self.PUIDWeight*self.triggerSF
          self.cutflow_scaled = (self.cutflow * self.scale.sum()).astype(int)
-         self.nomWeight = self.genWeight * self.PUWeight * self.PUIDWeight * self.triggerSF
+         self.nomWeight = self.genWeight*self.PUWeight*self.PUIDWeight*self.triggerSF
 
 
       self.resolved_mask = ak.all(self.jet_signalId[:,:6] > -1, axis=1)
@@ -778,7 +814,7 @@ class SixB(Tree):
 
          setattr(self, sf_name, corr * raw_sf)
          setattr(self, f'{sf_name}_raw', raw_sf)
-         self.nomWeight = self.nomWeight * self.bSFshape_central
+      self.nomWeight = self.nomWeight * self.bSFshape_central
 
    def sr_hist(self):
       fig, ax = plt.subplots()
