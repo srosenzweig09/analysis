@@ -18,11 +18,11 @@ class Model():
         elif which == 'old': self.init_old_model(sixb)
         else: raise ValueError(f"Model type '{which}' not recognized")
 
-    def init_new_model(self, sixb, mass_dict):
-        print("------ new -------")
+    def init_new_model(self, sixb):
+        print(".. initializing new FeynNet model")
         mass_dict = getMassDict(sixb.year)
-        hash = mass_dict[sixb.filename]
-        model_path = f"{new_model_path}/{sixb.year}/{hash}.root"
+        model_path = mass_dict[sixb.filepath]
+        # model_path = f"{new_model_path}/{sixb.year}/{hash}.root"
         with uproot.open(model_path) as f:
             t = f['Events']
             # print(t['sorted_rank'].array())
@@ -31,7 +31,7 @@ class Model():
         # print(print(combos))
 
     def init_old_model(self, sixb):
-        print("------ old -------")
+        print(".. initializing old FeynNet model")
         model_path = f"{old_model_path}/{sixb.year}/{sixb.filename}.root"
         with uproot.open(model_path) as f:
             f = f['Events']
