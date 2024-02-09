@@ -9,6 +9,8 @@ import glob
 import json
 import sys
 
+directory_path = "/eos/uscms/store/user/srosenzw/weaver/cmsuf/data/store/user/srosenzw/lightning/models/feynnet_lightning/X_YH_3H_6b/x3h/lightning_logs/version_23183119/predict/2018"
+
 def merge_json_files(directory):
     merged_data = {}
     json_files = glob.glob(os.path.join(directory, '*.json'))
@@ -18,14 +20,14 @@ def merge_json_files(directory):
             file_data = json.load(file)
             for key,val in file_data.items():
                 # obtain hash from val and mass filename from key
-                key, val = key.split('/')[-2], val.split('/')[-1]
-                file_dict = {key : val}
+                # key, val = key.split('/')[-2], val.split('/')[-1]
+                hash_key = val.split('/')[-1]
+                file_dict = {key.replace("root://cmseos.fnal.gov/", "/eos/uscms") : f"{directory_path}/{hash_key}.root"}
             merged_data.update(file_dict)
     
     return merged_data
 
 # Example usage:
-directory_path = "/eos/uscms/store/user/srosenzw/weaver/cmsuf/data/store/user/srosenzw/lightning/models/feynnet_lightning/X_YH_3H_6b/x3h/lightning_logs/version_23183119/predict"
 merged_result = merge_json_files(directory_path)
 # for key in merged_result:
     # print(key, merged_result[key])
