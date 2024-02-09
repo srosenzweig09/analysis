@@ -10,7 +10,7 @@ from utils.useCMSstyle import *
 plt.style.use(CMS)
 from utils.plotter import Hist
 from utils.analysis.particle import Particle, Higgs, Y
-from utils.analysis.feyn import model_path, model_name
+from utils.analysis.feyn import model_path, new_model_path, Model
 from utils.xsecUtils import lumiMap, xsecMap
 from utils.plotter import latexTitle
 
@@ -128,7 +128,10 @@ class Tree():
       self.medium_wp = self.btagWP[key]['Medium']
       self.tight_wp = self.btagWP[key]['Tight']
 
-      if feyn: self.init_model(feyn)
+      if feyn: 
+         # self.init_model(feyn)
+         self.model = Model(model_path, self.filename)
+         sys.exit()
       else: self.initialize_bosons()
       
       self.initialize_vars()
