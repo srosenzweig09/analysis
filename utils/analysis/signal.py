@@ -21,14 +21,11 @@ import os, sys
 from colorama import Fore, Style
 # import subprocess
 
-njet_bins = np.arange(8)
-id_bins = np.arange(-1, 7)
-pt_bins = np.linspace(0, 500, 100)
-score_bins = np.linspace(0,1.01,102)
-
-nbins = 40
-m_bins = np.linspace(375, 1150, nbins)
-x_X_m = (m_bins[:-1] + m_bins[1:]) / 2
+def get_indices(var, bins):
+   ind = np.digitize(var, bins) - 1
+   ind = np.where(ind == len(bins)-1, len(bins)-2, ind)
+   ind = np.where(ind < 0, 0, ind)
+   return ind
 
 def get_region_mask(higgs, center, sr_edge, cr_edge):
    deltaM = np.column_stack(([abs(mH.to_numpy() - val) for mH,val in zip(higgs,center)]))
@@ -57,6 +54,10 @@ def ROOTHist(h_vals, title, filepath):
    ROOT.gROOT.SetBatch(True)
    from array import array
    assert ".root" in filepath, print("[ERROR] Please include '.root' in filepath")
+
+   nbins = 40
+   m_bins = np.linspace(375, 1150, nbins)
+   x_X_m = (m_bins[:-1] + m_bins[1:]) / 2
    
    fout = ROOT.TFile(f"{filepath}","recreate")
    fout.cd()
@@ -121,7 +122,7 @@ class Tree():
       if feyn: 
          # self.init_model(feyn)
          self.model = Model('old', self)
-         self.model = Model('new', self)
+         # self.model = Model('new', self)
          self.combos = self.model.combos
          self.init_model()
       else: self.initialize_bosons()
@@ -700,7 +701,6 @@ class Tree():
          self.vcr_hs_masks.append(vcr_hs_mask)
          self.vsr_ls_masks.append(vsr_ls_mask)
          self.vsr_hs_masks.append(vsr_hs_mask)
-
       
       self.vcr_ls_mask = np.any(self.vcr_ls_masks, axis=0)
       self.vcr_hs_mask = np.any(self.vcr_hs_masks, axis=0)
@@ -759,6 +759,9 @@ class SixB(Tree):
          self.get_sf_ratios()
 
    def get_sf_ratios(self):
+      """
+      The scale factor ratios must first be calculated by running the script located in `scripts/calculate_2d_sf_corrs.py`, which calculates the correction factors using the maxbtag ntuples.
+      """
       sf_dir = f'data/btag/MX_{self.mx}_MY_{self.my}.root'
       sf_file = uproot.open(sf_dir)
 
@@ -769,21 +772,17 @@ class SixB(Tree):
          ratio, n_bins, ht_bins = sf_file[key].to_numpy()
    
          n_jet = self.n_jet.to_numpy()
-         ht = self.get('PFHT', library='np')
+         ht    = self.get('PFHT', library='np')
 
-         i = np.digitize(n_jet, n_bins) - 1
-         j = np.digitize(ht, ht_bins) - 1
-         i = np.where(i == len(n_bins)-1, len(n_bins)-2, i)
-         j = np.where(j == len(ht_bins)-1, len(ht_bins)-2, j)
-         i = np.where(i < 0, 0, i)
-         j = np.where(j < 0, 0, j)
-   
+         i = get_indices(n_jet, n_bins)
+         j = get_indices(ht, ht_bins)
          corr = ratio[i,j]
       
          raw_sf = self.tree[sf_name].array()
 
          setattr(self, sf_name, corr * raw_sf)
          setattr(self, f'{sf_name}_raw', raw_sf)
+      
       self.nomWeight = self.nomWeight * self.bSFshape_central
 
    def sr_hist(self):
