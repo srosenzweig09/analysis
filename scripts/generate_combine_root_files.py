@@ -2,8 +2,6 @@
 """
 This script will build the individual root files for each mass point, containing the nominal MX distribution, as well as the distributions for each systematic variation.
 
-python scripts/generate_combine_root_files.py /eos/uscms/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag_4b/Official_NMSSM/NMSSM_XToYHTo6B_MX-500_MY-300_TuneCP5_13TeV-madgraph-pythia8/ntuple.root
-python scripts/generate_combine_root_files.py /eos/uscms/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag_4b/Official_NMSSM/NMSSM_XToYHTo6B_MX-950_MY-700_TuneCP5_13TeV-madgraph-pythia8/ntuple.root
 python scripts/generate_combine_root_files.py /eos/uscms/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag_4b/Official_NMSSM/NMSSM_XToYHTo6B_MX-1000_MY-800_TuneCP5_13TeV-madgraph-pythia8/ntuple.root
 """
 
@@ -14,13 +12,10 @@ ROOT.gROOT.SetBatch(True)
 from array import array
 import numpy as np
 import matplotlib.pyplot as plt
-# import subprocess
 from configparser import ConfigParser
 from utils.plotter import Hist
 from utils.analysis.signal import SixB
-from utils.analysis.feyn import model_name
-fsave = f'combine/feynnet/{model_name}'
-import sys
+import os, sys
 
 parser = ArgumentParser()
 parser.add_argument("filename")
@@ -55,6 +50,9 @@ def writeHist(h_title, n):
     ROOT_hist.Draw("hist")
     ROOT_hist.Write()
 
+def makeDir(path):
+    if not os.path.exists(path): os.makedirs(path)
+
 # base = "/eos/uscms/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag_4b/Official_NMSSM"
 # output = subprocess.check_output(f"ls {base}", shell=True).decode('utf-8').split('\n')
 # signals = [out for out in output if 'NMSSM' in out]
@@ -65,6 +63,9 @@ fname = args.filename
 
 try: tree = SixB(fname)
 except: raiseError(fname)
+fsave = f'combine/feynnet/{tree.model.model_name}'
+makeDir(fsave)
+
 tree.spherical_region()
 mx, my = tree.mx, tree.my
 MX = tree.X.m[tree.asr_hs_mask]
