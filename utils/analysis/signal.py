@@ -244,6 +244,11 @@ class Tree():
       self.gnn_resolved_mask = ak.all(self.H_b_sig_id > -1, axis=1)
       self.gnn_resolved_h_mask = ak.all(self.H_b_h_id > 0, axis=1)
 
+      hx_possible = ak.sum(self.H_b_h_id == 1, axis=1) == 2
+      h1_possible = ak.sum(self.H_b_h_id == 2, axis=1) == 2
+      h2_possible = ak.sum(self.H_b_h_id == 3, axis=1) == 2
+      self.n_h_possible = hx_possible*1 + h1_possible*1 + h2_possible*1
+
       self.HX_correct = (self.HX.b1.h_id == self.HX.b2.h_id) & (self.HX.b1.h_id == 1)
       self.H1_correct = (self.H1.b1.h_id == self.H1.b2.h_id) & ((self.H1.b1.h_id == 2) | (self.H1.b1.h_id == 3))
       self.H2_correct = (self.H2.b1.h_id == self.H2.b2.h_id) & ((self.H2.b1.h_id == 2) | (self.H2.b1.h_id == 3))
@@ -747,6 +752,16 @@ class SixB(Tree):
 
 
       self.resolved_mask = ak.all(self.jet_signalId[:,:6] > -1, axis=1)
+      # assert np.array_equal(self.gnn_resolved_mask, self.resolved_mask)
+
+      self.H_b_h_id = np.column_stack((self.jet_signalId[:,:6]+1))//3
+
+
+      hx_possible = ak.sum(self.H_b_h_id == 0, axis=1) == 2
+      h1_possible = ak.sum(self.H_b_h_id == 1, axis=1) == 2
+      h2_possible = ak.sum(self.H_b_h_id == 2, axis=1) == 2
+      self.n_h_possible = hx_possible*1 + h1_possible*1 + h2_possible*1
+
 
       # for k, v in self.tree.items():
       #    if 'gen' in k:
