@@ -2,9 +2,11 @@ import json, uproot
 import numpy as np
 import awkward as ak
 
-old_model_path = f'/eos/uscms/store/user/srosenzw/weaver/models/exp_sixb_official/feynnet_ranker_6b/20230731_7d266883bbfb88fe4e226783a7d1c9db_ranger_lr0.0047_batch2000_withbkg/predict_output'
+old_model_name = '20230731_7d266883bbfb88fe4e226783a7d1c9db_ranger_lr0.0047_batch2000_withbkg'
+old_model_path = f'/eos/uscms/store/user/srosenzw/weaver/models/exp_sixb_official/feynnet_ranker_6b/{old_model_name}/predict_output'
 
-new_model_path = "/eos/uscms/store/user/srosenzw/weaver/cmsuf/data/store/user/srosenzw/lightning/models/feynnet_lightning/X_YH_3H_6b/x3h/lightning_logs/version_23183119/predict/"
+new_model_name = 'version_23183119'
+new_model_path = f"/eos/uscms/store/user/srosenzw/weaver/cmsuf/data/store/user/srosenzw/lightning/models/feynnet_lightning/X_YH_3H_6b/x3h/lightning_logs/{new_model_name}/predict/"
 
 def getMassDict(year):
     with open(f"{new_model_path}/{year}/samples.json", 'r') as file:
@@ -28,6 +30,7 @@ class Model():
             # print(t['sorted_rank'].array())
             maxcomb = ak.firsts(t['sorted_j_assignments'].array())
         self.combos = ak.from_regular(maxcomb)
+        self.model_name = new_model_name
         # print(print(combos))
 
     def init_old_model(self, sixb):
@@ -39,3 +42,4 @@ class Model():
 
         combos = maxcomb.astype(int)
         self.combos = ak.from_regular(combos)
+        self.model_name = old_model_name
