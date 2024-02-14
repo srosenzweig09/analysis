@@ -16,9 +16,9 @@ def get(cmd, **kwargs):
 # path = f'/uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_2_18/src/HiggsAnalysis/CombinedLimit/limits/{jets}_sphere.txt'
 
 # path = '/uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_6_19_patch2/src/sixb/limits/btag_pt_limits.txt'
-path = '/uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_6_19_patch2/src/sixb/combine/feynnet/20230731_7d266883bbfb88fe4e226783a7d1c9db_ranger_lr0.0047_batch2000_withbkg/datacards/limits.txt'
+path = '/uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_6_19_patch2/src/sixb/combine/feynnet/20230731_7d266883bbfb88fe4e226783a7d1c9db_ranger_lr0.0047_batch2000_withbkg/limits.txt'
 
-flimits = '/uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_6_19_patch2/src/sixb/combine/feynnet/20230731_7d266883bbfb88fe4e226783a7d1c9db_ranger_lr0.0047_batch2000_withbkg/datacards/limits.pdf'
+flimits = '/uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_6_19_patch2/src/sixb/combine/feynnet/20230731_7d266883bbfb88fe4e226783a7d1c9db_ranger_lr0.0047_batch2000_withbkg/limits.pdf'
 
 with open(path) as f:
    lines = f.readlines()
@@ -52,8 +52,8 @@ print(df)
 fig, ax = plt.subplots(figsize=(10,10))
 for MY in np.unique(my):
    limits = df.xs(MY, level='my')['mean']
-   print(f"my = {MY}")
-   print(f"MY =? 400 : {MY==400}")
+   # print(f"my = {MY}")
+   # print(f"MY =? 400 : {MY==400}")
    # if MY == 400: 
       # limits = limits.where(limits.index != 650)
    limits.plot(ax=ax, xlabel=r'M$_\mathrm{X}$ [GeV]', ylabel=r'$\sigma(\mathrm{X}\rightarrow\mathrm{Y(HH)H}\rightarrow\mathrm{6b})$ [fb]', ylim=(1,300))
