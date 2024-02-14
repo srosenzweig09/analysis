@@ -7,7 +7,7 @@ from utils.varUtils import *
 from utils.cutConfig import *
 from utils.plotter import Hist
 from utils.analysis.particle import Particle
-from utils.analysis.feyn import model_path
+from utils.analysis.feyn import Model
 
 # Standard library imports
 from configparser import ConfigParser
