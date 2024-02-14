@@ -317,6 +317,7 @@ def NewRatio(numer, denom, bins, labels, axs=None, weights=[None, None], density
    n_ratio = Hist(x, ax=ax2, weights=ratio, bins=bins)
    ax2.set_ylim(0,2)
    
+   return axs
       
 
 
