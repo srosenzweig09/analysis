@@ -7,7 +7,6 @@ import sys
 import uproot as ut
 import awkward as ak
 import numpy as np
-import sympy as sp
 
 import string
 import re
@@ -23,7 +22,6 @@ def init_attr(attr,init,size):
     attr = list(attr)
     return (attr + size*[init])[:size]
 
-from .selectUtils import *
 from .plotUtils import *
 # from .studyUtils import *
 # from .classUtils import *

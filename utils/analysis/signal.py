@@ -14,8 +14,6 @@ from utils.analysis.feyn import Model
 from utils.xsecUtils import lumiMap, xsecMap
 from utils.plotter import latexTitle
 
-from rich.console import Console
-console = Console()
 import re
 import os, sys 
 from colorama import Fore, Style

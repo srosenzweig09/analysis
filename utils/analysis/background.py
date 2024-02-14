@@ -11,7 +11,6 @@ from utils.analysis.feyn import Model
 
 # Standard library imports
 from configparser import ConfigParser
-from rich import print as rprint
 
 import subprocess, shlex
 import sys 
@@ -188,7 +187,7 @@ class Bkg():
                 n = len(tree['jet_pt'])
                 
                 if n == 0: 
-                    rprint(f".. skipping {file_info}")
+                    print(f".. skipping {file_info}")
                     continue
 
                 if 'QCD' in filename: qcd_mask = np.append(qcd_mask, np.repeat(1,n))
