@@ -16,6 +16,7 @@ def get_central_samples():
     base = '/cmsuf/data/store/user/srosenzw/root/cmseos.fnal.gov/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag_4b/Official_NMSSM/*/ntuple.root'
     files = glob.glob(base)
     masses = [f"{out}\n" for out in files if get_central_mx(out) < 1300]
+    masses = sorted(masses)
     with open("filelists/central.txt", "w") as f:
         f.writelines(masses)
 
@@ -29,6 +30,7 @@ def get_private_samples():
     base = '/cmsuf/data/store/user/srosenzw/root/cmseos.fnal.gov/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag/NMSSM/*/ntuple.root'
     output = glob.glob(base)
     output = [f"{out}\n" for out in output if get_private_mx(out) < 1300]
+    output = sorted(output)
     with open("filelists/private.txt", "w") as f:
         f.writelines(output)
 
@@ -38,6 +40,7 @@ def get_central_systematics():
     base = '/cmsuf/data/store/user/srosenzw/root/cmseos.fnal.gov/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag_4b/Official_NMSSM/syst/*/*/*/ntuple.root'
     files = glob.glob(base)
     files = [f"{out}\n" for out in files]
+    files = sorted(files)
     with open("filelists/central_systematics.txt", "w") as f:
         f.writelines(files)
 
