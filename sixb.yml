@@ -1,0 +1,29 @@
+name: sixb
+channels:
+  - conda-forge
+dependencies:
+  - uproot=5
+  - awkward=2
+  - awkward0
+  - hep_ml
+  - icu
+  - jax
+  - jupyter
+  - matplotlib
+  - networkx
+  - numba
+  - numpy=1.24
+  - pandas
+  - pillow
+  - pyhf
+  - pyyaml
+  - rich
+  - root
+  - scikit-learn
+  - scipy
+  - seaborn
+  - sympy
+  - tqdm
+  - vector
+  - xrootd=5.3
+  - boost-histogram
