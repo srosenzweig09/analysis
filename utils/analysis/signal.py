@@ -119,8 +119,8 @@ class Tree():
 
       if feyn: 
          # self.init_model(feyn)
-         self.model = Model('old', self)
-         # self.model = Model('new', self)
+         # self.model = Model('old', self)
+         self.model = Model('new', self)
          self.combos = self.model.combos
          self.init_model()
       else: self.initialize_bosons()
@@ -770,6 +770,7 @@ class SixB(Tree):
       # print("Calculating SF correction factors")
       if 'Official' in self.filepath: 
          self.get_sf_ratios()
+         self.init_weights()
 
    def get_sf_ratios(self):
       """
@@ -779,6 +780,7 @@ class SixB(Tree):
       sf_file = uproot.open(sf_dir)
 
       for key in sf_file.keys():
+         if 'cferr' in key: continue
          sf_name = key.split(f'{self.my}_')[-1].split(';')[0]
          # print(sf_name)
          
@@ -797,6 +799,27 @@ class SixB(Tree):
          setattr(self, f'{sf_name}_raw', raw_sf)
       
       self.nomWeight = self.nomWeight * self.bSFshape_central
+
+   def init_weights(self):
+      self.w_nominal = self.genWeight*self.PUWeight*self.PUIDWeight*self.bSFshape_central*self.triggerSF
+      self.w_PUUp = self.genWeight*self.PUWeight_up*self.PUIDWeight*self.bSFshape_central*self.triggerSF
+      self.w_PUDown = self.genWeight*self.PUWeight_down*self.PUIDWeight*self.bSFshape_central*self.triggerSF
+      self.w_PUIDUp = self.genWeight*self.PUWeight*self.PUIDWeight_up*self.bSFshape_central*self.triggerSF
+      self.w_PUIDDown = self.genWeight*self.PUWeight*self.PUIDWeight_down*self.bSFshape_central*self.triggerSF
+      self.w_triggerUp = self.genWeight*self.PUWeight*self.PUIDWeight*self.bSFshape_central*self.triggerSF_up
+      self.w_triggerDown = self.genWeight*self.PUWeight*self.PUIDWeight*self.bSFshape_central*self.triggerSF_down
+      self.w_HFUp = self.genWeight*self.PUWeight*self.PUIDWeight*self.bSFshape_up_hf*self.triggerSF
+      self.w_HFDown = self.genWeight*self.PUWeight*self.PUIDWeight*self.bSFshape_down_hf*self.triggerSF
+      self.w_LFUp = self.genWeight*self.PUWeight*self.PUIDWeight*self.bSFshape_up_lf*self.triggerSF
+      self.w_LFDown = self.genWeight*self.PUWeight*self.PUIDWeight*self.bSFshape_down_lf*self.triggerSF
+      self.w_LFStats1Up = self.genWeight*self.PUWeight*self.PUIDWeight*self.bSFshape_up_lfstats1*self.triggerSF
+      self.w_LFStats1Down = self.genWeight*self.PUWeight*self.PUIDWeight*self.bSFshape_down_lfstats1*self.triggerSF
+      self.w_LFStats2Up = self.genWeight*self.PUWeight*self.PUIDWeight*self.bSFshape_up_lfstats2*self.triggerSF
+      self.w_LFStats2Down = self.genWeight*self.PUWeight*self.PUIDWeight*self.bSFshape_down_lfstats2*self.triggerSF
+      self.w_HFStats1Up = self.genWeight*self.PUWeight*self.PUIDWeight*self.bSFshape_up_hfstats1*self.triggerSF
+      self.w_HFStats1Down = self.genWeight*self.PUWeight*self.PUIDWeight*self.bSFshape_down_hfstats1*self.triggerSF
+      self.w_HFStats2Up = self.genWeight*self.PUWeight*self.PUIDWeight*self.bSFshape_up_hfstats2*self.triggerSF
+      self.w_HFStats2Down = self.genWeight*self.PUWeight*self.PUIDWeight*self.bSFshape_down_hfstats2*self.triggerSF
 
    def sr_hist(self):
       fig, ax = plt.subplots()
