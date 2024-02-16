@@ -13,6 +13,7 @@ from utils.analysis.particle import Particle, Higgs, Y
 from utils.analysis.feyn import Model
 from utils.xsecUtils import lumiMap, xsecMap
 from utils.plotter import latexTitle
+from configparser import ConfigParser
 
 import re
 import os, sys 
@@ -73,23 +74,23 @@ def ROOTHist(h_vals, title, filepath):
    ROOT_hist.Write()
    fout.Close()
 
-from configparser import ConfigParser
 # Parent Class
 class Tree():
-
-   def __init__(self, filepath, treename='sixBtree', cfg='config/bdt_params.cfg', feyn=True):
+   def __init__(self, filepath, treename='sixBtree', cfg=None, feyn=True):
       from utils.cutConfig import btagWP
       self.btagWP = btagWP
-
-      self.read_config(cfg)
 
       self.filepath = filepath
       print(f"{Fore.CYAN}ntuple: {self.filepath}{Style.RESET_ALL}")
       self.filename = self.filepath.split('/')[-2]
       self.treename = treename
       self.year = int([yr for yr in ['2016', '2017', '2018'] if yr in filepath][0])
+      self.year_long = re.search("ntuples/(.*?)/", filepath).group(1)
       self.is_signal = 'NMSSM' in filepath
       self.tree = uproot.open(f"{filepath}:{treename}")
+
+      if cfg is None: cfg = f'config/bdt_{self.year_long}.cfg'
+      self.read_config(cfg)
 
       # with uproot.open(f"{filepath}:{treename}") as tree:
       pattern = re.compile('H.+_') # Search for any keys beginning with an 'H' and followed somewhere by a '_'
@@ -118,7 +119,6 @@ class Tree():
       self.tight_wp = self.btagWP[key]['Tight']
 
       if feyn: 
-         # self.init_model(feyn)
          # self.model = Model('old', self)
          self.model = Model('new', self)
          self.combos = self.model.combos
@@ -163,7 +163,6 @@ class Tree():
       np_arr = self.get(key, library='np')
       if not isinstance(np_arr, np.ndarray): np_arr = np_arr.to_numpy()
       return np_arr
-
 
    def init_model(self):
 
@@ -487,228 +486,9 @@ class Tree():
 
       # self.resolved_mask = ak.all(self.jet_signalId[:,:6] > -1, axis=1)
 
-   def diagonal_region(self):
-      
-      minMX = int(self.config['plot']['minMX'])
-      maxMX = int(self.config['plot']['maxMX'])
-      if self.config['plot']['style'] == 'linspace':
-         nbins = int(self.config['plot']['edges'])
-         self.mBins = np.linspace(minMX,maxMX,nbins)
-      if self.config['plot']['style'] == 'arange':
-         step = int(self.config['plot']['steps'])
-         self.mBins = np.arange(minMX,maxMX,step)
-
-      self.x_mBins = (self.mBins[:-1] + self.mBins[1:])/2
-
-      """Defines spherical estimation region masks."""
-      self.ar_center = float(self.config['spherical']['ARcenter'])
-      self.sr_edge   = float(self.config['spherical']['SRedge'])
-      self.cr_edge   = float(self.config['spherical']['CRedge'])
-
-      self.vr_center = self.ar_center + (self.sr_edge + self.cr_edge) / 2
-
-      # higgs = ['HX_m', 'H1_m', 'H2_m']
-      higgs = [self.HX.m, self.H1.m, self.H2.m]
-
-      # deltaM = np.column_stack(([getattr(self, mH).to_numpy() - self.ar_center for mH in higgs]))
-      deltaM = np.column_stack(([abs(mH.to_numpy() - self.ar_center) for mH in higgs]))
-      deltaM = deltaM * deltaM
-      deltaM = deltaM.sum(axis=1)
-      self.AR_deltaM = np.sqrt(deltaM)
-      self.asr_mask = self.AR_deltaM <= self.sr_edge # Analysis SR
-      if self._is_signal: self.asr_avgbtag = self.btag_avg[self.asr_mask]
-      self.acr_mask = (self.AR_deltaM > self.sr_edge) & (self.AR_deltaM <= self.cr_edge) # Analysis CR
-      if not self._is_signal: self.acr_avgbtag = self.btag_avg[self.acr_mask]
-
-      # VR_deltaM = np.column_stack(([abs(getattr(self, mH).to_numpy() - self.vr_center) for mH in higgs]))
-      VR_deltaM = np.column_stack(([abs(mH.to_numpy() - self.vr_center) for mH in higgs]))
-      VR_deltaM = VR_deltaM * VR_deltaM
-      VR_deltaM = VR_deltaM.sum(axis=1)
-      VR_deltaM = np.sqrt(VR_deltaM)
-      self.vsr_mask = VR_deltaM <= self.sr_edge # Validation SR
-      self.vcr_mask = (VR_deltaM > self.sr_edge) & (VR_deltaM <= self.cr_edge) # Validation CR
-
-      self.score_cut = float(self.config['score']['threshold'])
-      self.ls_mask = self.btag_avg < self.score_cut # ls
-      self.hs_mask = self.btag_avg >= self.score_cut # hs
-
-      self.acr_ls_mask = self.acr_mask & self.ls_mask
-      self.acr_hs_mask = self.acr_mask & self.hs_mask
-      self.asr_ls_mask = self.asr_mask & self.ls_mask
-      self.asr_hs_mask = self.asr_mask & self.hs_mask
-      if not self._is_signal:
-         self.blind_mask = ~self.asr_hs_mask
-         self.asr_hs_mask = np.zeros_like(self.asr_mask)
-      self.sr_mask = self.asr_hs_mask
-      # else: self.acr_avgbtag = self.btag_avg[self.vcr_mask]
-
-      self.vcr_ls_mask = self.vcr_mask & self.ls_mask
-      self.vcr_hs_mask = self.vcr_mask & self.hs_mask
-      self.vsr_ls_mask = self.vsr_mask & self.ls_mask
-      self.vsr_hs_mask = self.vsr_mask & self.hs_mask
-
-   def spherical_region(self, nregions='concentric'):
-      # print(self.config['spherical']['nregions'])
-      # if self.config['spherical']['nregions'] == 'multiple':
-      if nregions == 'multiple':
-         print("REGION: multiple")
-         self.multi_region()
-      # elif self.config['spherical']['nregions'] == 'diagonal':
-      elif nregions == 'diagonal':
-         print("REGION: diagonal")
-         self.diagonal_region()
-      # elif self.config['spherical']['nregions'] == 'concentric':
-      elif nregions == 'concentric':
-         print("REGION: concentric")
-         self.concentric_spheres_region()
-
-   def concentric_spheres_region(self):
-      minMX = int(self.config['plot']['minMX'])
-      maxMX = int(self.config['plot']['maxMX'])
-      if self.config['plot']['style'] == 'linspace':
-         nbins = int(self.config['plot']['edges'])
-         self.mBins = np.linspace(minMX,maxMX,nbins)
-      if self.config['plot']['style'] == 'arange':
-         step = int(self.config['plot']['steps'])
-         self.mBins = np.arange(minMX,maxMX,step)
-
-      self.x_mBins = (self.mBins[:-1] + self.mBins[1:])/2
-
-      """Defines spherical estimation region masks."""
-      self.ar_center = float(self.config['spherical']['ARcenter'])
-      self.sr_edge   = float(self.config['spherical']['SRedge'])
-      self.vr_edge   = float(self.config['spherical']['VRedge'])
-      self.cr_edge   = float(self.config['spherical']['CRedge'])
-
-      # higgs = ['HX_m', 'H1_m', 'H2_m']
-      higgs = [self.HX.m, self.H1.m, self.H2.m]
-      try: higgs = [m.to_numpy() for m in higgs]
-      except: pass
-
-      # deltaM = np.column_stack(([getattr(self, mH).to_numpy() - self.ar_center for mH in higgs]))
-      deltaM = np.column_stack(([abs(mH - self.ar_center) for mH in higgs]))
-      deltaM = deltaM * deltaM
-      deltaM = deltaM.sum(axis=1)
-      deltaM = np.sqrt(deltaM)
-      self.deltaM = deltaM
-
-      self.asr_mask = deltaM <= self.sr_edge # Analysis SR
-      if self._is_signal: self.asr_avgbtag = self.btag_avg[self.asr_mask]
-      self.acr_mask = (deltaM > self.sr_edge) & (deltaM <= self.cr_edge) # Analysis CR
-      if not self._is_signal: self.acr_avgbtag = self.btag_avg[self.acr_mask]
-
-      # vsr_edge = self.sr_edge*2 + self.cr_edge
-      # vcr_edge = self.sr_edge*2 + self.cr_edge*2
-      self.vsr_mask = (deltaM <= self.cr_edge) &  (deltaM > self.sr_edge)# Validation SR
-      self.vcr_mask = (deltaM > self.cr_edge) & (deltaM <= self.vr_edge) # Validation CR
-
-      self.score_cut = float(self.config['score']['threshold'])
-      self.ls_mask = self.btag_avg < self.score_cut # ls
-      self.hs_mask = self.btag_avg >= self.score_cut # hs
-
-
-      # b_cut = float(config['score']['n'])
-      # self.nloose_b = ak.sum(self.get('jet_btag') > 0.0490, axis=1)
-      # self.nmedium_b = ak.sum(self.get('jet_btag') > 0.2783, axis=1)
-      # ls_mask = self.nmedium_b < b_cut # ls
-      # hs_mask = self.nmedium_b >= b_cut # hs
-
-      self.acr_ls_mask = self.acr_mask & self.ls_mask
-      self.acr_hs_mask = self.acr_mask & self.hs_mask
-      self.asr_ls_mask = self.asr_mask & self.ls_mask
-      self.asr_hs_mask = self.asr_mask & self.hs_mask
-      if not self._is_signal:
-         self.blind_mask = ~self.asr_hs_mask
-         self.asr_hs_mask = np.zeros_like(self.asr_mask)
-      # else: self.acr_avgbtag = self.btag_avg[self.vcr_mask]
-
-      self.vcr_ls_mask = self.vcr_mask & self.ls_mask
-      self.vcr_hs_mask = self.vcr_mask & self.hs_mask
-      self.vsr_ls_mask = self.vsr_mask & self.ls_mask
-      self.vsr_hs_mask = self.vsr_mask & self.hs_mask
-   
-      self.crtf = round(1 + np.sqrt(1/self.acr_ls_mask.sum()+1/self.acr_hs_mask.sum()),2)
-      self.vrtf = 1 + np.sqrt(1/self.vcr_ls_mask.sum()+1/self.vcr_hs_mask.sum())
-
-   def multi_region(self):
-      """
-      The GNN tends to flatten out the 2D MH_i v. MH_j distribution, leaving fewer events in the validation region and posing a potential problem when it comes to obtaining closure. This function introduces more validation regions, which makes the validation plots look better... but now that I think about it, I'm changing the validation regions without affecting at all the signal region and estimation going on in there... How can I show with confidence that whatever validation region I use is a good representative of the signal region?
-
-      Ultimately the goal is to apply the background modeling procedure in the validation region, show that it works, and obtain confidence that it will work in the signal region... but we should be able to show that the validation region is kinematically similar to the signal region, right? I'm not quite sure anymore.
-      """
-
-      minMX = int(self.config['plot']['minMX'])
-      maxMX = int(self.config['plot']['maxMX'])
-      if self.config['plot']['style'] == 'linspace':
-         nbins = int(self.config['plot']['edges'])
-         self.mBins = np.linspace(minMX,maxMX,nbins)
-      if self.config['plot']['style'] == 'arange':
-         step = int(self.config['plot']['steps'])
-         self.mBins = np.arange(minMX,maxMX,step)
-
-      self.x_mBins = (self.mBins[:-1] + self.mBins[1:])/2
-
-      """Defines spherical estimation region masks."""
-      self.ar_center = float(self.config['spherical']['ARcenter'])
-      self.sr_edge   = float(self.config['spherical']['SRedge'])
-      self.cr_edge   = float(self.config['spherical']['CRedge'])
-
-      deltaS = (self.cr_edge + self.sr_edge) / np.sqrt(2)
-      
-      val_centers = []
-      val_centers.append((self.ar_center + deltaS, self.ar_center + deltaS, self.ar_center + deltaS))
-      val_centers.append((self.ar_center + deltaS, self.ar_center + deltaS, self.ar_center - deltaS))
-      val_centers.append((self.ar_center + deltaS, self.ar_center - deltaS, self.ar_center + deltaS))
-      val_centers.append((self.ar_center - deltaS, self.ar_center + deltaS, self.ar_center + deltaS))
-      val_centers.append((self.ar_center + deltaS, self.ar_center - deltaS, self.ar_center - deltaS))
-      val_centers.append((self.ar_center - deltaS, self.ar_center + deltaS, self.ar_center - deltaS))
-      val_centers.append((self.ar_center - deltaS, self.ar_center - deltaS, self.ar_center + deltaS))
-      val_centers.append((self.ar_center - deltaS, self.ar_center - deltaS, self.ar_center - deltaS))
-
-      higgs = [self.HX.m, self.H1.m, self.H2.m]
-
-      self.asr_mask, self.acr_mask = get_region_mask(higgs, (125,125,125), self.sr_edge, self.cr_edge)
-
-      vsr_masks, vcr_masks = [], []
-      self.vsr_mask = np.repeat(False, len(self.asr_mask))
-      self.vcr_mask = np.repeat(False, len(self.asr_mask))
-      for center in val_centers:
-         vsr_mask, vcr_mask = get_region_mask(higgs, center, self.sr_edge, self.cr_edge)
-         self.vsr_mask = np.logical_or(self.vsr_mask, vsr_mask)
-         self.vcr_mask = np.logical_or(self.vcr_mask, vcr_mask)
-         vsr_masks.append(vsr_mask)
-         vcr_masks.append(vcr_mask)
-
-      # print("vsr_mask:", self.vsr_mask)
-      assert ak.any(self.vsr_mask), "No validation region found. :("
-
-      self.score_cut = float(self.config['score']['threshold'])
-      self.ls_mask = self.btag_avg < self.score_cut # ls
-      self.hs_mask = self.btag_avg >= self.score_cut # hs
-
-      self.acr_ls_mask = self.acr_mask & self.ls_mask
-      self.acr_hs_mask = self.acr_mask & self.hs_mask
-      self.asr_ls_mask = self.asr_mask & self.ls_mask
-      self.asr_hs_mask = self.asr_mask & self.hs_mask
-      if not self._is_signal:
-         self.blind_mask = ~self.asr_hs_mask
-         self.asr_hs_mask = np.zeros_like(self.asr_mask)
-      # else: self.acr_avgbtag = self.btag_avg[self.vcr_mask]
-
-      self.vcr_ls_masks, self.vcr_hs_masks = [], []
-      self.vsr_ls_masks, self.vsr_hs_masks = [], []
-      for vsr_mask, vcr_mask in zip(vsr_masks, vcr_masks):
-         vcr_ls_mask, vcr_hs_mask, vsr_ls_mask, vsr_hs_mask = get_hs_ls_masks(vsr_mask, vcr_mask, self.ls_mask, self.hs_mask)
-
-         self.vcr_ls_masks.append(vcr_ls_mask)
-         self.vcr_hs_masks.append(vcr_hs_mask)
-         self.vsr_ls_masks.append(vsr_ls_mask)
-         self.vsr_hs_masks.append(vsr_hs_mask)
-      
-      self.vcr_ls_mask = np.any(self.vcr_ls_masks, axis=0)
-      self.vcr_hs_mask = np.any(self.vcr_hs_masks, axis=0)
-      self.vsr_ls_mask = np.any(self.vsr_ls_masks, axis=0)
-      self.vsr_hs_mask = np.any(self.vsr_hs_masks, axis=0)
+   def init_regions(self):
+      from utils.analysis.bdt import BDTRegion
+      self.region = BDTRegion(self)
 
 class SixB(Tree):
 
@@ -776,7 +556,7 @@ class SixB(Tree):
       """
       The scale factor ratios must first be calculated by running the script located in `scripts/calculate_2d_sf_corrs.py`, which calculates the correction factors using the maxbtag ntuples.
       """
-      sf_dir = f'data/btag/MX_{self.mx}_MY_{self.my}.root'
+      sf_dir = f'data/{self.year_long}/btag/MX_{self.mx}_MY_{self.my}.root'
       sf_file = uproot.open(sf_dir)
 
       for key in sf_file.keys():
