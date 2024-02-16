@@ -8,8 +8,9 @@ import os
 import glob
 import json
 import sys
+from utils.analysis.feyn import new_model_path
 
-directory_path = "/eos/uscms/store/user/srosenzw/weaver/cmsuf/data/store/user/srosenzw/lightning/models/feynnet_lightning/X_YH_3H_6b/x3h/lightning_logs/version_23183119/predict/2018"
+directory_path = f"{new_model_path}/2018"
 
 def merge_json_files(directory):
     merged_data = {}
