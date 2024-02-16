@@ -13,6 +13,8 @@ from awkward import flatten
 from awkward.highlevel import Array
 import matplotlib.colors as colors
 import numpy as np
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
 
 # import matplotlib as mpl
 # mpl.rcParams['axes.formatter.limits'] = (-1,4)
@@ -184,8 +186,6 @@ def Hist(x, scale=1, legend_loc='best', weights=None, density=False, ax=None, pa
     return n
 
 def Ratio(data, bins, labels, xlabel, axs=None, weights=[None, None], density=False, ratio_ylabel='Ratio', broken=False, pull=False, data_norm=False, norm=None, total=False):
-   
-   from matplotlib.lines import Line2D
 
    data1, data2 = data
    label1, label2 = labels
@@ -288,6 +288,51 @@ def getRatio(numer, denom):
    ratio = numer / denom
    ratio = np.where(denom < 1e-6, 0, ratio)
    return ratio
+
+def DataRatio(data, axs=None, fsave=None):
+   if axs is None: fig, axs = plt.subplots(nrows=2,  gridspec_kw={'height_ratios':[4,1]})
+
+   n_model_SR_hs = Hist(data.X_m[data.asr_ls_mask], weights=data.asr_weights, bins=data.mBins, ax=axs[0], label='asr', density=False, color='C2')
+   weights2 = np.histogram(data.X_m[data.asr_ls_mask], weights=data.asr_weights**2, bins=data.mBins)[0]
+   data.error = np.sqrt(weights2)
+
+   sumw2 = []
+   err = []
+   for i,n_nominal in enumerate(n_model_SR_hs):#, model_uncertainty_up, model_uncertainty_down)):
+      low_x = data.X_m[data.asr_ls_mask] > data.mBins[i]
+      high_x = data.X_m[data.asr_ls_mask] <= data.mBins[i+1]
+      weights = np.sum(data.asr_weights[low_x & high_x]**2)
+      sumw2.append(weights)
+      weights = np.sqrt(weights)
+      err.append(weights)
+      model_uncertainty_up = n_nominal + weights
+      model_uncertainty_down = n_nominal - weights
+
+      axs[0].fill_between([data.mBins[i], data.mBins[i+1]], model_uncertainty_down, model_uncertainty_up, color='C2', alpha=0.25)
+      
+      ratio_up = np.nan_to_num(model_uncertainty_up / n_nominal)
+      ratio_down = np.nan_to_num(model_uncertainty_down / n_nominal)
+      # print(ratio_down)
+      # print(i, i+1, ratio_down, ratio_up)
+      axs[1].fill_between([data.mBins[i], data.mBins[i+1]], ratio_down, ratio_up, color='C2', alpha=0.25)
+
+   data.sumw2 = np.array((sumw2))
+   data.err = np.array((err))
+
+   model_nominal = Line2D([0], [0], color='C2', lw=2, label='Bkg Model')
+   handles = [model_nominal, Patch(facecolor='C2', alpha=0.25, label='Bkg Uncertainty')]
+   
+   axs[0].legend(handles=handles)
+
+   axs[0].set_ylabel('Events')
+   axs[1].set_ylabel('Uncertainty')
+
+   axs[1].plot([data.mBins[0], data.mBins[-1]], [1,1], color='gray', linestyle='--')
+   axs[1].set_xlabel(r"$M_X$ [GeV]")
+
+   if fsave is not None: fig.savefig(fsave)
+   
+   return axs, n_model_SR_hs
 
 def NewRatio(numer, denom, bins, labels, axs=None, weights=[None, None], density=False, **kwargs):
    if axs is None:

@@ -104,9 +104,6 @@ class Tree():
       else: self.initialize_bosons()
       self.bdt = BDTRegion(self)
       
-      if not self.is_signal:
-         self.set_var_dict()
-      
       if self.nevents != len(self.n_jet): print("WARNING! Number of events in cutflow does not match number of events in tree!")
 
    def read_config(self, cfg):
@@ -447,15 +444,14 @@ class Data(Tree):
       self.vr_stat_prec = round(1 + np.sqrt(abs(1/self.vsr_weights.sum() - 1/self.asr_weights.sum())), 2)
       err = np.sqrt(np.sum(self.vsr_weights**2))
       self.total_error = np.sqrt(self.vsr_weights.sum() + err**2 + (self.vsr_weights.sum()*self.vrtf)**2)
-      self.diff = self.vsr_hs_mask.sum() - self.vsr_weights.sum()
-      sd = self.diff / self.total_error
+      self.diff = ak.sum(self.vsr_hs_mask) - ak.sum(self.vsr_weights)
       if self.diff**2 > self.total_error: self.K = np.sqrt(self.diff**2 - self.total_error**2)
       else: self.K = 0
-      self.vr_yield_val = round(1 + self.K / self.asr_weights.sum(), 2)
+      self.vr_yield_val = round(1 + self.K / ak.sum(self.asr_weights), 2)
 
-      self.vsr_model_ks_t, self.vsr_model_ks_p = self.ks_test('X_m', self.vsr_ls_mask, self.vsr_hs_mask, self.vsr_weights) # weighted ks test (ls shape with weights)
-      self.vsr_const_ks_t, self.vsr_const_ks_p = self.ks_test('X_m', self.vsr_ls_mask, self.vsr_hs_mask, np.ones_like(self.vsr_weights)) # unweighted ks test (ls shape without weights)
-      self.vcr_model_ks_t, self.vcr_model_ks_p = self.ks_test('X_m', self.vcr_ls_mask, self.vcr_hs_mask, self.vcr_weights)
+      # self.vsr_model_ks_t, self.vsr_model_ks_p = self.ks_test('X_m', self.vsr_ls_mask, self.vsr_hs_mask, self.vsr_weights) # weighted ks test (ls shape with weights)
+      # self.vsr_const_ks_t, self.vsr_const_ks_p = self.ks_test('X_m', self.vsr_ls_mask, self.vsr_hs_mask, np.ones_like(self.vsr_weights)) # unweighted ks test (ls shape without weights)
+      # self.vcr_model_ks_t, self.vcr_model_ks_p = self.ks_test('X_m', self.vcr_ls_mask, self.vcr_hs_mask, self.vcr_weights)
 
    def vr_histo(self, ls_mask, hs_mask, weights, density=False, vcr=False, data_norm=False, ax=None, variable='X_m', bins=None, norm=None):
       # ratio = ak.sum(self.vcr_ls_mask) / ak.sum(self.vcr_hs_mask) 
@@ -515,15 +511,6 @@ class Data(Tree):
 
       return fig, axs, n_target, n_model, n_ratio
       
-   def vsr_hist(self):
-      fig, axs, n_target, n_model, n_ratio = self.vr_hist(self.vsr_ls_mask, self.vsr_hs_mask, self.vsr_weights, density=False)
-      axs[0].set_title('Validation Signal Region')
-      return fig, axs, n_target, n_model
-   
-   def vcr_hist(self):
-      fig, axs, n_target, n_model, n_ratio = self.vr_hist(self.vcr_ls_mask, self.vcr_hs_mask, self.vcr_weights, density=False, vcr=True)
-      axs[0].set_title('Validation Control Region')
-      return fig, axs, n_target, n_model
 
    def pull_plots(self, variable='X_m', saveas=None, region='VSR'):
       from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
@@ -645,115 +632,6 @@ class Data(Tree):
       if savedir is not None: fig.savefig(f"{savedir}/{variable}_vsr_after_bdt.pdf")
 
       # fig.savefig(f"plots/model_VCR.pdf", bbox_inches='tight')
-
-   def sr_hist(self, savein=None):
-      from matplotlib.lines import Line2D
-      from matplotlib.patches import Patch
-
-      fig, axs = plt.subplots(nrows=2,  gridspec_kw={'height_ratios':[4,1]})
-
-      n_model_SR_hs = Hist(self.X_m[self.asr_ls_mask], weights=self.asr_weights, bins=self.mBins, ax=axs[0], label='asr', density=False, color='C2')
-      weights2 = np.histogram(self.X_m[self.asr_ls_mask], weights=self.asr_weights**2, bins=self.mBins)[0]
-      self.error = np.sqrt(weights2)
-
-      model_uncertainty = np.sqrt(n_model_SR_hs)
-
-      sumw2 = []
-      err = []
-      for i,n_nominal in enumerate(n_model_SR_hs):#, model_uncertainty_up, model_uncertainty_down)):
-         low_x = self.X_m[self.asr_ls_mask] > self.mBins[i]
-         high_x = self.X_m[self.asr_ls_mask] <= self.mBins[i+1]
-         weights = np.sum(self.asr_weights[low_x & high_x]**2)
-         sumw2.append(weights)
-         weights = np.sqrt(weights)
-         err.append(weights)
-         model_uncertainty_up = n_nominal + weights
-         model_uncertainty_down = n_nominal - weights
-
-         axs[0].fill_between([self.mBins[i], self.mBins[i+1]], model_uncertainty_down, model_uncertainty_up, color='C2', alpha=0.25)
-         
-         ratio_up = np.nan_to_num(model_uncertainty_up / n_nominal)
-         ratio_down = np.nan_to_num(model_uncertainty_down / n_nominal)
-         # print(ratio_down)
-         # print(i, i+1, ratio_down, ratio_up)
-         axs[1].fill_between([self.mBins[i], self.mBins[i+1]], ratio_down, ratio_up, color='C2', alpha=0.25)
-
-      self.sumw2 = np.array((sumw2))
-      self.err = np.array((err))
-
-      model_nominal = Line2D([0], [0], color='C2', lw=2, label='Bkg Model')
-      handles = [model_nominal, Patch(facecolor='C2', alpha=0.25, label='Bkg Uncertainty')]
-      
-      axs[0].legend(handles=handles)
-
-      axs[0].set_ylabel('Events')
-      axs[1].set_ylabel('Uncertainty')
-
-      axs[1].plot([self.mBins[0], self.mBins[-1]], [1,1], color='gray', linestyle='--')
-      axs[1].set_xlabel(r"$M_X$ [GeV]")
-
-      if savein is not None: ROOTHist(n_model_SR_hs, 'data', savein)
-      
-      return fig, axs, n_model_SR_hs
-
-   def vr_hist(self, savein=None):
-      from matplotlib.lines import Line2D
-      from matplotlib.patches import Patch
-
-      fig, axs = plt.subplots(nrows=2,  gridspec_kw={'height_ratios':[4,1]})
-
-      x = (self.mBins[1:] + self.mBins[:-1])/2
-      n_model_SR_hs = Hist(self.X_m[self.vsr_ls_mask], weights=self.vsr_weights, bins=self.mBins, ax=axs[0], label='Model vsr', density=False)
-      # n_SR_hs = Hist(self.X_m[self.vsr_hs_mask], bins=self.mBins, ax=axs[0], label='Target vsr', density=False, color='k')
-      n_SR_hs, _ = np.histogram(self.X_m[self.vsr_hs_mask], bins=self.mBins)
-      print(len(x),len(n_SR_hs))
-      axs[0].scatter(x, n_SR_hs, color='k', label='Target vsr')
-      n_err = np.sqrt(n_SR_hs)
-      for xval,val,nval in zip(x,n_err,n_SR_hs):
-         axs[0].plot([xval,xval], [nval-val, nval+val], color='k')
-
-      model_uncertainty = np.sqrt(n_model_SR_hs)
-
-      sumw2 = []
-      err = []
-      for i,n_nominal in enumerate(n_model_SR_hs):#, model_uncertainty_up, model_uncertainty_down)):
-         low_x = self.X_m[self.vsr_ls_mask] > self.mBins[i]
-         high_x = self.X_m[self.vsr_ls_mask] <= self.mBins[i+1]
-         weights = np.sum(self.vsr_weights[low_x & high_x]**2)
-         sumw2.append(weights)
-         weights = np.sqrt(weights)
-         err.append(weights)
-         model_uncertainty_up = n_nominal + weights
-         model_uncertainty_down = n_nominal - weights
-
-         axs[0].fill_between([self.mBins[i], self.mBins[i+1]], model_uncertainty_down, model_uncertainty_up, color='C0', alpha=0.25)
-         
-         ratio_up = np.nan_to_num(model_uncertainty_up / n_nominal)
-         ratio_down = np.nan_to_num(model_uncertainty_down / n_nominal)
-         # print(ratio_down)
-         # print(i, i+1, ratio_down, ratio_up)
-         axs[1].fill_between([self.mBins[i], self.mBins[i+1]], ratio_down, ratio_up, color='C0', alpha=0.25)
-
-      self.sumw2 = np.array((sumw2))
-      self.err = np.array((err))
-
-      model_nominal = Line2D([0], [0], color='C0', lw=2, label='Validation Bkg Model')
-      target_handle = Line2D([0], [0], marker='o', color='w', label='Validation Target Distribution', markerfacecolor='k', markersize=8)
-
-      handles = [target_handle, model_nominal, Patch(facecolor='C0', alpha=0.25, label='Validation Bkg Uncertainty')]
-      
-      axs[0].legend(handles=handles)
-
-      axs[0].set_ylabel('Events')
-      axs[1].set_ylabel('Uncertainty')
-
-      axs[1].plot([self.mBins[0], self.mBins[-1]], [1,1], color='gray', linestyle='--')
-      axs[1].set_xlabel(r"$M_X$ [GeV]")
-
-      if savein is not None: ROOTHist(n_model_SR_hs, 'data', savein)
-      
-      return fig, axs, n_model_SR_hs
-      
 
 
 bins = 31
