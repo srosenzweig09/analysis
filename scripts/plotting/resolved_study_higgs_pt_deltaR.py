@@ -2,7 +2,7 @@
 print("Loading packages...")
 from utils.analysis import SixB
 from utils.plotter import Hist2d
-from utils.files import *
+from utils.filelists import *
 from utils.bashUtils import suppress_stdout
 
 from configparser import ConfigParser

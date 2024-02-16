@@ -2,7 +2,7 @@
 print("Loading packages...")
 from utils.analysis.gnn import model_path
 from utils.analysis import sixb_from_gnn, data_from_gnn, Bkg
-from utils.files import *
+from utils.filelists import *
 from utils.bashUtils import suppress_stdout
 
 from configparser import ConfigParser

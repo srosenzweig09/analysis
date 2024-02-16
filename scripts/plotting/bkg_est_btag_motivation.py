@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from utils.analysis import sixb_from_gnn, Bkg
-from utils.files import get_NMSSM_list, get_qcd_ttbar
+from utils.filelists import get_NMSSM_list, get_qcd_ttbar
 from tqdm import tqdm
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.lines import Line2D

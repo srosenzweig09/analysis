@@ -7,7 +7,7 @@ console = Console()
 from tqdm import tqdm
 # from utils.plotter import Hist
 import numpy as np
-from utils.files import *
+from utils.filelists import *
 import os, sys
 
 from utils.analysis.gnn import model_path
