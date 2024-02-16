@@ -30,8 +30,6 @@ class OOMFormatter(ScalarFormatter):
         if self._useMathText:
             self.format = r'$\mathdefault{%s}$' % self.format
 
-file_location = '/uscms/home/srosenzw/nobackup/workarea/higgs/sixb_analysis/CMSSW_10_2_18/src/sixb/plots/'
-
 # for informational purposes because I find myself looking this up often lol
 legend_loc = {
     'best': 0,

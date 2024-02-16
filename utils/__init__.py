@@ -1,33 +1,11 @@
-import os
-import sys
-# import git
-
-# GIT_WD = git.Repo('.', search_parent_directories=True).working_tree_dir
-
-import uproot as ut
-import awkward as ak
 import numpy as np
-
-import string
-import re
+import matplotlib.pyplot as plt
+import awkward as ak
 import vector
 
-from tqdm import tqdm
-
-from .xsecUtils import *
+from .analysis.signal import SixB, Data, Particle
+from .plotter import Hist, Hist2d
+from .filelists import *
 from .cutConfig import *
-
-def init_attr(attr,init,size):
-    if attr is None: return [init]*size
-    attr = list(attr)
-    return (attr + size*[init])[:size]
-
-from .plotUtils import *
-# from .studyUtils import *
-# from .classUtils import *
-from .orderUtils import *
-from .testUtils import *
-
-from .bashUtils import *
-
-from .plotter import *
+from .useCMSstyle import *
+plt.style.use(CMS)
