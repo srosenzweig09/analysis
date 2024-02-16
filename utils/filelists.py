@@ -33,7 +33,7 @@ def get_NMSSM(mx=700, my=400, year=2018, selection='maxbtag_4b', suffix='', priv
    if len(mpoint) < 0: raise FileNotFoundError(f'File not found: {mpoint}')
    if suffix != '': suffix = '_' + suffix
    mpoint = f"NMSSM/{mpoint}{suffix}" if private else f"Official_NMSSM/{mpoint}"
-   return f"{base}/{year}/{selection}/{mpoint}/ntuple.root"
+   return f"{hpg_base}/{year}/{selection}/{mpoint}/ntuple.root"
 
 def get_NMSSM_list(year='Summer2018UL', jets='maxbtag_4b', private=False):
    location = f"{base}/{year}/{jets}/"
@@ -53,7 +53,7 @@ def get_presel(mx=700, my=400, year='Summer2018UL'):
    return f"{base}/{year}/cutflow_studies/presel/NMSSM/NMSSM_XYH_YToHH_6b_MX_{mx}_MY_{my}/ntuple.root"
 
 def get_data(year='Summer2018UL', selection='maxbtag_4b'):
-   return f"{base}/{year}/{selection}/{data_path[selection]}"
+   return f"{hpg_base}/{year}/{selection}/{data_path[year]}"
 
 def get_qcd_benriched(selection, year='Summer2018UL'):
    files = sorted(glob.glob(f"{hpg_base}/{year}/{selection}/QCD/QCD_bEnriched_*/ntuple.root"))
