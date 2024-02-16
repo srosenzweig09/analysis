@@ -242,6 +242,8 @@ class BDTRegion():
         self.n_H_jet_medium = np.sum(self.H_j_btag >= tree.medium_wp, axis=1)
         self.n_H_jet_loose = np.sum(self.H_j_btag >= tree.loose_wp, axis=1)
 
+        self.copy_attributes(tree)
+
     def set_var_dict(self, tree):
         self.var_dict = {
             'pt6bsum' : tree.pt6bsum,
@@ -284,8 +286,9 @@ class BDTRegion():
         """
         region is either "ar" or "vr"
         """
+        self.initialize_vars(tree)
         self.set_var_dict(tree)
-        print(f"high avg b tag score threshold = {self.btag_avg_threshold}")
+        print(f"high avg b tag score threshold = {self.avg_btag_threshold}")
         
         tf = sum(self.acr_hs_mask)/sum(cr_ls_mask)
         ls_weights = np.ones(ak.sum(cr_ls_mask))*tf
