@@ -1,4 +1,6 @@
-# parallel -j 4 "python scripts/calculate_2d_sf_corrs.py {}" ::: $(cat sf_files.txt) --eta
+# parallel -j 4 "python scripts/calculate_2d_sf_corrs.py {}" ::: $(cat filelists/Summer2018UL/private.txt) --eta
+
+# python scripts/calculate_2d_sf_corrs.py /cmsuf/data/store/user/srosenzw/root/cmseos.fnal.gov/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag/NMSSM/NMSSM_XYH_YToHH_6b_MX_1000_MY_250_2M/ntuple.root
 
 from argparse import ArgumentParser
 import matplotlib.pyplot as plt
@@ -7,6 +9,7 @@ import uproot
 from utils.analysis.signal import SixB
 from utils.plotter import Hist2d
 from colorama import Fore, Style
+import re, sys
 
 parser = ArgumentParser()
 parser.add_argument("filename")
@@ -36,8 +39,8 @@ def calculate_ratio(n_jet, ht, bsf, scale):
 
     return ratio
 
-# filename = '/eos/uscms/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag/NMSSM/NMSSM_XYH_YToHH_6b_MX_850_MY_350/ntuple.root'
 filename = args.filename
+year = re.search("ntuples/(.*?)/", args.filename).group(1)
 
 try: tree = SixB(filename, feyn=False)
 except uproot.exceptions.KeyInFileError: print(Fore.RED + f"File {filename} not found" + Style.RESET_ALL)
@@ -58,7 +61,7 @@ x_ht = (ht_bins[1:] + ht_bins[:-1]) / 2
 
 ratios = {name:calculate_ratio(n_jet, ht, tree.get(name, library='np'), scale) for name in bsf_names}
 
-with uproot.recreate(f'data/btag/MX_{tree.mx}_MY_{tree.my}.root') as f:
+with uproot.recreate(f'data/{year}/btag/MX_{tree.mx}_MY_{tree.my}.root') as f:
     for name in bsf_names:
         h_name = f"MX_{tree.mx}_MY_{tree.my}_{name}"
         f[h_name] = (ratios[name], n_bins, ht_bins)
