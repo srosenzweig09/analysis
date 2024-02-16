@@ -14,6 +14,7 @@ from utils.analysis.feyn import Model
 from utils.xsecUtils import lumiMap, xsecMap
 from utils.plotter import latexTitle
 from configparser import ConfigParser
+from utils.analysis.bdt import BDTRegion
 
 import re
 import os, sys 
@@ -25,25 +26,6 @@ def get_indices(var, bins):
    ind = np.where(ind == len(bins)-1, len(bins)-2, ind)
    ind = np.where(ind < 0, 0, ind)
    return ind
-
-def get_region_mask(higgs, center, sr_edge, cr_edge):
-   deltaM = np.column_stack(([abs(mH.to_numpy() - val) for mH,val in zip(higgs,center)]))
-   deltaM = deltaM * deltaM
-   deltaM = deltaM.sum(axis=1)
-   deltaM = np.sqrt(deltaM)
-
-   sr_mask = deltaM <= sr_edge 
-   cr_mask = (deltaM > sr_edge) & (deltaM <= cr_edge) 
-
-   return sr_mask, cr_mask
-
-def get_hs_ls_masks(sr_mask, cr_mask, ls_mask, hs_mask):
-   cr_ls_mask = cr_mask & ls_mask
-   cr_hs_mask = cr_mask & hs_mask
-   sr_ls_mask = sr_mask & ls_mask
-   sr_hs_mask = sr_mask & hs_mask
-
-   return cr_ls_mask, cr_hs_mask, sr_ls_mask, sr_hs_mask
 
 def ROOTHist(h_vals, title, filepath):
    """
@@ -118,14 +100,10 @@ class Tree():
       self.medium_wp = self.btagWP[key]['Medium']
       self.tight_wp = self.btagWP[key]['Tight']
 
-      if feyn: 
-         # self.model = Model('old', self)
-         self.model = Model('new', self)
-         self.combos = self.model.combos
-         self.init_model()
+      if feyn: self.model = Model('new', self) # particles initialized here
       else: self.initialize_bosons()
+      self.bdt = BDTRegion(self)
       
-      self.initialize_vars()
       if not self.is_signal:
          self.set_var_dict()
       
@@ -163,110 +141,6 @@ class Tree():
       np_arr = self.get(key, library='np')
       if not isinstance(np_arr, np.ndarray): np_arr = np_arr.to_numpy()
       return np_arr
-
-   def init_model(self):
-
-      btag_mask = ak.argsort(self.jet_btag, axis=1, ascending=False) < 6
-
-      pt = self.jet_ptRegressed[btag_mask][self.combos]
-      phi = self.jet_phi[btag_mask][self.combos]
-      eta = self.jet_eta[btag_mask][self.combos]
-      m = self.jet_mRegressed[btag_mask][self.combos]
-      btag = self.jet_btag[btag_mask][self.combos]
-      sig_id = self.jet_signalId[btag_mask][self.combos]
-      h_id = (self.jet_signalId[btag_mask][self.combos] + 2) // 2
-
-      self.btag_avg = ak.mean(btag, axis=1)
-
-      sample_particles = []
-      for j in range(6):
-         particle = Particle({
-               'pt' : pt[:,j],
-               'eta' : eta[:,j],
-               'phi' : phi[:,j],
-               'm' : m[:,j],
-               'btag' : btag[:,j],
-               'sig_id' : sig_id[:,j],
-               'h_id': h_id[:,j]
-               }
-         )
-         sample_particles.append(particle)
-
-      HX_b1 = {'pt':sample_particles[0].pt,'eta':sample_particles[0].eta,'phi':sample_particles[0].phi,'m':sample_particles[0].m,'btag':sample_particles[0].btag,'sig_id':sample_particles[0].sig_id,'h_id':sample_particles[0].h_id}
-      HX_b2 = {'pt':sample_particles[1].pt,'eta':sample_particles[1].eta,'phi':sample_particles[1].phi,'m':sample_particles[1].m,'btag':sample_particles[1].btag,'sig_id':sample_particles[1].sig_id,'h_id':sample_particles[1].h_id}
-      H1_b1 = {'pt':sample_particles[2].pt,'eta':sample_particles[2].eta,'phi':sample_particles[2].phi,'m':sample_particles[2].m,'btag':sample_particles[2].btag,'sig_id':sample_particles[2].sig_id,'h_id':sample_particles[2].h_id}
-      H1_b2 = {'pt':sample_particles[3].pt,'eta':sample_particles[3].eta,'phi':sample_particles[3].phi,'m':sample_particles[3].m,'btag':sample_particles[3].btag,'sig_id':sample_particles[3].sig_id,'h_id':sample_particles[3].h_id}
-      H2_b1 = {'pt':sample_particles[4].pt,'eta':sample_particles[4].eta,'phi':sample_particles[4].phi,'m':sample_particles[4].m,'btag':sample_particles[4].btag,'sig_id':sample_particles[4].sig_id,'h_id':sample_particles[4].h_id}
-      H2_b2 = {'pt':sample_particles[5].pt,'eta':sample_particles[5].eta,'phi':sample_particles[5].phi,'m':sample_particles[5].m,'btag':sample_particles[5].btag,'sig_id':sample_particles[5].sig_id,'h_id':sample_particles[5].h_id}
-
-      self.HX = Higgs(HX_b1, HX_b2)
-
-      # self.HX_b1 = self.HX.b1
-      # self.HX_b2 = self.HX.b2
-
-      H1 = Higgs(H1_b1, H1_b2)
-      H2 = Higgs(H2_b1, H2_b2)
-
-      assert ak.all(self.HX.b1.pt >= self.HX.b2.pt)
-      assert ak.all(H1.b1.pt >= H1.b2.pt)
-      assert ak.all(H2.b1.pt >= H2.b2.pt)
-
-      self.Y = Y(H1, H2)
-
-      self.H1 = self.Y.H1
-      self.H2 = self.Y.H2
-
-      assert ak.all(self.H1.pt >= self.H2.pt)
-
-      self.X = self.HX + self.H1 + self.H2
-
-      self.H_b_sig_id = np.column_stack((
-         self.HX.b1.sig_id.to_numpy(),
-         self.HX.b2.sig_id.to_numpy(),
-         self.H1.b1.sig_id.to_numpy(),
-         self.H1.b2.sig_id.to_numpy(),
-         self.H2.b1.sig_id.to_numpy(),
-         self.H2.b2.sig_id.to_numpy(),
-      ))
-
-      self.H_b_h_id = np.column_stack((
-         self.HX.b1.h_id.to_numpy(),
-         self.HX.b2.h_id.to_numpy(),
-         self.H1.b1.h_id.to_numpy(),
-         self.H1.b2.h_id.to_numpy(),
-         self.H2.b1.h_id.to_numpy(),
-         self.H2.b2.h_id.to_numpy(),
-      ))
-
-      self.gnn_resolved_mask = ak.all(self.H_b_sig_id > -1, axis=1)
-      self.gnn_resolved_h_mask = ak.all(self.H_b_h_id > 0, axis=1)
-
-      hx_possible = ak.sum(self.H_b_h_id == 1, axis=1) == 2
-      h1_possible = ak.sum(self.H_b_h_id == 2, axis=1) == 2
-      h2_possible = ak.sum(self.H_b_h_id == 3, axis=1) == 2
-      self.n_h_possible = hx_possible*1 + h1_possible*1 + h2_possible*1
-
-      self.HX_correct = (self.HX.b1.h_id == self.HX.b2.h_id) & (self.HX.b1.h_id == 1)
-      self.H1_correct = (self.H1.b1.h_id == self.H1.b2.h_id) & ((self.H1.b1.h_id == 2) | (self.H1.b1.h_id == 3))
-      self.H2_correct = (self.H2.b1.h_id == self.H2.b2.h_id) & ((self.H2.b1.h_id == 2) | (self.H2.b1.h_id == 3))
-
-      # print(self.H2_correct)
-
-
-      # self.HX_correct = (self.HX.b1.h_id == self.HX.b2.h_id) & (self.HX.b1.h_id == 2)
-      # self.H1_correct = (self.H1.b1.h_id == self.H1.b2.h_id) & ((self.H1.b1.h_id == 1) | (self.H1.b1.h_id == 0))
-      # self.H2_correct = (self.H2.b1.h_id == self.H2.b2.h_id) & ((self.H2.b1.h_id == 0) | (self.H2.b1.h_id == 1))
-
-      # efficiency taking into account to which higgs the pair was assigned
-      self.n_H_correct = self.HX_correct*1 + self.H1_correct*1 + self.H2_correct*1
-
-      self.HA_correct = (self.HX.b1.h_id == self.HX.b2.h_id) & (self.HX.b1.h_id > 0)
-      self.HB_correct = (self.H1.b1.h_id == self.H1.b2.h_id) & (self.H1.b1.h_id > 0)
-      self.HC_correct = (self.H2.b1.h_id == self.H2.b2.h_id) & (self.H2.b1.h_id > 0)
-
-      # efficiency without taking into account to which higgs the pair was assigned
-      # only worried about pairing together two jets from any higgs boson
-      self.n_H_paired_correct = self.HA_correct*1 + self.HB_correct*1 + self.HC_correct*1
 
    def init_unregressed(self):
       btag_mask = ak.argsort(self.jet_btag, axis=1, ascending=False) < 6
@@ -368,104 +242,6 @@ class Tree():
       self.H1_costheta = self.H1.costheta
       self.H2_costheta = self.H2.costheta
 
-   def initialize_vars(self):
-      """Initialize variables that don't exist in the original ROOT tree."""
-
-      self.tight_mask = self.jet_btag > self.tight_wp
-      medium_mask = self.jet_btag > self.medium_wp
-      loose_mask = self.jet_btag > self.loose_wp
-
-      self.fail_mask = ~loose_mask
-      self.loose_mask = loose_mask & ~medium_mask
-      self.medium_mask = medium_mask & ~self.tight_mask
-
-      self.n_tight = ak.sum(self.tight_mask, axis=1)
-      self.n_medium = ak.sum(self.medium_mask, axis=1)
-      self.n_loose = ak.sum(self.loose_mask, axis=1)
-      self.n_fail = ak.sum(self.fail_mask, axis=1)
-
-      bs = [self.HX.b1, self.HX.b2, self.H1.b1, self.H1.b2, self.H2.b1, self.H2.b2]
-      pair1 = [self.HX.b1]*5 + [self.HX.b2]*4 + [self.H1.b1]*3 + [self.H1.b2]*2 + [self.H2.b1]
-      pair2 = bs[1:] + bs[2:] + bs[3:] + bs[4:] + [bs[-1]]
-
-      dR6b = []
-      dEta6b = []
-      for b1, b2 in zip(pair1, pair2):
-         dR6b.append(b1.deltaR(b2))
-         dEta6b.append(abs(b1.deltaEta(b2)))
-      dR6b = np.column_stack(dR6b)
-      dEta6b = np.column_stack(dEta6b)
-      self.dR6bmin = dR6b.min(axis=1)
-      self.dEta6bmax = dEta6b.max(axis=1)
-
-      self.pt6bsum = self.HX.b1.pt + self.HX.b2.pt + self.H1.b1.pt + self.H1.b2.pt + self.H2.b1.pt + self.H2.b2.pt
-
-      self.HX_pt = self.HX.pt
-      self.H1_pt = self.H1.pt
-      self.H2_pt = self.H2.pt
-
-      self.HX_dr = self.HX.dr
-      self.H1_dr = self.H1.dr
-      self.H2_dr = self.H2.dr
-
-      self.HX_m = self.HX.m
-      self.H1_m = self.H1.m
-      self.H2_m = self.H2.m
-
-      self.HX_H1_dEta = abs(self.HX.deltaEta(self.H1))
-      self.H1_H2_dEta = abs(self.H1.deltaEta(self.H2))
-      self.H2_HX_dEta = abs(self.H2.deltaEta(self.HX))
-
-      self.HX_H1_dPhi = self.HX.deltaPhi(self.H1)
-      self.H1_H2_dPhi = self.H1.deltaPhi(self.H2)
-      self.H2_HX_dPhi = self.H2.deltaPhi(self.HX)
-
-      self.HX_H1_dr = self.HX.deltaR(self.H1)
-      self.HX_H2_dr = self.H2.deltaR(self.HX)
-      self.H1_H2_dr = self.H1.deltaR(self.H2)
-      
-      self.Y_HX_dr = self.Y.deltaR(self.HX)
-
-      self.HX_costheta = abs(np.cos(self.HX.P4.theta))
-      self.H1_costheta = abs(np.cos(self.H1.P4.theta))
-      self.H2_costheta = abs(np.cos(self.H2.P4.theta))
-
-      self.HX_H1_dr = self.HX.deltaR(self.H1)
-      self.H1_H2_dr = self.H2.deltaR(self.H1)
-      self.H2_HX_dr = self.HX.deltaR(self.H2)
-
-      self.X_m = self.X.m
-
-      self.X_m_prime = self.X_m - self.HX_m - self.H1_m - self.H2_m + 3*125
-
-      self.H_j_btag = np.column_stack((
-         self.HX_b1_btag.to_numpy(),
-         self.HX_b2_btag.to_numpy(),
-         self.H1_b1_btag.to_numpy(),
-         self.H1_b2_btag.to_numpy(),
-         self.H2_b1_btag.to_numpy(),
-         self.H2_b2_btag.to_numpy()
-      ))
-
-      self.n_H_jet_tight = np.sum(self.H_j_btag >= self.tight_wp, axis=1)
-      self.n_H_jet_medium = np.sum(self.H_j_btag >= self.medium_wp, axis=1)
-      self.n_H_jet_loose = np.sum(self.H_j_btag >= self.loose_wp, axis=1)
-
-      self.btag_avg = np.average(self.H_j_btag, axis=1)
-
-      # if self._is_signal and not self.gnn:
-      #    self.HA_correct = (self.HX_b1.h_id == self.HX_b2.h_id) & (self.HX_b1.h_id != -1)
-      #    self.HB_correct = (self.H1_b1.h_id == self.H1_b2.h_id) & (self.H1_b1.h_id != -1)
-      #    self.HC_correct = (self.H2_b1.h_id == self.H2_b2.h_id) & (self.H2_b1.h_id != -1)
-
-      #    self.n_H_paired_correct = self.HA_correct*1 + self.HB_correct*1 + self.HC_correct*1
-
-      #    self.HX_correct = (self.HX_b1.h_id == self.HX_b2.h_id) & (self.HX_b1.h_id == 0)
-      #    self.H1_correct = (self.H1_b1.h_id == self.H1_b2.h_id) & (self.H1_b1.h_id == 1)
-      #    self.H2_correct = (self.H2_b1.h_id == self.H2_b2.h_id) & (self.H2_b1.h_id == 2)
-
-      #    self.n_H_correct = self.HX_correct*1 + self.H1_correct*1 + self.H2_correct*1
-
    def initialize_gen(self):
       """Initializes gen-matched particles."""
 
@@ -486,15 +262,11 @@ class Tree():
 
       # self.resolved_mask = ak.all(self.jet_signalId[:,:6] > -1, axis=1)
 
-   def init_regions(self):
-      from utils.analysis.bdt import BDTRegion
-      self.region = BDTRegion(self)
-
 class SixB(Tree):
 
    _is_signal = True
 
-   def __init__(self, filepath, config='config/bdt_params.cfg', treename='sixBtree', feyn=True):
+   def __init__(self, filepath, config=None, treename='sixBtree', feyn=True):
       super().__init__(filepath, treename, config, feyn=feyn)
       
       try: self.mx = int(re.search('MX_.+MY', filepath).group().split('_')[1])
@@ -661,169 +433,16 @@ class Data(Tree):
 
    _is_signal = False
 
-   def __init__(self, filepath, cfg='config/bdt_params.cfg', treename='sixBtree', feyn=True):
+   def __init__(self, filepath, cfg=None, treename='sixBtree', feyn=True):
       super().__init__(filepath, treename, cfg, feyn=feyn)
 
       self.sample = rf"{round(lumiMap[self.year][0]/1000,1)} fb$^{{-1}}$ (13 TeV, {self.year})"
-      self.set_bdt_params(cfg)
-      self.set_var_dict()
-
-   def set_bdt_params(self, cfg):
-      if isinstance(cfg, str):
-         config = ConfigParser()
-         config.optionxform = str
-         config.read(cfg)
-         self.config = config
-      elif isinstance(cfg, ConfigParser):
-         self.config = cfg
-
-      minMX = int(self.config['plot']['minMX'])
-      maxMX = int(self.config['plot']['maxMX'])
-      if self.config['plot']['style'] == 'linspace':
-         nbins = int(self.config['plot']['edges'])
-         self.mBins = np.linspace(minMX,maxMX,nbins)
-      if self.config['plot']['style'] == 'arange':
-         step = int(self.config['plot']['steps'])
-         self.mBins = np.arange(minMX,maxMX,step)
-
-      self.x_mBins = (self.mBins[:-1] + self.mBins[1:])/2
-
-      self.Nestimators  = int(self.config['BDT']['Nestimators'])
-      self.learningRate = float(self.config['BDT']['learningRate'])
-      self.maxDepth     = int(self.config['BDT']['maxDepth'])
-      self.minLeaves    = int(self.config['BDT']['minLeaves'])
-      self.GBsubsample  = float(self.config['BDT']['GBsubsample'])
-      self.randomState  = int(self.config['BDT']['randomState'])
-      variables = self.config['BDT']['variables']
-      if isinstance(variables, str):
-         variables = variables.split(", ")
-      self.variables = variables
-
-   def set_var_dict(self):
-      pt6bsum = self.HX.b1.pt + self.HX.b2.pt + self.H1.b1.pt + self.H1.b2.pt + self.H2.b1.pt + self.H2.b2.pt
-
-      self.var_dict = {
-         'pt6bsum' : self.pt6bsum,
-         'dR6bmin' : self.dR6bmin,
-         'dEta6bmax' : self.dEta6bmax,
-         'HX_m' : self.HX.m,
-         'H1_m' : self.H1.m,
-         'H2_m' : self.H2.m,
-         'HX_pt' : self.HX.pt,
-         'H1_pt' : self.H1.pt,
-         'H2_pt' : self.H2.pt,
-         'HX_dr' : self.HX.dr,
-         'H1_dr' : self.H1.dr,
-         'H2_dr' : self.H2.dr,
-         'HX_costheta' : self.HX.costheta,
-         'H1_costheta' : self.H1.costheta,
-         'H2_costheta' : self.H2.costheta,
-         'HX_H1_dr' : self.HX.deltaR(self.H1),
-         'H1_H2_dr' : self.H1.deltaR(self.H2),
-         'H2_HX_dr' : self.H2.deltaR(self.HX),
-         'HX_H1_dEta' : self.HX.deltaEta(self.H1),
-         'H1_H2_dEta' : self.H1.deltaEta(self.H2),
-         'H2_HX_dEta' : self.H2.deltaEta(self.HX),
-         'HX_H1_dPhi' : self.HX.deltaPhi(self.H1),
-         'H1_H2_dPhi' : self.H1.deltaPhi(self.H2),
-         'H2_HX_dPhi' : self.H2.deltaPhi(self.HX),
-         'Y_m' : self.Y.m,
-      }
-
-   def set_variables(self, var_list):
-      self.variables = var_list
-
-   def get_df(self, mask, variables):
-      import pandas as pd
-      features = {}
-      for var in variables:
-         # features[var] = abs(getattr(self, var)[mask])
-         features[var] = abs(self.var_dict[var][mask])
-      df = pd.DataFrame(features)
-      return df
-
-   def train_ar(self):
-      from hep_ml import reweight
-      # print(".. initializing transfer factor")
-      self.AR_TF = sum(self.acr_hs_mask)/sum(self.acr_ls_mask)
-      ls_weights = np.ones(ak.sum(self.acr_ls_mask))*self.AR_TF
-      hs_weights = np.ones(ak.sum([self.acr_hs_mask]))
-      # np.digitize()  
-
-      # print(".. initializing dataframes of variables")
-      AR_df_ls = self.get_df(self.acr_ls_mask, self.variables)
-      AR_df_hs = self.get_df(self.acr_hs_mask, self.variables)
-
-      np.random.seed(self.randomState) #Fix any random seed using numpy arrays
-      # print(".. calling reweight.GBReweighter")
-      reweighter_base = reweight.GBReweighter(
-         n_estimators=self.Nestimators, 
-         learning_rate=self.learningRate, 
-         max_depth=self.maxDepth, 
-         min_samples_leaf=self.minLeaves,
-         gb_args={'subsample': self.GBsubsample})
-
-      # print(".. calling reweight.FoldingReweighter")
-      reweighter = reweight.FoldingReweighter(reweighter_base, random_state=self.randomState, n_folds=2, verbose=False)
-
-      # print(".. calling reweighter.fit for AR")
-      reweighter.fit(AR_df_ls,AR_df_hs,ls_weights,hs_weights)
-      self.reweighter = reweighter
-      # self.AR_reweighter = reweighter
-
-      # print(".. predicting AR hs weights")
-      AR_df_ls = self.get_df(self.asr_ls_mask, self.variables)
-      initial_weights = np.ones(ak.sum(self.asr_ls_mask))*self.AR_TF
-
-      self.asr_weights = reweighter.predict_weights(AR_df_ls,initial_weights,lambda x: np.mean(x, axis=0))
-
-      self.acr_df_ls = self.get_df(self.acr_ls_mask, self.variables)
-      self.acr_initial_weights = np.ones(ak.sum(self.acr_ls_mask))*self.AR_TF
-      self.acr_weights = reweighter.predict_weights(self.acr_df_ls,self.acr_initial_weights,lambda x: np.mean(x, axis=0))
-
-   def train_vr(self):
-      from hep_ml import reweight
-      # print(".. initializing transfer factor")
-      self.vr_tf = sum(self.vcr_hs_mask)/sum(self.vcr_ls_mask)
-      ls_weights = np.ones(ak.sum(self.vcr_ls_mask))*self.vr_tf
-      hs_weights = np.ones(ak.sum([self.vcr_hs_mask]))
-
-      # print(".. initializing dataframes of variables")
-      df_ls = self.get_df(self.vcr_ls_mask, self.variables)
-      df_hs = self.get_df(self.vcr_hs_mask, self.variables)
-
-      np.random.seed(self.randomState) #Fix any random seed using numpy arrays
-      # print(".. calling reweight.GBReweighter")
-      reweighter_base = reweight.GBReweighter(
-         n_estimators=self.Nestimators, 
-         learning_rate=self.learningRate, 
-         max_depth=self.maxDepth, 
-         min_samples_leaf=self.minLeaves,
-         gb_args={'subsample': self.GBsubsample})
-
-      # print(".. calling reweight.FoldingReweighter")
-      reweighter = reweight.FoldingReweighter(reweighter_base, random_state=self.randomState, n_folds=2, verbose=False)
-
-      # print(".. calling reweighter.fit")
-      reweighter.fit(df_ls,df_hs,ls_weights,hs_weights)
-      # self.VR_reweighter = reweighter
-
-      # print(".. predicting VR hs weights")
-      vcr_df_ls = self.get_df(self.vcr_ls_mask, self.variables)
-      vcr_initial_weights = np.ones(ak.sum(self.vcr_ls_mask))*self.vr_tf
-      self.vcr_weights = reweighter.predict_weights(vcr_df_ls,vcr_initial_weights,lambda x: np.mean(x, axis=0))
-
-      self.vsr_df_ls = self.get_df(self.vsr_ls_mask, self.variables)
-      self.vsr_initial_weights = np.ones(ak.sum(self.vsr_ls_mask))*self.vr_tf
-      self.vsr_weights = reweighter.predict_weights(self.vsr_df_ls,self.vsr_initial_weights,lambda x: np.mean(x, axis=0))
 
    def train(self):
-      self.set_var_dict()
-      print(f"high avg b tag score threshold = {self.score_cut}")
       print(".. training in validation region")
-      self.train_vr()
+      self.bdt.train(self, self.vsr_ls_mask, self.vcr_hs_mask, self.vcr_ls_mask, 'vr')
       print(".. training in analysis region")
-      self.train_ar()
+      self.bdt.train(self, self.asr_ls_mask, self.acr_hs_mask, self.acr_ls_mask, 'ar')
 
       self.vr_stat_prec = round(1 + np.sqrt(abs(1/self.vsr_weights.sum() - 1/self.asr_weights.sum())), 2)
       err = np.sqrt(np.sum(self.vsr_weights**2))
@@ -870,8 +489,6 @@ class Data(Tree):
          # print("bin ratios",self.bin_ratios)
       # else: 
       #    print(n_ls.sum(), n_hs.sum(), weights.sum(), (n_ls*self.bin_ratios).sum())
-
-
       sumw2 = []
       err = []
       for i,n_nominal in enumerate(n_model):#, model_uncertainty_up, model_uncertainty_down)):
@@ -897,52 +514,6 @@ class Data(Tree):
       self.VR_err = np.array((err))
 
       return fig, axs, n_target, n_model, n_ratio
-
-   def ks_test(self, variable, ls_mask, hs_mask, weights):
-      from scipy.stats import kstwobign
-      from awkward.highlevel import Array
-
-      ratio = 1
-
-      var = getattr(self, variable)
-
-      sort_mask_ls = np.argsort(var[ls_mask])
-      sort_mask_hs = np.argsort(var[hs_mask])
-
-      sorted_ls_var = var[ls_mask][sort_mask_ls]
-      sorted_hs_var = var[hs_mask][sort_mask_hs]
-
-      if isinstance(sorted_ls_var, Array): sorted_ls_var = sorted_ls_var.to_numpy()
-      if isinstance(sorted_hs_var, Array): sorted_hs_var = sorted_hs_var.to_numpy()
-
-      sorted_weights = weights[sort_mask_ls]*ratio
-      x_ls = sorted_ls_var
-      y_model = sorted_weights.cumsum() / sorted_weights.sum()
-
-      x_hs = sorted_hs_var
-      y_obs = np.ones_like(x_hs).cumsum() / hs_mask.sum()
-
-      ess_unweighted = hs_mask.sum()
-      ess_weighted = np.sum(sorted_weights)**2 / np.sum(weights**2)
-
-      nm = np.sqrt((ess_weighted*ess_unweighted)/(ess_weighted + ess_unweighted))
-
-      x_max = max(x_ls.max(), x_hs.max())
-      x_min = min(x_ls.min(), x_hs.min())
-      x_bins = np.linspace(x_min, x_max, 100)
-      y_model_interp = np.interp(x_bins, x_ls, y_model)
-      y_obs_interp = np.interp(x_bins, x_hs, y_obs)
-
-      y_model_interp = y_model_interp
-      y_obs_interp = y_obs_interp
-
-      difference = abs(y_model_interp - y_obs_interp) * nm
-
-      ks_statistic = round(difference.max(),2)
-      try: ks_probability = int(kstwobign.sf(ks_statistic)*100)
-      except: ks_probability = 0
-
-      return ks_statistic, ks_probability
       
    def vsr_hist(self):
       fig, axs, n_target, n_model, n_ratio = self.vr_hist(self.vsr_ls_mask, self.vsr_hs_mask, self.vsr_weights, density=False)
