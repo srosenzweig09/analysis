@@ -11,39 +11,63 @@ def get_private_mx(out):
     return int(re.search('MX_(.*)_MY_', out).group(1))
 
 # Central Samples ######################################
-def get_central_samples():
+def generate_central_filelist(year):
     # base = '/eos/uscms/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag_4b/Official_NMSSM/*/ntuple.root'
-    base = '/cmsuf/data/store/user/srosenzw/root/cmseos.fnal.gov/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag_4b/Official_NMSSM/*/ntuple.root'
+    base = f'/cmsuf/data/store/user/srosenzw/root/cmseos.fnal.gov/store/user/srosenzw/sixb/ntuples/{year}/maxbtag_4b/Official_NMSSM/*/ntuple.root'
     files = glob.glob(base)
-    masses = [f"{out}\n" for out in files if get_central_mx(out) < 1300]
-    masses = sorted(masses)
+    files = [f"{out}\n" for out in files if get_central_mx(out) < 1300]
+    files = sorted(files)
+    files[-1] = files[-1].replace('\n', '')
     with open("filelists/central.txt", "w") as f:
-        f.writelines(masses)
-
-# masses = [f"root://cmseos.fnal.gov//store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag_4b/Official_NMSSM/{out}/ntuple.root\n" for out in output if get_central_mx(out) < 1300] # with spaces for FeynNet prediction
-# with open("filelists/central_feynman.txt", "w") as f:
-#     f.writelines(masses)
+        f.writelines(files)
 
 # # Private Samples ######################################
-def get_private_samples():
+def generate_private_filelist(year):
     # base = '/eos/uscms/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag/NMSSM/*/ntuple.root'
-    base = '/cmsuf/data/store/user/srosenzw/root/cmseos.fnal.gov/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag/NMSSM/*/ntuple.root'
-    output = glob.glob(base)
-    output = [f"{out}\n" for out in output if get_private_mx(out) < 1300]
-    output = sorted(output)
+    base = f'/cmsuf/data/store/user/srosenzw/root/cmseos.fnal.gov/store/user/srosenzw/sixb/ntuples/{year}/maxbtag/NMSSM/*/ntuple.root'
+    files = glob.glob(base)
+    files = [f"{out}\n" for out in files if get_private_mx(out) < 1300]
+    files = sorted(files)
+    files[-1] = files[-1].replace('\n', '')
     with open("filelists/private.txt", "w") as f:
-        f.writelines(output)
+        f.writelines(files)
 
 # Systematic Samples ######################################
-def get_central_systematics():
+def generate_central_systematics_filelist(year):
     # base = '/eos/uscms/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag_4b/Official_NMSSM/syst/*/*/*/ntuple.root'
-    base = '/cmsuf/data/store/user/srosenzw/root/cmseos.fnal.gov/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag_4b/Official_NMSSM/syst/*/*/*/ntuple.root'
+    base = f'/cmsuf/data/store/user/srosenzw/root/cmseos.fnal.gov/store/user/srosenzw/sixb/ntuples/{year}/maxbtag_4b/Official_NMSSM/syst/*/*/*/ntuple.root'
     files = glob.glob(base)
-    files = [f"{out}\n" for out in files]
+    files = [f"{out}\n" for out in files if 'analysis_tar' not in out]
     files = sorted(files)
+    files[-1] = files[-1].replace('\n', '')
     with open("filelists/central_systematics.txt", "w") as f:
         f.writelines(files)
 
-get_central_samples()
-get_private_samples()
-get_central_systematics()
+def generate_background_filelist(year):
+    # base = f'/eos/uscms/store/user/srosenzw/sixb/ntuples/{year}/maxbtag_4b'
+    base = f'/cmsuf/data/store/user/srosenzw/root/cmseos.fnal.gov/store/user/srosenzw/sixb/ntuples/{year}/maxbtag_4b'
+    files = glob.glob(f"{base}/QCD/*") + glob.glob(f"{base}/TTJets/*")
+    files = sorted([f"{f}/ntuple.root\n" for f in files if 'analysis_tar' not in f and 'small_' not in f])
+    files[-1] = files[-1].replace('\n', '')
+    with open(f"filelists/{year}/background.txt", "w") as f:
+        f.writelines(files)
+
+def generate_data_filelist(year):
+    # base = f'/eos/uscms/store/user/srosenzw/sixb/ntuples/{year}/maxbtag_4b/{year_dict[year]}/ntuple.root'
+    base = f'/cmsuf/data/store/user/srosenzw/root/cmseos.fnal.gov/store/user/srosenzw/sixb/ntuples/{year}/maxbtag_4b/{year_dict[year]}/ntuple.root'
+    files = glob.glob(base)
+    with open(f"filelists/{year}/data.txt", "w") as f:
+        f.writelines(files)
+
+
+year = 'Summer2018UL'
+year_dict = {
+    'Summer2018UL' : 'JetHT_Data_UL'
+}
+
+generate_central_filelist(year)
+generate_private_filelist(year)
+generate_central_systematics_filelist(year)
+generate_background_filelist(year)
+generate_data_filelist(year)
+
