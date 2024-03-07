@@ -1,4 +1,8 @@
 # Added manually to Python .gitignore template provided by GitHub
+# slurm output
+slurm*
+jupyter-*
+
 # Data files
 *.npz
 *.root
