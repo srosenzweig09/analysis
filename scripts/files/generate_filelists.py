@@ -18,7 +18,7 @@ def generate_central_filelist(year):
     files = [f"{out}\n" for out in files if get_central_mx(out) < 1300]
     files = sorted(files)
     files[-1] = files[-1].replace('\n', '')
-    with open("filelists/central.txt", "w") as f:
+    with open(f"filelists/{year}/central.txt", "w") as f:
         f.writelines(files)
 
 # # Private Samples ######################################
@@ -29,7 +29,7 @@ def generate_private_filelist(year):
     files = [f"{out}\n" for out in files if get_private_mx(out) < 1300]
     files = sorted(files)
     files[-1] = files[-1].replace('\n', '')
-    with open("filelists/private.txt", "w") as f:
+    with open(f"filelists/private.txt", "w") as f:
         f.writelines(files)
 
 # Systematic Samples ######################################
@@ -40,7 +40,7 @@ def generate_central_systematics_filelist(year):
     files = [f"{out}\n" for out in files if 'analysis_tar' not in out]
     files = sorted(files)
     files[-1] = files[-1].replace('\n', '')
-    with open("filelists/central_systematics.txt", "w") as f:
+    with open(f"filelists/{year}/central_systematics.txt", "w") as f:
         f.writelines(files)
 
 def generate_background_filelist(year):
@@ -65,9 +65,9 @@ year_dict = {
     'Summer2018UL' : 'JetHT_Data_UL'
 }
 
-generate_central_filelist(year)
+# generate_central_filelist(year)
 generate_private_filelist(year)
-generate_central_systematics_filelist(year)
-generate_background_filelist(year)
-generate_data_filelist(year)
+# generate_central_systematics_filelist(year)
+# generate_background_filelist(year)
+# generate_data_filelist(year)
 

@@ -10,7 +10,7 @@
 #SBATCH --array=
 #SBATCH --output=slurm_output/slurm-%A_%a.out
 
-# Usage: parallel_filelist.sh pythonScript.py filelist
+# Usage: sh parallel_filelist.sh pythonScript.py filelist
 # Description: This script takes two arguments, the first of which should be the python script you wish to run, the second being the filelist to submit as a command line argument. 
 
 script="$1"

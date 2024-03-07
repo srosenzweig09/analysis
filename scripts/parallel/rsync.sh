@@ -10,7 +10,8 @@
 #SBATCH --array=1-10
 #SBATCH --output=slurm_output/slurm-%A_%a.out
 
-# Usage: parallel_rsync.sh filelist
+# Usage: sh scripts/parallel/rsync.sh filelists/Summer2018UL/central.txt
+# Usage: sh scripts/parallel/rsync.sh filelists/Summer2018UL/private.txt
 # Description: This script takes one argument - the filelist to submit as a command line argument. The script will read the filenames and modify them appropriately for the rsync call.
 
 filelist="$1"
@@ -54,7 +55,15 @@ echo rsync -avuRP $lpcbase${fileArray[$ID]#$hpgbase} $hpgbase/./
 rsync -avuRP $lpcbase${fileArray[$ID]#$hpgbase} $hpgbase/./
 
 
+
 ### For running them manually:
 # rsync -avuRP srosenzw@cmslpc-sl7.fnal.gov:/eos/uscms/./store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag/NMSSM/*/ntuple.root /cmsuf/data/store/user/srosenzw/root/cmseos.fnal.gov/./
 # rsync -avuRP srosenzw@cmslpc-sl7.fnal.gov:/eos/uscms/./store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag_4b/Official_NMSSM/*/ntuple.root /cmsuf/data/store/user/srosenzw/root/cmseos.fnal.gov/./
 # rsync -avuRP srosenzw@cmslpc-sl7.fnal.gov:/eos/uscms/./store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag_4b/Official_NMSSM/syst/*/*/*/ntuple.root /cmsuf/data/store/user/srosenzw/root/cmseos.fnal.gov/./
+# rsync -avuRP srosenzw@cmslpc-sl7.fnal.gov:/eos/uscms/./store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag_4b/JetHT_Data_UL/ntuple.root /cmsuf/data/store/user/srosenzw/root/cmseos.fnal.gov/./
+# rsync -avuRP srosenzw@cmslpc-sl7.fnal.gov:/eos/uscms/./store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag/TTJets/*/ntuple.root /cmsuf/data/store/user/srosenzw/root/cmseos.fnal.gov/./
+
+# rsync -avuRP srosenzw@cmslpc-sl7.fnal.gov:/eos/uscms/./store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag_4b/Official_NMSSM/NMSSM_XToYHTo6B_MX-1100_MY-900_TuneCP5_13TeV-madgraph-pythia8/ntuple.root /cmsuf/data/store/user/srosenzw/root/cmseos.fnal.gov/./
+
+
+# rsync -avuRP srosenzw@cmslpc-sl7.fnal.gov:/eos/uscms/./store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag/NMSSM/NMSSM_XYH_YToHH_6b_MX_1100_MY_250_2M/ntuple.root /cmsuf/data/store/user/srosenzw/root/cmseos.fnal.gov/./

@@ -1,6 +1,6 @@
-# parallel -j 4 "python scripts/calculate_2d_sf_corrs.py {}" ::: $(cat filelists/Summer2018UL/private.txt) --eta
+# sh scripts/parallel/runPythonWithFilelist.sh scripts/weights_and_scalefactors/calculate_2d_sf_corrs.py filelists/Summer2018UL/private.txt
 
-# python scripts/calculate_2d_sf_corrs.py /cmsuf/data/store/user/srosenzw/root/cmseos.fnal.gov/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag/NMSSM/NMSSM_XYH_YToHH_6b_MX_1000_MY_250_2M/ntuple.root
+# python scripts/calculate_2d_sf_corrs.py /cmsuf/data/store/user/srosenzw/root/cmseos.fnal.gov/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag/NMSSM/NMSSM_XYH_YToHH_6b_MX_700_MY_400_2M/ntuple.root
 
 from argparse import ArgumentParser
 import matplotlib.pyplot as plt
@@ -27,11 +27,11 @@ def calculate_ratio(n_jet, ht, bsf, scale):
     fig, axs = plt.subplots(ncols=2, figsize=(16,6))
 
     ax = axs[0]
-    n1, xe, xy, im = Hist2d(n_jet, ht, bins=[n_bins, ht_bins], ax=ax, weights=scale)
+    n1, im = Hist2d(n_jet, ht, bins=[n_bins, ht_bins], ax=ax, weights=scale)
     fig.colorbar(im, ax=ax)
 
     ax = axs[1]
-    n2, xe, xy, im = Hist2d(n_jet, ht, bins=[n_bins, ht_bins], ax=ax, weights=bsf*scale)
+    n2, im = Hist2d(n_jet, ht, bins=[n_bins, ht_bins], ax=ax, weights=bsf*scale)
     fig.colorbar(im, ax=ax)
 
     ratio = np.nan_to_num(n1/n2, nan=1.0)

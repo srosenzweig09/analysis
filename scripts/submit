@@ -1,0 +1,15 @@
+#!/bin/sh
+
+#SBATCH --job-name=eff
+#SBATCH --qos=avery
+#SBATCH --account=avery
+#SBATCH --time=4:00:00
+#SBATCH --partition=hpg-dev
+#SBATCH --cpus-per-task=1
+#SBATCH --mem-per-cpu=8GB
+#SBATCH --output=slurm_output/slurm-%A_%a.out
+
+# sbatch scripts/submit
+
+
+python scripts/feynnet/signal_v_bkg_shapes.py

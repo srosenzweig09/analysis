@@ -1,0 +1,18 @@
+#!/bin/sh
+
+#SBATCH --job-name=eff
+#SBATCH --qos=avery
+#SBATCH --account=avery
+#SBATCH --time=4:00:00
+#SBATCH --partition=hpg-dev
+#SBATCH --cpus-per-task=1
+#SBATCH --mem-per-cpu=8GB
+#SBATCH --output=slurm_output/slurm-%A_%a.out
+
+# sbatch scripts/minimum_diagonal/efficiencies/run
+
+echo "Calculating efficiencies for minimum diagonal method"
+
+sh scripts/minimum_diagonal/efficiencies/submitEfficienciesToSLURM.sh 
+
+python scripts/minimum_diagonal/efficiencies/plot_efficiencies.py

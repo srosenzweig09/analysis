@@ -1,12 +1,12 @@
-# parallel -j 10 "python scripts/generate_combine_root_files.py {}" ::: $(cat filelists/central.txt) --eta
+# sh scripts/parallel/runPythonWithFilelist.sh scripts/combine_distributions.py filelists/Summer2018UL/central.txt
+
 """
 This script will build the individual root files for each mass point, containing the nominal MX distribution, as well as the distributions for each systematic variation.
 
-python scripts/generate_combine_root_files.py /eos/uscms/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag_4b/Official_NMSSM/NMSSM_XToYHTo6B_MX-1000_MY-250_TuneCP5_13TeV-madgraph-pythia8/ntuple.root
+python scripts/weights_and_scalefactors/combine_distributions.py /cmsuf/data/store/user/srosenzw/root/cmseos.fnal.gov/store/user/srosenzw/sixb/ntuples/Summer2018UL/maxbtag_4b/Official_NMSSM/NMSSM_XToYHTo6B_MX-1000_MY-250_TuneCP5_13TeV-madgraph-pythia8/ntuple.root
 """
 
 import awkward as ak
-from argparse import ArgumentParser
 from colorama import Fore, Style
 import numpy as np
 import matplotlib.pyplot as plt
@@ -18,12 +18,13 @@ import os, sys
 import uproot
 import boost_histogram as bh
 
+from argparse import ArgumentParser
 parser = ArgumentParser()
 parser.add_argument("filename")
 args = parser.parse_args()
 
 config = ConfigParser()
-config.read("config/bdt_params.cfg")
+config.read("config/bdt_Summer2018UL.cfg")
 
 style = config['plot']['style']
 minMX = int(config['plot']['minMX'])
@@ -45,7 +46,6 @@ def raiseError(fname):
 
 def get_fname(fname, systematic, var):
     tmp = fname.split('/')
-    print(tmp)
     tmp.insert(16, "syst")
     tmp.insert(17, systematic)
     tmp.insert(18, var)
@@ -80,7 +80,6 @@ makeDir(fsave)
 fout = f"{fsave}/MX_{MX}_MY_{MY}.root"
 print(fout)
 
-tree.spherical_region()
 asr_mask = tree.asr_hs_mask
 mx = tree.X.m[asr_mask]
 
@@ -111,23 +110,21 @@ for systematic in systematics:
     fUp = get_fname(fname, systematic, "up")
     try: up = SixB(fUp)
     except: raiseError(fUp)
-    up.spherical_region()
 
     w_btag = btag_weight(up, "up", systematic)
-    weight = (up.genWeight*up.PUWeight*up.PUIDWeight*up.triggerSF*w_btag)[up.asr_hs_mask]
+    weight = (up.genWeight*up.w_pu*up.w_puid*up.triggerSF*w_btag)[up.asr_hs_mask]
     H_syst = get_boost(up.X.m[up.asr_hs_mask], bins=bins, weight=weight)
-    boost_dict[f"{systematic}Up"] = H_syst
+    boost_dict[f"signal_{systematic}Up"] = H_syst
     
 
     fDown = get_fname(fname, systematic, "down")
     try: down = SixB(fDown)
     except: raiseError(fDown)
-    down.spherical_region()
 
     w_btag = btag_weight(down, "down", systematic)
-    weight = (down.genWeight*down.PUWeight*down.PUIDWeight*down.triggerSF*w_btag)[down.asr_hs_mask]
+    weight = (down.genWeight*down.w_pu*down.w_puid*down.triggerSF*w_btag)[down.asr_hs_mask]
     H_syst = get_boost(down.X.m[down.asr_hs_mask], bins=bins, weight=weight)
-    boost_dict[f"{systematic}Down"] = H_syst
+    boost_dict[f"signal_{systematic}Down"] = H_syst
 
 
 with uproot.recreate(fout) as file:

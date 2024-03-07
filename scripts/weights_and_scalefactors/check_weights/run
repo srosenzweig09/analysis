@@ -1,0 +1,26 @@
+#!/bin/sh
+
+#SBATCH --job-name=eff
+#SBATCH --qos=avery
+#SBATCH --account=avery
+#SBATCH --time=4:00:00
+#SBATCH --partition=hpg-dev
+#SBATCH --cpus-per-task=1
+#SBATCH --mem-per-cpu=8GB
+#SBATCH --output=slurm_output/slurm-%A_%a.out
+
+# sbatch scripts/weights_and_scalefactors/check_weights/run
+
+random_number=$RANDOM
+
+mkdir -p tmp
+
+cfg="tmp/feynnet_$random_number.cfg"
+cp config/feynnet.cfg $cfg
+python scripts/weights_and_scalefactors/check_weights/print_config.py --config $cfg
+
+sh scripts/weights_and_scalefactors/check_weights/submitEfficienciesToSLURM.sh $cfg
+
+python scripts/weights_and_scalefactors/check_weights/plot_weights.py --config $cfg
+
+rm -r $cfg
