@@ -9,7 +9,7 @@ def make_bins(style):
 def get_deltaM(higgs, center):
     deltaM = np.column_stack(([abs(m - center) for m in higgs]))
     deltaM = deltaM * deltaM
-    deltaM = deltaM.sum(axis=1)
+    deltaM = ak.sum(deltaM, axis=1)
     deltaM = np.sqrt(deltaM)
     return deltaM
 
@@ -66,7 +66,7 @@ class BDTRegion():
         self.mBins = make_bins(self.plot_style)(self.minMX, self.maxMX, self.nedges)
         self.x_mBins = (self.mBins[:-1] + self.mBins[1:])/2
 
-        self.higgs = [tree.HX.m, tree.H1.m, tree.H2.m]
+        self.higgs = [tree.H1.m, tree.H2.m, tree.H3.m]
         try: higgs = [m.to_numpy() for m in higgs]
         except: pass
 
@@ -75,6 +75,7 @@ class BDTRegion():
         if tree._is_signal: self.asr_avgbtag = tree.btag_avg[self.asr_mask]
         self.acr_mask = (self.ar_deltaM > self.sr_edge) & (self.ar_deltaM <= self.cr_edge) # Analysis CR
         if not tree._is_signal: self.acr_avgbtag = tree.btag_avg[self.acr_mask]
+        self.ar_mask = self.asr_mask | self.acr_mask
 
         self.ls_mask = tree.btag_avg < self.avg_btag_threshold
         self.hs_mask = tree.btag_avg >= self.avg_btag_threshold
@@ -92,6 +93,8 @@ class BDTRegion():
         elif self.shape == 'diagonal': self.init_diagonal()
         elif self.shape == 'multiple': self.init_multiple()
         else: raise ValueError(f"Unknown shape: {self.shape}")
+
+        self.sr_efficiency = ak.sum(self.asr_hs_mask)/len(self.asr_hs_mask)
 
         self.copy_attributes(tree)
 
@@ -175,8 +178,8 @@ class BDTRegion():
         self.n_loose = ak.sum(self.loose_mask, axis=1)
         self.n_fail = ak.sum(self.fail_mask, axis=1)
 
-        bs = [tree.HX.b1, tree.HX.b2, tree.H1.b1, tree.H1.b2, tree.H2.b1, tree.H2.b2]
-        pair1 = [tree.HX.b1]*5 + [tree.HX.b2]*4 + [tree.H1.b1]*3 + [tree.H1.b2]*2 + [tree.H2.b1]
+        bs = [tree.H1.b1, tree.H1.b2, tree.H2.b1, tree.H2.b2, tree.H3.b1, tree.H3.b2]
+        pair1 = [tree.H1.b1]*5 + [tree.H1.b2]*4 + [tree.H2.b1]*3 + [tree.H2.b2]*2 + [tree.H3.b1]
         pair2 = bs[1:] + bs[2:] + bs[3:] + bs[4:] + [bs[-1]]
 
         dR6b = []
@@ -189,53 +192,53 @@ class BDTRegion():
         self.dR6bmin = dR6b.min(axis=1)
         self.dEta6bmax = dEta6b.max(axis=1)
 
-        self.pt6bsum = tree.HX.b1.pt + tree.HX.b2.pt + tree.H1.b1.pt + tree.H1.b2.pt + tree.H2.b1.pt + tree.H2.b2.pt
+        self.pt6bsum = tree.H1.b1.pt + tree.H1.b2.pt + tree.H2.b1.pt + tree.H2.b2.pt + tree.H3.b1.pt + tree.H3.b2.pt
 
-        self.HX_pt = tree.HX.pt
         self.H1_pt = tree.H1.pt
         self.H2_pt = tree.H2.pt
+        self.H3_pt = tree.H3.pt
 
-        self.HX_dr = tree.HX.dr
         self.H1_dr = tree.H1.dr
         self.H2_dr = tree.H2.dr
+        self.H3_dr = tree.H3.dr
 
-        self.HX_m = tree.HX.m
         self.H1_m = tree.H1.m
         self.H2_m = tree.H2.m
+        self.H3_m = tree.H3.m
 
-        self.HX_H1_dEta = abs(tree.HX.deltaEta(tree.H1))
         self.H1_H2_dEta = abs(tree.H1.deltaEta(tree.H2))
-        self.H2_HX_dEta = abs(tree.H2.deltaEta(tree.HX))
+        self.H2_H3_dEta = abs(tree.H2.deltaEta(tree.H3))
+        self.H3_H1_dEta = abs(tree.H3.deltaEta(tree.H1))
 
-        self.HX_H1_dPhi = tree.HX.deltaPhi(tree.H1)
         self.H1_H2_dPhi = tree.H1.deltaPhi(tree.H2)
-        self.H2_HX_dPhi = tree.H2.deltaPhi(tree.HX)
+        self.H2_H3_dPhi = tree.H2.deltaPhi(tree.H3)
+        self.H3_H1_dPhi = tree.H3.deltaPhi(tree.H1)
 
-        self.HX_H1_dr = tree.HX.deltaR(tree.H1)
-        self.HX_H2_dr = tree.H2.deltaR(tree.HX)
         self.H1_H2_dr = tree.H1.deltaR(tree.H2)
+        self.H1_H3_dr = tree.H3.deltaR(tree.H1)
+        self.H2_H3_dr = tree.H2.deltaR(tree.H3)
         
-        self.Y_HX_dr = tree.Y.deltaR(tree.HX)
+        self.Y_H1_dr = tree.Y.deltaR(tree.H1)
 
-        self.HX_costheta = abs(np.cos(tree.HX.P4.theta))
         self.H1_costheta = abs(np.cos(tree.H1.P4.theta))
         self.H2_costheta = abs(np.cos(tree.H2.P4.theta))
+        self.H3_costheta = abs(np.cos(tree.H3.P4.theta))
 
-        self.HX_H1_dr = tree.HX.deltaR(tree.H1)
-        self.H1_H2_dr = tree.H2.deltaR(tree.H1)
-        self.H2_HX_dr = tree.HX.deltaR(tree.H2)
+        self.H1_H2_dr = tree.H1.deltaR(tree.H2)
+        self.H2_H3_dr = tree.H3.deltaR(tree.H2)
+        self.H3_H1_dr = tree.H1.deltaR(tree.H3)
 
         self.X_m = tree.X.m
 
-        self.X_m_prime = tree.X_m - tree.HX_m - tree.H1_m - tree.H2_m + 3*125
+        self.X_m_prime = tree.X_m - tree.H1_m - tree.H2_m - tree.H3_m + 3*125
 
         self.H_j_btag = np.column_stack((
-            tree.HX_b1_btag.to_numpy(),
-            tree.HX_b2_btag.to_numpy(),
             tree.H1_b1_btag.to_numpy(),
             tree.H1_b2_btag.to_numpy(),
             tree.H2_b1_btag.to_numpy(),
-            tree.H2_b2_btag.to_numpy()
+            tree.H2_b2_btag.to_numpy(),
+            tree.H3_b1_btag.to_numpy(),
+            tree.H3_b2_btag.to_numpy()
         ))
 
         self.n_H_jet_tight = np.sum(self.H_j_btag >= tree.tight_wp, axis=1)
@@ -249,27 +252,27 @@ class BDTRegion():
             'pt6bsum' : tree.pt6bsum,
             'dR6bmin' : tree.dR6bmin,
             'dEta6bmax' : tree.dEta6bmax,
-            'HX_m' : tree.HX.m,
             'H1_m' : tree.H1.m,
             'H2_m' : tree.H2.m,
-            'HX_pt' : tree.HX.pt,
+            'H3_m' : tree.H3.m,
             'H1_pt' : tree.H1.pt,
             'H2_pt' : tree.H2.pt,
-            'HX_dr' : tree.HX.dr,
+            'H3_pt' : tree.H3.pt,
             'H1_dr' : tree.H1.dr,
             'H2_dr' : tree.H2.dr,
-            'HX_costheta' : tree.HX.costheta,
+            'H3_dr' : tree.H3.dr,
             'H1_costheta' : tree.H1.costheta,
             'H2_costheta' : tree.H2.costheta,
-            'HX_H1_dr' : tree.HX.deltaR(tree.H1),
+            'H3_costheta' : tree.H3.costheta,
             'H1_H2_dr' : tree.H1.deltaR(tree.H2),
-            'H2_HX_dr' : tree.H2.deltaR(tree.HX),
-            'HX_H1_dEta' : tree.HX.deltaEta(tree.H1),
+            'H2_H3_dr' : tree.H2.deltaR(tree.H3),
+            'H3_H1_dr' : tree.H3.deltaR(tree.H1),
             'H1_H2_dEta' : tree.H1.deltaEta(tree.H2),
-            'H2_HX_dEta' : tree.H2.deltaEta(tree.HX),
-            'HX_H1_dPhi' : tree.HX.deltaPhi(tree.H1),
+            'H2_H3_dEta' : tree.H2.deltaEta(tree.H3),
+            'H3_H1_dEta' : tree.H3.deltaEta(tree.H1),
             'H1_H2_dPhi' : tree.H1.deltaPhi(tree.H2),
-            'H2_HX_dPhi' : tree.H2.deltaPhi(tree.HX),
+            'H2_H3_dPhi' : tree.H2.deltaPhi(tree.H3),
+            'H3_H1_dPhi' : tree.H3.deltaPhi(tree.H1),
             'Y_m' : tree.Y.m,
         }
 
