@@ -1,68 +1,83 @@
+from configparser import ConfigParser
 import json, uproot
 import numpy as np
 import awkward as ak
 from utils.analysis.particle import Particle, Higgs, Y
 
-old_model_name = '20230731_7d266883bbfb88fe4e226783a7d1c9db_ranger_lr0.0047_batch2000_withbkg'
-old_model_path = f'/eos/uscms/store/user/srosenzw/weaver/models/exp_tree_official/feynnet_ranker_6b/{old_model_name}/predict_output'
-
-new_model_name = 'version_23183119'
-# new_model_path = f"/eos/uscms/store/user/srosenzw/weaver/cmsuf/data/store/user/srosenzw/lightning/models/feynnet_lightning/X_YH_3H_6b/x3h/lightning_logs/{new_model_name}/predict/"
-new_model_path = f"/cmsuf/data/store/user/srosenzw/lightning/models/feynnet_lightning/X_YH_3H_6b/x3h/lightning_logs/{new_model_name}/predict/"
-new_model_path = f"/cmsuf/data/store/user/srosenzw/lightning/models/feynnet_lightning/X_YH_3H_6b/x3h/lightning_logs/{new_model_name}/predict/"
-
-def getMassDict(year):
-    with open(f"{new_model_path}/{year}/samples.json", 'r') as file:
+def getMassDict(path):
+    with open(f"{path}/samples.json", 'r') as file:
         mass_dict = json.load(file)
     return mass_dict
 
 class Model():
 
-    def __init__(self, which, tree):
-        if which == 'new': self.init_new_model(tree)
-        elif which == 'old': self.init_old_model(tree)
-        else: raise ValueError(f"Model type '{which}' not recognized")
+    @staticmethod
+    def read_feynnet_cfg(cfg="config/feynnet.cfg"):
+        config = ConfigParser()
+        config.read(cfg)
+
+        model_version = config['feynnet']['version']
+        model_name = config['feynnet']['name']
+        model_path = config['feynnet']['path'].replace('version', model_name)
+        return model_version, model_name, model_path
+
+    @staticmethod
+    def get_savepath(cfg="config/feynnet.cfg"):
+        model_version, model_name, model_path = Model.read_feynnet_cfg(cfg)
+        return f"plots/feynnet/{model_name}"
+
+    def __init__(self, tree, config="config/feynnet.cfg"):
+        model_version, model_name, model_path = self.read_feynnet_cfg(config)
+
+        if model_version == 'new': self.init_new_model(tree, model_path)
+        elif model_version == 'old': self.init_old_model(tree, model_path)
+        else: raise ValueError(f"Model type '{model_version}' not recognized")
+
+        self.version = model_version
+        self.model_name = model_name
+        self.savepath = f"plots/feynnet/{self.model_name}"
 
         self.init_particles(tree)
         self.copy_attributes(tree)
 
-    def init_new_model(self, tree):
-        print(".. initializing new FeynNet model")
-        mass_dict = getMassDict(tree.year_long)
+    def init_new_model(self, tree, path):
+        mass_dict = getMassDict(path)
         model_path = mass_dict[tree.filepath]
-        # model_path = f"{new_model_path}/{tree.year}/{hash}.root"
         with uproot.open(model_path) as f:
             t = f['Events']
-            # print(t['sorted_rank'].array())
+            self.combos = t['sorted_j_assignments'].array()
+            self.ranks = t['sorted_rank'].array()
             maxcomb = ak.firsts(t['sorted_j_assignments'].array())
-        self.combos = ak.from_regular(maxcomb)
-        self.model_name = new_model_name
-        # print(print(combos))
+            sorted_rank = ak.firsts(t['sorted_rank'].array())
+        self.combo = ak.from_regular(maxcomb)
+        self.rank = sorted_rank
+        self.version = 'new'
 
-    def init_old_model(self, tree):
-        print(".. initializing old FeynNet model")
-        model_path = f"{old_model_path}/{tree.year}/{tree.filename}.root"
-        with uproot.open(model_path) as f:
+    def init_old_model(self, tree, path):
+        path = f"{path}/{tree.year_long}/{tree.filename}.root"
+        with uproot.open(path) as f:
             f = f['Events']
             maxcomb = f['max_comb'].array(library='np')
 
-        combos = maxcomb.astype(int)
-        self.combos = ak.from_regular(combos)
-        self.model_name = old_model_name
+        combo = maxcomb.astype(int)
+        self.combo = ak.from_regular(combo)
+        self.version = 'old'
 
-    def init_particles(self, tree):
+    def init_particles(self, tree, combo=0):
+        if combo == 0: combo = self.combo
+        else: combo = ak.from_regular(self.combos[:,combo])
+
         btag_mask = ak.argsort(tree.jet_btag, axis=1, ascending=False) < 6
 
-        pt = tree.jet_ptRegressed[btag_mask][self.combos]
-        phi = tree.jet_phi[btag_mask][self.combos]
-        eta = tree.jet_eta[btag_mask][self.combos]
-        m = tree.jet_mRegressed[btag_mask][self.combos]
-        btag = tree.jet_btag[btag_mask][self.combos]
-        sig_id = tree.jet_signalId[btag_mask][self.combos]
-        h_id = (tree.jet_signalId[btag_mask][self.combos] + 2) // 2
+        pt = tree.jet_ptRegressed[btag_mask][combo]
+        phi = tree.jet_phi[btag_mask][combo]
+        eta = tree.jet_eta[btag_mask][combo]
+        m = tree.jet_mRegressed[btag_mask][combo]
+        btag = tree.jet_btag[btag_mask][combo]
+        sig_id = tree.jet_signalId[btag_mask][combo]
+        h_id = (tree.jet_signalId[btag_mask][combo] + 2) // 2
 
         self.btag_avg = ak.mean(btag, axis=1)
-        setattr(tree, 'btag_avg', self.btag_avg)
 
         sample_particles = []
         for j in range(6):
@@ -86,60 +101,68 @@ class Model():
         H2_b2 = {'pt':sample_particles[5].pt,'eta':sample_particles[5].eta,'phi':sample_particles[5].phi,'m':sample_particles[5].m,'btag':sample_particles[5].btag,'sig_id':sample_particles[5].sig_id,'h_id':sample_particles[5].h_id}
 
         self.HX = Higgs(HX_b1, HX_b2)
-        setattr(tree, 'HX', self.HX)
 
-        H1 = Higgs(H1_b1, H1_b2)
-        H2 = Higgs(H2_b1, H2_b2)
+        H1 = Higgs(HX_b1, HX_b2)
+        H2 = Higgs(H1_b1, H1_b2)
+        H3 = Higgs(H2_b1, H2_b2)
+        self.Y = Y(H2, H3) # should not be used
 
-        assert ak.all(self.HX.b1.pt >= self.HX.b2.pt)
-        assert ak.all(H1.b1.pt >= H1.b2.pt)
-        assert ak.all(H2.b1.pt >= H2.b2.pt)
+        if self.version == 'new':
+            from utils.analysis.particle import OrderedSixB
+            self.pt_ordered_h = OrderedSixB(H1, H2, H3)
 
-        self.Y = Y(H1, H2)
-        setattr(tree, 'Y', self.Y)
+            self.H1 = self.pt_ordered_h.H1
+            self.H2 = self.pt_ordered_h.H2
+            self.H3 = self.pt_ordered_h.H3
 
-        self.H1 = self.Y.H1
-        self.H2 = self.Y.H2
-        setattr(tree, 'H1', self.H1)
-        setattr(tree, 'H2', self.H2)
+        if self.version == 'old':
+            self.H1 = H1
+            self.H2, self.H3 = Particle.swap_objects(H2, H3, H2.pt < H3.pt)
+            assert ak.all(self.H2.pt >= self.H3.pt)
+            self.Y = Y(H2, H3)
 
-        assert ak.all(self.H1.pt >= self.H2.pt)
+        self.HY1 = self.Y.H1
+        self.HY2 = self.Y.H2
 
-        self.X = self.HX + self.H1 + self.H2
-        setattr(tree, 'X', self.X)
+        # assert ak.all(self.H1.pt >= self.H2.pt)
 
-        self.higgs_bjet_sig_id = np.column_stack((
-            self.HX.b1.sig_id.to_numpy(),
-            self.HX.b2.sig_id.to_numpy(),
-            self.H1.b1.sig_id.to_numpy(),
-            self.H1.b2.sig_id.to_numpy(),
-            self.H2.b1.sig_id.to_numpy(),
-            self.H2.b2.sig_id.to_numpy(),
-        ))
+        # self.X = self.HX + self.H1 + self.H2
+        self.X = self.H1 + self.H2 + self.H3
+        # setattr(tree, 'X', self.X)
 
-        self.higgs_bjet_h_id = np.column_stack((
-            self.HX.b1.h_id.to_numpy(),
-            self.HX.b2.h_id.to_numpy(),
-            self.H1.b1.h_id.to_numpy(),
-            self.H1.b2.h_id.to_numpy(),
-            self.H2.b1.h_id.to_numpy(),
-            self.H2.b2.h_id.to_numpy(),
-        ))
+        if tree._is_signal:
+            self.higgs_bjet_sig_id = np.column_stack((
+                self.H1.b1.sig_id.to_numpy(),
+                self.H1.b2.sig_id.to_numpy(),
+                self.H2.b1.sig_id.to_numpy(),
+                self.H2.b2.sig_id.to_numpy(),
+                self.H3.b1.sig_id.to_numpy(),
+                self.H3.b2.sig_id.to_numpy(),
+            ))
 
-        self.feyn_resolved_mask = ak.all(self.higgs_bjet_sig_id > -1, axis=1)
-        self.feyn_resolved_h_mask = ak.all(self.higgs_bjet_h_id > 0, axis=1)
+            self.higgs_bjet_h_id = np.column_stack((
+                self.H1.b1.h_id.to_numpy(),
+                self.H1.b2.h_id.to_numpy(),
+                self.H2.b1.h_id.to_numpy(),
+                self.H2.b2.h_id.to_numpy(),
+                self.H3.b1.h_id.to_numpy(),
+                self.H3.b2.h_id.to_numpy(),
+            ))
 
-        hx_possible = ak.sum(self.higgs_bjet_h_id == 1, axis=1) == 2
-        h1_possible = ak.sum(self.higgs_bjet_h_id == 2, axis=1) == 2
-        h2_possible = ak.sum(self.higgs_bjet_h_id == 3, axis=1) == 2
-        self.n_h_possible = hx_possible*1 + h1_possible*1 + h2_possible*1
+            self.feyn_resolved_mask = ak.all(self.higgs_bjet_sig_id > -1, axis=1)
+            self.feyn_resolved_h_mask = ak.all(self.higgs_bjet_h_id > 0, axis=1)
 
-        # efficiency without taking into account to which higgs the pair was assigned
-        # only worried about pairing together two jets from any higgs boson
-        hx_correct = (self.HX.b1.h_id == self.HX.b2.h_id) & (self.HX.b1.h_id > 0)*1
-        h1_correct = (self.H1.b1.h_id == self.H1.b2.h_id) & (self.H1.b1.h_id > 0)*1
-        h2_correct = (self.H2.b1.h_id == self.H2.b2.h_id) & (self.H2.b1.h_id > 0)*1
-        self.n_H_paired_correct = hx_correct + h1_correct + h2_correct
+            hx_possible = ak.sum(self.higgs_bjet_h_id == 1, axis=1) == 2
+            h1_possible = ak.sum(self.higgs_bjet_h_id == 2, axis=1) == 2
+            h2_possible = ak.sum(self.higgs_bjet_h_id == 3, axis=1) == 2
+            self.n_h_possible = hx_possible*1 + h1_possible*1 + h2_possible*1
+
+            # efficiency without taking into account to which higgs the pair was assigned
+            # only worried about pairing together two jets from any higgs boson
+            hx_correct = (self.H1.b1.h_id == self.H1.b2.h_id) & (self.H1.b1.h_id > 0)
+            h1_correct = (self.H2.b1.h_id == self.H2.b2.h_id) & (self.H2.b1.h_id > 0)
+            h2_correct = (self.H3.b1.h_id == self.H3.b2.h_id) & (self.H3.b1.h_id > 0)
+            self.n_h_found = hx_correct*1 + h1_correct*1 + h2_correct*1
 
     def copy_attributes(self, dest_cls):
         # but not methods
