@@ -9,7 +9,7 @@ from .useCMSstyle import *
 plt.style.use(CMS)
 from .varUtils import *
 
-from awkward import flatten
+import awkward as ak
 from awkward.highlevel import Array
 import matplotlib.colors as colors
 import numpy as np
@@ -21,16 +21,16 @@ from matplotlib.patches import Patch
 
 from matplotlib.ticker import ScalarFormatter
 class OOMFormatter(ScalarFormatter):
-    def __init__(self, order=0, fformat="%1.1f", offset=True, mathText=True):
-        self.oom = order
-        self.fformat = fformat
-        ScalarFormatter.__init__(self,useOffset=offset,useMathText=mathText)
-    def _set_order_of_magnitude(self):
-        self.orderOfMagnitude = self.oom
-    def _set_format(self, vmin=None, vmax=None):
-        self.format = self.fformat
-        if self._useMathText:
-            self.format = r'$\mathdefault{%s}$' % self.format
+   def __init__(self, order=0, fformat="%1.1f", offset=True, mathText=True):
+      self.oom = order
+      self.fformat = fformat
+      ScalarFormatter.__init__(self,useOffset=offset,useMathText=mathText)
+   def _set_order_of_magnitude(self):
+      self.orderOfMagnitude = self.oom
+   def _set_format(self, vmin=None, vmax=None):
+      self.format = self.fformat
+      if self._useMathText:
+         self.format = r'$\mathdefault{%s}$' % self.format
 
 # for informational purposes because I find myself looking this up often lol
 legend_loc = {
@@ -46,78 +46,69 @@ legend_loc = {
     'upper center': 9,
     'center': 10}
 
-def fig_ax_ratio():
-   """Returns fig, axs for ratio plot."""
-   return plt.subplots(nrows=2, ncols=1, figsize=(8,8), gridspec_kw={'height_ratios':[4,1]})
-
-def latexTitle(mx,my):
-   #  ind = -2
-   #  if 'output' in descriptor: ind = -3
-   #  mass_point = descriptor.split("/")[ind]
-   #  mX = mass_point.split('_')[ind-1]
-   #  mY = mass_point.split('_')[ind+1]
-    return r"$M_X=$ " + str(mx) + r" GeV, $M_Y=$ " + str(my) + " GeV"
-
-
 def change_cmap_bkg_to_white(colormap, arr=False, n=256):
-    """Changes lowest value of colormap to white."""
-    import matplotlib.cm as cm
-    tmp_colors = cm.get_cmap(colormap, n)
-    newcolors = tmp_colors(np.linspace(0, 1, n))
-    # Define colors by [Red, Green, Blue, Alpha]
-    white = np.array([1, 1, 1, 1])
-    newcolors[0, :] = white  # Only change bins with 0 entries.
-    newcmp = colors.ListedColormap(newcolors)
-    if arr: return newcolors
-    return newcmp
+   """Changes lowest value of colormap to white."""
+   import matplotlib.cm as cm
+   tmp_colors = cm.get_cmap(colormap, n)
+   newcolors = tmp_colors(np.linspace(0, 1, n))
+   # Define colors by [Red, Green, Blue, Alpha]
+   white = np.array([1, 1, 1, 1])
+   newcolors[0, :] = white  # Only change bins with 0 entries.
+   newcmp = colors.ListedColormap(newcolors)
+   if arr: return newcolors
+   return newcmp
 
 r_cmap = change_cmap_bkg_to_white('rainbow')
 r_arr = change_cmap_bkg_to_white('rainbow', arr=True)
 
-def Hist2d(x, y, bins, log=False, density=False, **kwargs):
-   if 'ax' in kwargs.keys():
-      ax = kwargs['ax']
-      kwargs.pop('ax')
-   else:
-      fig, ax = plt.subplots(figsize=(12, 10))
-      
-   if 'cmap' in kwargs.keys():
-      cmap = kwargs['cmap']
-      kwargs.pop('cmap')
-   else: cmap = r_cmap
+def get_cmap_kwargs(zlim=None, cmap='YlOrRd', log=False, **kwargs):
+   cmap_kwargs = dict(
+      cmap = cmap
+   )
 
-   try: x = ak.flatten(x)
-   except: pass
-   try: y = ak.flatten(y)
-   except: pass
+   if zlim is None: return cmap_kwargs
 
-   if isinstance(x, Array): x = x.to_numpy()
-   if isinstance(y, Array): y = y.to_numpy()
+   if len(zlim) == 2:
+      cmap_kwargs['vmin'] = zlim[0]
+      cmap_kwargs['vmax'] = zlim[1]
 
+   elif len(zlim) > 2:
+      if isinstance(cmap, str):
+         cmap=mpl.cm.get_cmap(cmap)
 
-   if log:
-      n, xe, ye, im = ax.hist2d(
-         x, y, bins=bins, norm=colors.LogNorm(), cmap=cmap, **kwargs)
-   elif density:
-      n, xe, ye, im = ax.hist2d(
-         x, y, bins=bins, cmap=cmap, density=True)
-         # x, y, bins=bins, density=True, cmap=cmap)
-   else:
-      n, xe, ye, im = ax.hist2d(x, y, bins=bins, cmap=cmap, **kwargs)
+      if log:
+         norm = mpl.colors.LogNorm(vmin=np.min(zlim), vmax=np.max(zlim) )
+      else:
+         norm = mpl.colors.BoundaryNorm(boundaries=np.array(zlim), ncolors=cmap.N)
+
+      cmap_kwargs['norm'] = norm
+
+   return cmap_kwargs
+
+def mod_kwargs(kwargs, key):
+   tmp = kwargs[key]
+   kwargs.pop(key)
+   return kwargs, tmp
+
+def Hist2d(x, y, bins, ax=None, density=False, **kwargs):
+   if ax is None: fig, ax = plt.subplots(figsize=(12, 10))
+   cmap = r_cmap
+
+   if 'weights' in kwargs:
+      if isinstance(kwargs['weights'], Array): kwargs['weights'] = kwargs['weights'].to_numpy()
+   if 'mask' in kwargs:
+      kwargs, mask = mod_kwargs(kwargs, 'mask')
+      x, y = x[mask], y[mask]
+      if 'weights' in kwargs: kwargs['weights'] = kwargs['weights'][mask]
+
+   n, xe, ye, im = ax.hist2d(x, y, bins=bins, cmap=cmap, density=density, **kwargs)
 
    if 'fig' in kwargs.keys():
       fig = kwargs['fig']
-      fig.colorbar(im)
-      fig.set_size_inches(10, 8)
+      fig.colorbar(im, ax=ax)
+      # fig.set_size_inches(10, 8)
 
-   return n, xe, ye, im
-
-
-def norm_hist(arr, bins=100):
-    n, b = np.histogram(arr, bins=bins)
-    x = (b[:-1] + b[1:]) / 2
-    return n/n.max(), b, x
-
+   return n, im
 
 plot_dict = {
     'histtype': 'step',
@@ -125,65 +116,39 @@ plot_dict = {
     'linewidth': 2
 }
 
+def Hist(x, bins, weights=None, density=False, ax=None, patches=False, exp=0, dec=2, scale=1.0, **kwargs):
+   """
+   This function is a wrapper for matplotlib.pyplot.hist that allows me to generate histograms quickly and consistently.
+   """
 
-def Hist(x, scale=1, legend_loc='best', weights=None, density=False, ax=None, patches=False, exp=0, dec=2, total=False, **kwargs):
-    """
-    This function is a wrapper for matplotlib.pyplot.hist that allows me to generate histograms quickly and consistently.
-    It also helps deal with background trees, which are typically given as lists of samples.
-    """
+   x_arr = x_bins(bins)
 
-    bins = kwargs['bins']
-    x_arr = x_bins(bins)
+   # convert array to numpy if it is an awkward array
+   if isinstance(x, Array): x = ak.ravel(x).to_numpy()
+   if isinstance(weights, Array): weights = weights.to_numpy() 
+   if isinstance(weights, float): weights = np.ones_like(x) * weights
+   if ax is None: fig, ax = plt.subplots()
+   # if weights is None: weights = np.ones_like(x)
+   # if 'label' in kwargs.keys(): ax.legend()
 
-    # convert array to numpy if it is an awkward array
-    if isinstance(x, Array): 
-      try: x = flatten(x).to_numpy()
-      except: x = x.to_numpy()
+   # set default values for histogramming
+   for k, v in plot_dict.items():
+      if k not in kwargs:
+         kwargs[k] = v
 
-    if isinstance(x, list):
-      for arr in x:
-         if isinstance(x, Array): 
-            try: x = flatten(x).to_numpy()
-            except: x = x.to_numpy()
-
-    if isinstance(weights, Array): weights = weights.to_numpy() 
-
-    if ax is None: fig, ax = plt.subplots()
-    
-    if weights is None: 
-      weights = np.ones_like(x)
-    
-    if isinstance(weights, float): 
-      weights = np.ones_like(x) * weights
-
-    # set default values for histogramming
-    for k, v in plot_dict.items():
-        if k not in kwargs:
-            kwargs[k] = v
-
-    if density:
+   if density:
       n, _ = np.histogram(x, bins=bins, weights=weights)
       n = np.where(np.isinf(n), 0, n)
       n = np.nan_to_num(n)
-      n, _, im = ax.hist(x_arr, weights=n/n.sum(), **kwargs)
+      n, _, im = ax.hist(x_arr, bins=bins, weights=n*scale/n.sum(), **kwargs)
       ax.yaxis.set_major_formatter(OOMFormatter(exp, f"%2.{dec}f"))
-   #   ax.ticklabel_format(axis='y', style='sci', scilimits=(0,4))
-      if total: return n, n.sum()
+      #   ax.ticklabel_format(axis='y', style='sci', scilimits=(0,4))
       return n
 
-    if scale != 1:
-      n, _, im = ax.hist(x_arr, weights=weights*scale, **kwargs)
-    if np.array_equal(weights, np.ones_like(x_arr)):
-      n, _, im = ax.hist(x, **kwargs)
-    else:
-      n, _, im = ax.hist(x, weights=weights, **kwargs)
+   n, _, im = ax.hist(x, bins=bins, weights=weights, **kwargs)
 
-    if 'label' in kwargs.keys():
-        ax.legend()
-    
-    if patches: return n, im
-    if total: return n, n.sum()
-    return n
+   if patches: return n, im
+   return n
 
 def Ratio(data, bins, labels, xlabel, axs=None, weights=[None, None], density=False, ratio_ylabel='Ratio', broken=False, pull=False, data_norm=False, norm=None, total=False):
 
